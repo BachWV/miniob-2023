@@ -81,6 +81,7 @@ RC PhysicalPlanGenerator::create(LogicalOperator &logical_operator, unique_ptr<P
   return rc;
 }
 
+// 目前tableGet只能实现等值查询？？
 RC PhysicalPlanGenerator::create_plan(TableGetLogicalOperator &table_get_oper, unique_ptr<PhysicalOperator> &oper)
 {
   vector<unique_ptr<Expression>> &predicates = table_get_oper.predicates();
@@ -127,6 +128,7 @@ RC PhysicalPlanGenerator::create_plan(TableGetLogicalOperator &table_get_oper, u
     }
   }
 
+  // 我们根据谓词来查找，看哪个字段有index，就创建一个index
   if (index != nullptr) {
     ASSERT(value_expr != nullptr, "got an index but value expr is null ?");
 
@@ -157,6 +159,7 @@ RC PhysicalPlanGenerator::create_plan(PredicateLogicalOperator &pred_oper, uniqu
   LogicalOperator &child_oper = *children_opers.front();
 
   unique_ptr<PhysicalOperator> child_phy_oper;
+  // 啥情况 怎么还递归
   RC rc = create(child_oper, child_phy_oper);
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to create child operator of predicate operator. rc=%s", strrc(rc));
@@ -166,6 +169,7 @@ RC PhysicalPlanGenerator::create_plan(PredicateLogicalOperator &pred_oper, uniqu
   vector<unique_ptr<Expression>> &expressions = pred_oper.expressions();
   ASSERT(expressions.size() == 1, "predicate logical operator's children should be 1");
 
+  // 新建了一个PredicatePhysicalOperator，然后求出子节点后做了add_child
   unique_ptr<Expression> expression = std::move(expressions.front());
   oper = unique_ptr<PhysicalOperator>(new PredicatePhysicalOperator(std::move(expression)));
   oper->add_child(std::move(child_phy_oper));

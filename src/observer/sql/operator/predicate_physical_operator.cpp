@@ -38,6 +38,8 @@ RC PredicatePhysicalOperator::next()
   RC rc = RC::SUCCESS;
   PhysicalOperator *oper = children_.front().get();
 
+  // 为啥用了while循环呢，之后的算子怎么来保证当前谓词执行的是正确呢？
+  // pred物理算子里面也没有字段缓存执行的正确与否，next函数也没有传出参数来执行执行正确
   while (RC::SUCCESS == (rc = oper->next())) {
     Tuple *tuple = oper->current_tuple();
     if (nullptr == tuple) {

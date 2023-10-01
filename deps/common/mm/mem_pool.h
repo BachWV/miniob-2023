@@ -326,6 +326,7 @@ std::string MemPoolSimple<T>::to_string()
   return ss.str();
 }
 
+// 为一类小内存对象创建bufferPool吗？
 class MemPoolItem
 {
 public:

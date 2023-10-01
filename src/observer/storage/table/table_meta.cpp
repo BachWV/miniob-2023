@@ -43,6 +43,7 @@ void TableMeta::swap(TableMeta &other) noexcept
   std::swap(record_size_, other.record_size_);
 }
 
+// 用给定的attr初始表的meta
 RC TableMeta::init(int32_t table_id, const char *name, int field_num, const AttrInfoSqlNode attributes[])
 {
   if (common::is_blank(name)) {
@@ -213,7 +214,7 @@ int TableMeta::serialize(std::ostream &ss) const
     indexes_value.append(std::move(index_value));
   }
   table_value[FIELD_INDEXES] = std::move(indexes_value);
-
+ 
   Json::StreamWriterBuilder builder;
   Json::StreamWriter *writer = builder.newStreamWriter();
 

@@ -31,6 +31,7 @@ See the Mulan PSL v2 for more details. */
 using namespace std;
 using namespace common;
 
+// 这个执行器的switch在command_executor中
 RC ExecuteStage::handle_request(SQLStageEvent *sql_event)
 {
   RC rc = RC::SUCCESS;
@@ -56,6 +57,8 @@ RC ExecuteStage::handle_request_with_physical_operator(SQLStageEvent *sql_event)
 {
   RC rc = RC::SUCCESS;
 
+  // 所以我optimiser进行了这么多次逻辑和物理的转换，到最后现在还是离不开parser阶段的stmt
+  // 转换的有点逆天吧
   Stmt *stmt = sql_event->stmt();
   ASSERT(stmt != nullptr, "SQL Statement shouldn't be empty!");
 

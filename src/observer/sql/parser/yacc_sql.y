@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <algorithm>
+#include <time.h>
 
 #include "common/log/log.h"
 #include "common/lang/string.h"
@@ -12,6 +13,7 @@
 #include "sql/parser/yacc_sql.hpp"
 #include "sql/parser/lex_sql.h"
 #include "sql/expr/expression.h"
+#include "sql/parser/parser_helper_func.h"
 
 using namespace std;
 
@@ -43,7 +45,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 
 %}
 
-%define api.pure full
+%define api.pure full 
 %define parse.error verbose
 /** 启用位置标识 **/
 %locations
@@ -97,6 +99,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         LE
         GE
         NE
+        DATE_T
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -118,6 +121,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   float                             floats;
 }
 
+/* %token <number> DATE */
+%token <string> DATE_STR
 %token <number> NUMBER
 %token <floats> FLOAT
 %token <string> ID
@@ -336,10 +341,12 @@ attr_def:
 number:
     NUMBER {$$ = $1;}
     ;
+// 这里的$$=type中的type是在value中定义的
 type:
     INT_T      { $$=INTS; }
     | STRING_T { $$=CHARS; }
     | FLOAT_T  { $$=FLOATS; }
+    | DATE_T   { $$=DATES; }
     ;
 insert_stmt:        /*insert   语句的语法解析树*/
     INSERT INTO ID VALUES LBRACE value value_list RBRACE 
@@ -381,9 +388,18 @@ value:
       @$ = @1;
     }
     |SSS {
+      // 这里为什么要-2
+      // A: 注意这里有双引号
       char *tmp = common::substr($1,1,strlen($1)-2);
       $$ = new Value(tmp);
       free(tmp);
+    }
+    |DATE_STR{
+      int time;
+      if(!CheckTimeRange($1, time)){
+        yyerror (&yylloc, sql_string, sql_result, scanner, YY_("date invalid"));
+      }
+      $$ = new Value(time, AttrType::DATES);
     }
     ;
     

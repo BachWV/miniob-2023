@@ -45,6 +45,8 @@ RC DeletePhysicalOperator::next()
   }
 
   PhysicalOperator *child = children_[0].get();
+  // Q：delete是要把表的每一条数据都删完？？？
+  // A: 下层的pred帮我们进行了过滤
   while (RC::SUCCESS == (rc = child->next())) {
     Tuple *tuple = child->current_tuple();
     if (nullptr == tuple) {

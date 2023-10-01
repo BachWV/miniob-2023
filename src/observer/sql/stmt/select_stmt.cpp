@@ -70,15 +70,18 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
 
     if (common::is_blank(relation_attr.relation_name.c_str()) &&
         0 == strcmp(relation_attr.attribute_name.c_str(), "*")) {
+          // 空.*
       for (Table *table : tables) {
         wildcard_fields(table, query_fields);
       }
 
     } else if (!common::is_blank(relation_attr.relation_name.c_str())) {
+      // 表名非空
       const char *table_name = relation_attr.relation_name.c_str();
       const char *field_name = relation_attr.attribute_name.c_str();
-
+      
       if (0 == strcmp(table_name, "*")) {
+        // 只能是*.*
         if (0 != strcmp(field_name, "*")) {
           LOG_WARN("invalid field name while table is *. attr=%s", field_name);
           return RC::SCHEMA_FIELD_MISSING;
@@ -87,6 +90,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
           wildcard_fields(table, query_fields);
         }
       } else {
+        // 常规情况，table.field
         auto iter = table_map.find(table_name);
         if (iter == table_map.end()) {
           LOG_WARN("no such table in from list: %s", table_name);
@@ -95,10 +99,12 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
 
         Table *table = iter->second;
         if (0 == strcmp(field_name, "*")) {
+          // table.*
           wildcard_fields(table, query_fields);
         } else {
           const FieldMeta *field_meta = table->table_meta().field(field_name);
           if (nullptr == field_meta) {
+            // 进行field合法性检查
             LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
             return RC::SCHEMA_FIELD_MISSING;
           }
@@ -107,6 +113,7 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
         }
       }
     } else {
+      // 没写table名，默认从第一个table中找
       if (tables.size() != 1) {
         LOG_WARN("invalid. I do not know the attr's table. attr=%s", relation_attr.attribute_name.c_str());
         return RC::SCHEMA_FIELD_MISSING;

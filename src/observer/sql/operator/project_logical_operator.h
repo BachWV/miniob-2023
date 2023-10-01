@@ -1,3 +1,11 @@
+/*
+ * @Author: wyy 281484683@qq.com
+ * @Date: 2023-09-25 09:03:31
+ * @LastEditors: wyy 281484683@qq.com
+ * @LastEditTime: 2023-09-28 20:31:55
+ * @FilePath: /miniob/src/observer/sql/operator/project_logical_operator.h
+ * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+ */
 /* Copyright (c) 2021 OceanBase and/or its affiliates. All rights reserved.
 miniob is licensed under Mulan PSL v2.
 You can use this software according to the terms and conditions of the Mulan PSL v2.
@@ -48,7 +56,7 @@ public:
   const std::vector<Field> &fields() const
   {
     return fields_;
-  }
+  } 
 
 private:
   //! 投影映射的字段名称

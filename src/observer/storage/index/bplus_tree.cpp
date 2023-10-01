@@ -803,6 +803,7 @@ RC BplusTreeHandler::create(const char *file_name, AttrType attr_type, int attr_
   header_dirty_ = false;
   bp->unpin_page(header_frame);
 
+  // 这个mem_pool_item有什么作用
   mem_pool_item_ = make_unique<common::MemPoolItem>(file_name);
   if (mem_pool_item_->init(file_header->key_length) < 0) {
     LOG_WARN("Failed to init memory pool for index %s", file_name);
@@ -1360,6 +1361,7 @@ MemPoolItem::unique_ptr BplusTreeHandler::make_key(const char *user_key, const R
   return key;
 }
 
+// 奇怪，看调用链上，传入的直接是所有value在一起的record(table/insert_entry)，到了这里怎么就能直接变成userKey了？？在哪里进行的从record中提取value？？
 RC BplusTreeHandler::insert_entry(const char *user_key, const RID *rid)
 {
   if (user_key == nullptr || rid == nullptr) {

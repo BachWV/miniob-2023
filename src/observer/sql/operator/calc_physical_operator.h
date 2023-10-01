@@ -51,8 +51,11 @@ public:
     emitted_ = true;
 
     int cell_num = tuple_.cell_num();
+    // Q: 先遍历一遍有什么用
+    // 咋想到的，为了cal还单独抽象了一个exprTuple？？
     for (int i = 0; i < cell_num; i++) {
       Value value;
+      // Q: exprTuple中的cell_at会执行当前的expr，返回value，但是有啥用啊，这个value也没在内部计算，也没传到外部
       rc = tuple_.cell_at(i, value);
       if (OB_FAIL(rc)) {
         return rc;

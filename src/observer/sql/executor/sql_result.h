@@ -41,6 +41,7 @@ public:
   {
     return_code_ = rc;
   }
+  
   void set_state_string(const std::string &state_string)
   {
     state_string_ = state_string;

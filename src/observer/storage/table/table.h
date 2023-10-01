@@ -33,7 +33,7 @@ class Trx;
  * @brief 表
  * 
  */
-class Table 
+class  Table 
 {
 public:
   Table() = default;

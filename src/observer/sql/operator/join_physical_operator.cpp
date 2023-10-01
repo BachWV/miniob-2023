@@ -35,6 +35,9 @@ RC NestedLoopJoinPhysicalOperator::open(Trx *trx)
   return rc;
 }
 
+// n2的复杂度，左边第i条先把右边所有的都匹配了
+// 等右边过了一轮，再用左边第i+1条匹配一轮右边
+// 现在只是设置joinTuple，至于joinTuple符不符合join的条件估计要执行器去判断
 RC NestedLoopJoinPhysicalOperator::next()
 {
   bool left_need_step = (left_tuple_ == nullptr);
@@ -101,6 +104,8 @@ RC NestedLoopJoinPhysicalOperator::left_next()
   return rc;
 }
 
+// 感觉执行器会调用算子的next来执行
+// 上级算子也会调用下级算子的next来驱动？？
 RC NestedLoopJoinPhysicalOperator::right_next()
 {
   RC rc = RC::SUCCESS;

@@ -67,6 +67,7 @@ void MemPoolItem::cleanup()
   LOG_INFO("Successfully do cleanup, this->name:%s.", this->name.c_str());
 }
 
+// init的时候调用这个函数来为每个item分配空间，并将分配好的空间放到frees中
 int MemPoolItem::extend()
 {
   if (this->dynamic == false) {
@@ -126,6 +127,7 @@ void *MemPoolItem::alloc()
   return buffer;
 }
 
+// 将自己的数据free掉
 MemPoolItem::unique_ptr MemPoolItem::alloc_unique_ptr()
 {
   void *item = this->alloc();

@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #pragma once
 
 #include <string>
+#include <ctime>
 
 /**
  * @brief 属性的类型
@@ -23,6 +24,7 @@ See the Mulan PSL v2 for more details. */
 enum AttrType
 {
   UNDEFINED,
+  DATES,
   CHARS,          ///< 字符串类型
   INTS,           ///< 整数类型(4字节)
   FLOATS,         ///< 浮点数类型(4字节)
@@ -46,6 +48,7 @@ public:
     this->set_data(data, length);
   }
 
+  explicit Value(int val, AttrType type);
   explicit Value(int val);
   explicit Value(float val);
   explicit Value(bool val);
@@ -64,6 +67,7 @@ public:
     this->set_data(const_cast<char *>(data), length);
   }
   void set_int(int val);
+  void set_date(int val);
   void set_float(float val);
   void set_boolean(bool val);
   void set_string(const char *s, int len = 0);
