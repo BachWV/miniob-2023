@@ -72,7 +72,7 @@ public:
 
 protected:
   int32_t     table_id_ = -1;
-  std::string name_;
+  std::string name_;  // 表名（不是表数据文件名，是用户创建的表名）
   std::vector<FieldMeta> fields_;  // 包含sys_fields
   std::vector<IndexMeta> indexes_;
 

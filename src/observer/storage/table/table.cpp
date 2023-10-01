@@ -26,6 +26,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/common/condition_filter.h"
 #include "storage/common/meta_util.h"
 #include "storage/index/index.h"
+#include "storage/index/index_meta.h"
 #include "storage/index/bplus_tree_index.h"
 #include "storage/trx/trx.h"
 
@@ -180,6 +181,43 @@ RC Table::open(const char *meta_file, const char *base_dir)
   }
 
   return rc;
+}
+
+RC Table::drop()
+{
+  RC ret = RC::SUCCESS;
+  const char *table_name = name();
+
+  const std::string table_data_file_name = table_data_file(base_dir_.c_str(), table_name);
+  const std::string table_meta_file_name = table_meta_file(base_dir_.c_str(), table_name);
+
+  auto do_unlink = [table_name](const std::string &file) -> RC {
+    RC ret = RC::SUCCESS;
+    if (::unlink(file.c_str()) == -1) {
+      int err = errno;
+      LOG_PANIC("Unable to unlink file %s while dropping table %s, errmsg = %s.", file.c_str(), table_name, strerror(err));
+      ret = RC::FILE_REMOVE;
+    }
+    LOG_TRACE("unlink file %s while dropping table %s.", file.c_str(), table_name);
+    return ret;
+  };
+
+  if ((ret = do_unlink(table_data_file_name)) != RC::SUCCESS) {
+    return ret;
+  }
+  if ((ret = do_unlink(table_meta_file_name)) != RC::SUCCESS) {
+    return ret;
+  }
+
+  for (const Index *index : indexes_) {
+    const char *index_name = index->index_meta().name();
+    const std::string index_file_name = table_index_file(base_dir_.c_str(), table_name, index_name);
+    if ((ret = do_unlink(index_file_name)) != RC::SUCCESS) {
+      return ret;
+    }
+  }
+
+  return ret;
 }
 
 RC Table::insert_record(Record &record)

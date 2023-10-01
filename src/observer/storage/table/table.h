@@ -61,6 +61,13 @@ public:
    */
   RC open(const char *meta_file, const char *base_dir);
 
+  /*
+   * 删除当前管理的表
+   * 对表的数据、元数据、索引文件分别unlink，但它们已经被Table打开了
+   * 调用者(Db)需要负责删除此Table对象，析构函数中将关闭这些文件，从而真正在硬盘中删除
+   */
+  RC drop();
+
   /**
    * @brief 根据给定的字段生成一个记录/行
    * @details 通常是由用户传过来的字段，按照schema信息组装成一个record。
@@ -112,8 +119,8 @@ public:
   Index *find_index_by_field(const char *field_name) const;
 
 private:
-  std::string base_dir_;
-  TableMeta   table_meta_;
+  std::string base_dir_;  // 表路径
+  TableMeta   table_meta_;  // name_成员含表名
   DiskBufferPool *data_buffer_pool_ = nullptr;   /// 数据文件关联的buffer pool
   RecordFileHandler *record_handler_ = nullptr;  /// 记录操作
   std::vector<Index *> indexes_;
