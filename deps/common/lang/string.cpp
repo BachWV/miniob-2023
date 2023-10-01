@@ -248,6 +248,7 @@ bool is_blank(const char *s)
 /**
  * 获取子串
  * 从s中提取下标为n1~n2的字符组成一个新字符串，然后返回这个新串的首地址
+ * 左闭右闭
  *
  * @param s
  * @param n1

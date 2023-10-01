@@ -49,6 +49,8 @@ RC TableScanPhysicalOperator::next()
     }
 
     if (filter_result) {
+      // 找到一条符合的，将其保存在current_record中
+      // Q:但是找到一条就返回吗？？？
       sql_debug("get a tuple: %s", tuple_.to_string().c_str());
       break;
     } else {
@@ -80,6 +82,7 @@ void TableScanPhysicalOperator::set_predicates(vector<unique_ptr<Expression>> &&
   predicates_ = std::move(exprs);
 }
 
+// 将每一个谓词应用到传入的tuple中，只有当所有谓词都在当前tuple中成立后，才将result返回true
 RC TableScanPhysicalOperator::filter(RowTuple &tuple, bool &result)
 {
   RC rc = RC::SUCCESS;

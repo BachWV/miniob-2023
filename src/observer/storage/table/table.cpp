@@ -50,6 +50,7 @@ Table::~Table()
   LOG_INFO("Table has been closed: %s", name());
 }
 
+// 创建meta，data，初始化recordHandler，表中涉及记录的操作都给到recordHandler
 RC Table::create(int32_t table_id, 
                  const char *path, 
                  const char *name, 
@@ -151,6 +152,7 @@ RC Table::open(const char *meta_file, const char *base_dir)
 
   const int index_num = table_meta_.index_num();
   for (int i = 0; i < index_num; i++) {
+    // 获取索引的字段
     const IndexMeta *index_meta = table_meta_.index(i);
     const FieldMeta *field_meta = table_meta_.field(index_meta->field());
     if (field_meta == nullptr) {
@@ -187,6 +189,7 @@ RC Table::insert_record(Record &record)
     return rc;
   }
 
+  // 用索引来检查主键完整性约束，如果当前的表没有index呢？
   rc = insert_entry_of_indexes(record.data(), record.rid());
   if (rc != RC::SUCCESS) { // 可能出现了键值重复
     RC rc2 = delete_entry_of_indexes(record.data(), record.rid(), false/*error_on_not_exists*/);
@@ -264,6 +267,8 @@ const TableMeta &Table::table_meta() const
   return table_meta_;
 }
 
+// 构造出来的record是自己管理内存
+// 奇怪
 RC Table::make_record(int value_num, const Value *values, Record &record)
 {
   // 检查字段类型是否一致
@@ -273,6 +278,7 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   }
 
   const int normal_field_start_index = table_meta_.sys_field_num();
+  // 重复，stmt明明已经检查了字段的合法性
   for (int i = 0; i < value_num; i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &value = values[i];
@@ -285,8 +291,11 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
 
   // 复制所有字段的值
   int record_size = table_meta_.record_size();
+  // cpp里面有这种移动内存的函数吗
   char *record_data = (char *)malloc(record_size);
 
+  // 构造的record只和字段物理size，offset有关，和里面放了什么无关
+  // 构造出的record包含了所有field的value
   for (int i = 0; i < value_num; i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &value = values[i];
@@ -360,7 +369,7 @@ RC Table::create_index(Trx *trx, const FieldMeta *field_meta, const char *index_
     delete index;
     LOG_ERROR("Failed to create bplus tree index. file name=%s, rc=%d:%s", index_file.c_str(), rc, strrc(rc));
     return rc;
-  }
+  } 
 
   // 遍历当前的所有数据，插入这个索引
   RecordFileScanner scanner;
@@ -402,6 +411,7 @@ RC Table::create_index(Trx *trx, const FieldMeta *field_meta, const char *index_
   /// 内存中有一份元数据，磁盘文件也有一份元数据。修改磁盘文件时，先创建一个临时文件，写入完成后再rename为正式文件
   /// 这样可以防止文件内容不完整
   // 创建元数据临时文件
+  // 序列化table_meta
   std::string tmp_file = table_meta_file(base_dir_.c_str(), name()) + ".tmp";
   std::fstream fs;
   fs.open(tmp_file, std::ios_base::out | std::ios_base::binary | std::ios_base::trunc);

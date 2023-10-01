@@ -85,6 +85,7 @@ RC LogicalPlanGenerator::create_plan(
   const std::vector<Field> &all_fields = select_stmt->query_fields();
   for (Table *table : tables) {
     std::vector<Field> fields;
+    // 同一个Table中的Field拿出来
     for (const Field &field : all_fields) {
       if (0 == strcmp(field.table_name(), table->name())) {
         fields.push_back(field);
@@ -162,6 +163,7 @@ RC LogicalPlanGenerator::create_plan(
   Table *table = insert_stmt->table();
   vector<Value> values(insert_stmt->values(), insert_stmt->values() + insert_stmt->value_amount());
 
+  // 它为什么还要重新构建一个values呢？直接用stmt的values不行吗
   InsertLogicalOperator *insert_operator = new InsertLogicalOperator(table, values);
   logical_operator.reset(insert_operator);
   return RC::SUCCESS;
@@ -173,6 +175,7 @@ RC LogicalPlanGenerator::create_plan(
   Table *table = delete_stmt->table();
   FilterStmt *filter_stmt = delete_stmt->filter_stmt();
   std::vector<Field> fields;
+  // 把table中所有field都放到field中
   for (int i = table->table_meta().sys_field_num(); i < table->table_meta().field_num(); i++) {
     const FieldMeta *field_meta = table->table_meta().field(i);
     fields.push_back(Field(table, field_meta));
@@ -188,6 +191,7 @@ RC LogicalPlanGenerator::create_plan(
   unique_ptr<LogicalOperator> delete_oper(new DeleteLogicalOperator(table));
 
   if (predicate_oper) {
+    // delOp->predOp->tabOp
     predicate_oper->add_child(std::move(table_get_oper));
     delete_oper->add_child(std::move(predicate_oper));
   } else {

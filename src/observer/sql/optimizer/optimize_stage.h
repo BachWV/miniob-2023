@@ -1,3 +1,11 @@
+/*
+ * @Author: wyy 281484683@qq.com
+ * @Date: 2023-09-25 09:03:31
+ * @LastEditors: wyy 281484683@qq.com
+ * @LastEditTime: 2023-09-27 17:15:51
+ * @FilePath: /miniob/src/observer/sql/optimizer/optimize_stage.h
+ * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+ */
 /* Copyright (c) 2021 OceanBase and/or its affiliates. All rights reserved.
 miniob is licensed under Mulan PSL v2.
 You can use this software according to the terms and conditions of the Mulan PSL v2.
@@ -49,7 +57,7 @@ private:
    */
   RC create_logical_plan(SQLStageEvent *sql_event, std::unique_ptr<LogicalOperator> &logical_operator);
 
-  /**
+  /** 
    * @brief 重写逻辑计划
    * @details 根据各种规则，对逻辑计划进行重写，比如消除多余的比较(1!=0)等。
    * 规则改写也是一个递归的过程。

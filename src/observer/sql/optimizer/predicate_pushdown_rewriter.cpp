@@ -20,14 +20,16 @@ See the Mulan PSL v2 for more details. */
 RC PredicatePushdownRewriter::rewrite(std::unique_ptr<LogicalOperator> &oper, bool &change_made)
 {
   RC rc = RC::SUCCESS;
+  // 当前是一个谓词
   if (oper->type() != LogicalOperatorType::PREDICATE) {
     return rc;
   }
-
+  // 不能有多叉
   if (oper->children().size() != 1) {
     return rc;
   }
-
+  // 获取唯一的孩子，并且孩子是tableGet，所以当前下推只能下推邻近的Pred和TabGet，只要中间隔了东西，就无法进行下推？
+  // 如果当前谓词是and，and这种有多个表达式的，也无法进行下推？？
   std::unique_ptr<LogicalOperator> &child_oper = oper->children().front();
   if (child_oper->type() != LogicalOperatorType::TABLE_GET) {
     return rc;
@@ -35,6 +37,7 @@ RC PredicatePushdownRewriter::rewrite(std::unique_ptr<LogicalOperator> &oper, bo
 
   auto table_get_oper = static_cast<TableGetLogicalOperator *>(child_oper.get());
 
+  // 获得当前谓词的表达式，谓词只能有一个表达式
   std::vector<std::unique_ptr<Expression>> &predicate_oper_exprs = oper->expressions();
   if (predicate_oper_exprs.size() != 1) {
     return rc;

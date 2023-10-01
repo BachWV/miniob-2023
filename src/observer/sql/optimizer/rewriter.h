@@ -1,3 +1,11 @@
+/*
+ * @Author: wyy 281484683@qq.com
+ * @Date: 2023-09-25 09:03:31
+ * @LastEditors: wyy 281484683@qq.com
+ * @LastEditTime: 2023-09-27 17:21:48
+ * @FilePath: /miniob/src/observer/sql/optimizer/rewriter.h
+ * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+ */
 /* Copyright (c) 2021 OceanBase and/or its affiliates. All rights reserved.
 miniob is licensed under Mulan PSL v2.
 You can use this software according to the terms and conditions of the Mulan PSL v2.
@@ -37,7 +45,7 @@ public:
   Rewriter();
   virtual ~Rewriter() = default;
 
-  /**
+  /** 
    * @brief 对逻辑计划进行重写
    * @details 如果重写发生，change_made为true，否则为false。
    * 通常情况下如果改写发生改变，就会继续重写，直到没有改变为止。

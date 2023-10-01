@@ -33,6 +33,8 @@ RC ProjectPhysicalOperator::open(Trx *trx)
   return RC::SUCCESS;
 }
 
+// 啥意思啊，为啥投影的物理操作是最child[0]执行next啊？？？
+// 
 RC ProjectPhysicalOperator::next()
 {
   if (children_.empty()) {
@@ -54,6 +56,8 @@ Tuple *ProjectPhysicalOperator::current_tuple()
   return &tuple_;
 }
 
+// Q: 我们要投影的tuple建立好了之后，为什么current_tuple直接设置的是children的tuple呢，children是怎么根据我们proj算子存储的tuple来设置自己的tuple呢？
+// A: ProjTuple在cell_at函数中帮我们用内部存储的待投影的字段specs_过滤了一下
 void ProjectPhysicalOperator::add_projection(const Table *table, const FieldMeta *field_meta)
 {
   // 对单表来说，展示的(alias) 字段总是字段名称，

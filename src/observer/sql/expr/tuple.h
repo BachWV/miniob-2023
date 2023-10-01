@@ -257,6 +257,7 @@ public:
     return speces_.size();
   }
 
+  // 我们找的时候找的是speces_中的字段，从speces拿到之后，在直接从我们绑定的普通tuple中find
   RC cell_at(int index, Value &cell) const override
   {
     if (index < 0 || index >= static_cast<int>(speces_.size())) {
@@ -286,6 +287,7 @@ public:
   }
 #endif
 private:
+  // 已投影的vector
   std::vector<TupleCellSpec *> speces_;
   Tuple *tuple_ = nullptr;
 };
