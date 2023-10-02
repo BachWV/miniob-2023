@@ -47,6 +47,12 @@ public:
 
   RC create_table(const char *table_name, int attribute_count, const AttrInfoSqlNode *attributes);
 
+  /*
+   * 在数据库中删除table_name对应的表，删除该表相关的数据、元数据文件、索引文件
+   * 当前实现中，不考虑事务相关的操作，如回滚、有序提交
+   */
+  RC drop_table(const char *table_name);
+
   Table *find_table(const char *table_name) const;
   Table *find_table(int32_t table_id) const;
 
@@ -70,5 +76,10 @@ private:
   std::unique_ptr<CLogManager> clog_manager_;
 
   /// 给每个table都分配一个ID，用来记录日志。这里假设所有的DDL都不会并发操作，所以相关的数据都不上锁
+  /*
+   * TODO:
+   * 此处不考虑DDL的并发，导致DDL和DML也不能并发，因为DML要查找opened_tables_，DDL要修改opened_tables_。
+   * 如果后续测试出现DDL和DML并发，则需要锁保护opened_tables_
+   */
   int32_t next_table_id_ = 0;
 };

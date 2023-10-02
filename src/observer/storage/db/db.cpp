@@ -101,6 +101,33 @@ RC Db::create_table(const char *table_name, int attribute_count, const AttrInfoS
   return RC::SUCCESS;
 }
 
+RC Db::drop_table(const char *table_name)
+{
+  const std::string table_name_(table_name);
+  RC ret = RC::SUCCESS;
+  
+  if (opened_tables_.count(table_name_) == 0) {
+    LOG_WARN("Dropping table %s does not exist.", table_name);
+    return RC::SCHEMA_TABLE_NOT_EXIST;
+  }
+  
+  /* 首先，删除table_name相关的所有数据、元数据、索引文件 */
+  Table *table = opened_tables_.at(table_name_);
+  ret = table->drop();
+  if (ret != RC::SUCCESS)
+    return ret;
+
+  /* 然后，将table对象从Db的opened_tables_中移除 */
+  opened_tables_.erase(table_name_);
+
+  /* 
+   * 最后，析构table对象，
+   * 将table文件的缓存frame移除缓冲区，关闭打开的文件，从而真正在硬盘上删除 
+   */
+  delete table;
+  return ret;
+}
+
 Table *Db::find_table(const char *table_name) const
 {
   std::unordered_map<std::string, Table *>::const_iterator iter = opened_tables_.find(table_name);
