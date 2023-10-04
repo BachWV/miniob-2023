@@ -1,25 +1,11 @@
-/* Copyright (c) 2021 OceanBase and/or its affiliates. All rights reserved.
-miniob is licensed under Mulan PSL v2.
-You can use this software according to the terms and conditions of the Mulan PSL v2.
-You may obtain a copy of Mulan PSL v2 at:
-         http://license.coscl.org.cn/MulanPSL2
-THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
-EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
-MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-See the Mulan PSL v2 for more details. */
-
-//
-// Created by WangYunlai on 2022/6/27.
-//
-
 #include "common/log/log.h"
-#include "sql/operator/delete_physical_operator.h"
+#include "sql/operator/update_physical_operator.h"
 #include "storage/record/record.h"
 #include "storage/table/table.h"
 #include "storage/trx/trx.h"
-#include "sql/stmt/delete_stmt.h"
+#include "sql/stmt/update_stmt.h"
 
-RC DeletePhysicalOperator::open(Trx *trx)
+RC UpdatePhysicalOperator::open(Trx *trx)
 {
   if (children_.empty()) {
     return RC::SUCCESS;
@@ -37,8 +23,12 @@ RC DeletePhysicalOperator::open(Trx *trx)
   return RC::SUCCESS;
 }
 
-RC DeletePhysicalOperator::next()
+RC UpdatePhysicalOperator::next()
 {
+  Record record;
+  
+  //----------------
+  //delete
   RC rc = RC::SUCCESS;
   if (children_.empty()) {
     return RC::RECORD_EOF;
@@ -54,23 +44,43 @@ RC DeletePhysicalOperator::next()
 
     RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
     Record &record = row_tuple->record();
-   //debug 是否真的能拿到数据
+    //tuple已经拿到数据了，tuple存有record的指针
+  
+    Record record_new;
+    vector<Value> values_;
     int cell_numddd=row_tuple->cell_num();
     for (int i = 0; i < cell_numddd; i++) {
+      if(i==field_meta_index_){
+          values_.push_back(value_);
+          continue;
+      }
         Value value ;
         row_tuple->cell_at(i, value);
+        values_.push_back(value);
     }
+    
+
     rc = trx_->delete_record(table_, record);
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to delete record: %s", strrc(rc));
       return rc;
     }
-  }
 
+    RC rc = table_->make_record(static_cast<int>(values_.size()), values_.data(), record_new);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to make record. rc=%s", strrc(rc));
+      return rc;
+    }
+    rc = trx_->insert_record(table_, record_new);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to update record: %s", strrc(rc));
+      return rc;
+    }
+  }
   return RC::RECORD_EOF;
 }
 
-RC DeletePhysicalOperator::close()
+RC UpdatePhysicalOperator::close()
 {
   if (!children_.empty()) {
     children_[0]->close();
