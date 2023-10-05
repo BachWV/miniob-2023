@@ -7,7 +7,7 @@
         {
             "type": "cppdbg",
             "request": "launch",
-            "name": "Debug",
+            "name": "observer-dbg",
             "program": "${workspaceFolder}/build/bin/observer",
             "args": ["-f", "${workspaceFolder}/etc/observer.ini", "-s", "miniob.sock"],
             "cwd": "${workspaceFolder}/build/",

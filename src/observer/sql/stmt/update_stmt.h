@@ -16,9 +16,10 @@ See the Mulan PSL v2 for more details. */
 
 #include "common/rc.h"
 #include "sql/stmt/stmt.h"
+#include "sql/stmt/filter_stmt.h"
 
 class Table;
-
+class Db;
 /**
  * @brief 更新语句
  * @ingroup Statement
@@ -27,8 +28,20 @@ class UpdateStmt : public Stmt
 {
 public:
   UpdateStmt() = default;
-  UpdateStmt(Table *table, Value *values, int value_amount);
+  UpdateStmt(Table *table,const Value value,int field_meta_index,FilterStmt *filter_stmt);
 
+  ~UpdateStmt() override;
+  FilterStmt *filter_stmt() const
+  {
+    return filter_stmt_;
+  }
+
+  StmtType type() const override
+  {
+    return StmtType::UPDATE;
+  }
+
+ 
 public:
   static RC create(Db *db, const UpdateSqlNode &update_sql, Stmt *&stmt);
 
@@ -37,17 +50,18 @@ public:
   {
     return table_;
   }
-  Value *values() const
+  const Value value() const
   {
-    return values_;
+    return value_;
   }
-  int value_amount() const
+  int field_meta_index() const
   {
-    return value_amount_;
+    return field_meta_index_;
   }
 
 private:
   Table *table_ = nullptr;
-  Value *values_ = nullptr;
-  int value_amount_ = 0;
+  const Value value_;
+  int field_meta_index_ ;
+  FilterStmt *filter_stmt_ = nullptr;
 };

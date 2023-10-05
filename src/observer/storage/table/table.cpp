@@ -269,7 +269,8 @@ RC Table::get_record(const RID &rid, Record &record)
     LOG_WARN("failed to visit record. rid=%s, table=%s, rc=%s", rid.to_string().c_str(), name(), strrc(rc));
     return rc;
   }
-
+//将该内存空间的地址和大小通过 record.set_data_owner 函数设置到 record 对象中
+//以便 record 对象管理该内存空间的释放
   record.set_data_owner(record_data, record_size);
   return rc;
 }
@@ -311,6 +312,7 @@ const TableMeta &Table::table_meta() const
 
 // 构造出来的record是自己管理内存
 // 奇怪
+//构造record，将values中的数据复制到record_data中
 RC Table::make_record(int value_num, const Value *values, Record &record)
 {
   // 检查字段类型是否一致
@@ -493,6 +495,44 @@ RC Table::delete_record(const Record &record)
            name(), index->index_meta().name(), record.rid().to_string().c_str(), strrc(rc));
   }
   rc = record_handler_->delete_record(&record.rid());
+  return rc;
+}
+
+RC Table::update_record(const Record &record)
+{
+  RC rc = RC::SUCCESS;
+  // for (Index *index : indexes_) {
+  //   rc = index->delete_entry(record.data(), &record.rid());
+  //   ASSERT(RC::SUCCESS == rc, 
+  //          "failed to update entry from index. table name=%s, index name=%s, rid=%s, rc=%s",
+  //          name(), index->index_meta().name(), record.rid().to_string().c_str(), strrc(rc));
+  //   rc = insert_entry_of_indexes(record.data(), record.rid());
+  //   if (rc != RC::SUCCESS) { // 可能出现了键值重复
+  //     RC rc2 = delete_entry_of_indexes(record.data(), record.rid(), false/*error_on_not_exists*/);
+  //     if (rc2 != RC::SUCCESS) {
+  //       LOG_ERROR("Failed to rollback index data when insert index entries failed. table name=%s, rc=%d:%s",
+  //                 name(), rc2, strrc(rc2));
+  //     }
+  //     rc2 = record_handler_->delete_record(&record.rid());
+  //     if (rc2 != RC::SUCCESS) {
+  //       LOG_PANIC("Failed to rollback record data when insert index entries failed. table name=%s, rc=%d:%s",
+  //                 name(), rc2, strrc(rc2));
+  //     }
+  //   }
+  // }
+  // rc = record_handler_->delete_record(&record.rid());
+  // if (rc != RC::SUCCESS) {
+  //   LOG_ERROR("in update Failed to delete old record. table name=%s, rc=%s", name(), strrc(rc));
+  //   return rc;
+  // }
+  
+  // rc = record_handler_->insert_record(record.data(), table_meta_.record_size(), &record.rid());
+  // if (rc != RC::SUCCESS) {
+  //   LOG_ERROR("Insert record failed. table name=%s, rc=%s", table_meta_.name(), strrc(rc));
+  //   return rc;
+  // }
+
+
   return rc;
 }
 
