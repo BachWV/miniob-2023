@@ -21,6 +21,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/table/table_meta.h"
 #include "common/log/log.h"
 #include "common/lang/string.h"
+#include "common/lang/bitmap.h"
 #include "storage/buffer/disk_buffer_pool.h"
 #include "storage/record/record_manager.h"
 #include "storage/common/condition_filter.h"
@@ -262,6 +263,7 @@ RC Table::get_record(const RID &rid, Record &record)
   auto copier = [&record, record_data, record_size](Record &record_src) {
     memcpy(record_data, record_src.data(), record_size);
     record.set_rid(record_src.rid());
+    record.set_null_states(record_src.get_null_states());
   };
   RC rc = record_handler_->visit_record(rid, true/*readonly*/, copier);
   if (rc != RC::SUCCESS) {
@@ -321,13 +323,19 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
 
   const int normal_field_start_index = table_meta_.sys_field_num();
   // 重复，stmt明明已经检查了字段的合法性
+  // note: 现在make_record来检查空值的合法性，因为不止一处调用make_record，在此处检查，减少重复工作
   for (int i = 0; i < value_num; i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &value = values[i];
-    if (field->type() != value.attr_type()) {
+    if (field->type() != value.attr_type() && value.attr_type() != NULL_TYPE) {
       LOG_ERROR("Invalid value type. table name =%s, field name=%s, type=%d, but given=%d",
                 table_meta_.name(), field->name(), field->type(), value.attr_type());
       return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+    }
+    if (value.is_null_value() && !field->nullable()) {
+      LOG_WARN("value can't be null. table name =%s, field name =%s, type=%d.", 
+        table_meta_.name(), field->name(), field->type());
+      return RC::SCHEMA_FIELD_FORBIDDEN_NULL;
     }
   }
 
@@ -335,12 +343,25 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   int record_size = table_meta_.record_size();
   // cpp里面有这种移动内存的函数吗
   char *record_data = (char *)malloc(record_size);
+  memset(record_data, 0, record_size);
+
+  char *null_bitmap = record_data + table_meta_.get_null_bitmap_offset();
+  common::Bitmap bitmap_oper(null_bitmap, table_meta_.field_num());
 
   // 构造的record只和字段物理size，offset有关，和里面放了什么无关
   // 构造出的record包含了所有field的value
   for (int i = 0; i < value_num; i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &value = values[i];
+
+    /* 初始化该属性在空值位图中的位。如果为空，则置1 */
+    int attr_index = i + table_meta_.sys_field_num();
+    if (value.is_null_value()) {
+      bitmap_oper.set_bit(attr_index);
+      continue;  // 空值，接下来的拷贝无意义
+    }
+    /* 不为空值，位图上不用清零，因为分配record_data时是全清零的 */
+
     size_t copy_len = field->len();
     if (field->type() == CHARS) {
       const size_t data_len = value.length();
@@ -394,6 +415,10 @@ RC Table::create_index(Trx *trx, const FieldMeta *field_meta, const char *index_
     LOG_INFO("Invalid input arguments, table name is %s, index_name is blank or attribute_name is blank", name());
     return RC::INVALID_ARGUMENT;
   }
+
+  /* 对nullable的列，避免建索引(B+树目前不支持空值key) */
+  if (field_meta->nullable())
+    return RC::SUCCESS;
 
   IndexMeta new_index_meta;
   RC rc = new_index_meta.init(index_name, *field_meta);
@@ -557,4 +582,19 @@ RC Table::sync()
   }
   LOG_INFO("Sync table over. table=%s", name());
   return rc;
+}
+
+void Table::construct_null_info_in_record(Record *rec)
+{
+  rec->clear_null_states();
+  rec->set_null_states_size(table_meta_.field_num());
+
+  char *record_data = rec->data();
+  common::Bitmap null_bitmap(record_data + table_meta_.get_null_bitmap_offset(), table_meta_.field_num());
+
+  for (int i = 0; i < table_meta_.field_num(); ++i) {
+    if (null_bitmap.get_bit(i)) {
+      rec->set_null_flag(i);
+    }
+  }
 }

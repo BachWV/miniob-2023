@@ -19,7 +19,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/comparator.h"
 #include "common/lang/string.h"
 
-const char *ATTR_TYPE_NAME[] = {"undefined", "chars", "ints", "floats", "booleans"};
+const char *ATTR_TYPE_NAME[] = {"undefined", "chars", "ints", "floats", "booleans", "null_type"};
 
 const char *attr_type_to_string(AttrType type)
 {
@@ -83,6 +83,8 @@ void Value::set_data(char *data, int length)
       num_value_.bool_value_ = *(int *)data != 0;
       length_ = length;
     } break;
+    case NULL_TYPE:
+      break;
     default: {
       LOG_WARN("unknown data type: %d", attr_type_);
     } break;
@@ -196,6 +198,9 @@ std::string Value::to_string() const
     case CHARS: {
       os << str_value_;
     } break;
+    case NULL_TYPE: {
+      os << "NULL";
+    } break;
     default: {
       LOG_WARN("unsupported attr type: %d", attr_type_);
     } break;
@@ -224,6 +229,8 @@ int Value::compare(const Value &other) const
       case BOOLEANS: {
         return common::compare_int((void *)&this->num_value_.bool_value_, (void *)&other.num_value_.bool_value_);
       }
+      case NULL_TYPE:
+        return 0;  // 这里是三路比较，但NULL值的比较不满足三路比较（无论如何都是false），因此只能在compare的调用者处再做特判了，这里随便返回。
       default: {
         LOG_WARN("unsupported type: %d", this->attr_type_);
       }
@@ -234,6 +241,8 @@ int Value::compare(const Value &other) const
   } else if (this->attr_type_ == FLOATS && other.attr_type_ == INTS) {
     float other_data = other.num_value_.int_value_;
     return common::compare_float((void *)&this->num_value_.float_value_, (void *)&other_data);
+  } else if (this->attr_type_ == NULL_TYPE || other.attr_type_ == NULL_TYPE) {
+    return 0;  // 同上
   }
   LOG_WARN("not supported");
   return -1;  // TODO return rc?
