@@ -63,6 +63,14 @@ public:
 
   int record_size() const;
 
+  int get_null_bitmap_offset() const {
+    return null_bitmap_offset;
+  }
+
+  int get_null_bitmap_len() const {
+    return null_bitmap_len;
+  }
+
 public:
   int serialize(std::ostream &os) const override;
   int deserialize(std::istream &is) override;
@@ -77,4 +85,5 @@ protected:
   std::vector<IndexMeta> indexes_;
 
   int record_size_ = 0;
+  int null_bitmap_offset, null_bitmap_len;  // 描述记录中空值位图的偏移和字节数
 };

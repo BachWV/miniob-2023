@@ -108,6 +108,9 @@ public:
 
   RC sync();
 
+  /* 由RecordFileHandler或RecordFileScanner在get_record返回前，以及visit_record回调调用前，在Record对象中构造is_null数组 */
+  void construct_null_info_in_record(Record *rec);
+
 private:
   RC insert_entry_of_indexes(const char *record, const RID &rid);
   RC delete_entry_of_indexes(const char *record, const RID &rid, bool error_on_not_exists);

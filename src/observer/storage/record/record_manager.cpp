@@ -289,7 +289,7 @@ bool RecordPageHandler::is_full() const { return page_header_->record_num >= pag
 
 RecordFileHandler::~RecordFileHandler() { this->close(); }
 
-RC RecordFileHandler::init(DiskBufferPool *buffer_pool)
+RC RecordFileHandler::init(DiskBufferPool *buffer_pool, Table *table)
 {
   if (disk_buffer_pool_ != nullptr) {
     LOG_ERROR("record file handler has been openned.");
@@ -297,6 +297,7 @@ RC RecordFileHandler::init(DiskBufferPool *buffer_pool)
   }
 
   disk_buffer_pool_ = buffer_pool;
+  table_ = table;
 
   RC rc = init_free_pages();
 
@@ -462,7 +463,17 @@ RC RecordFileHandler::get_record(RecordPageHandler &page_handler, const RID *rid
     return ret;
   }
 
-  return page_handler.get_record(rid, rec);
+  ret = page_handler.get_record(rid, rec);
+  if (OB_FAIL(ret))
+    return ret;
+
+  if (table_ == nullptr) {
+    LOG_WARN("RecordFileHandler: No table related, couldn't construct null information in returned record.");
+    return RC::RECORDFILEHANDLER_NO_TABLE;
+  }
+  
+  table_->construct_null_info_in_record(rec);
+  return RC::SUCCESS;
 }
 
 RC RecordFileHandler::visit_record(const RID &rid, bool readonly, std::function<void(Record &)> visitor)
@@ -481,6 +492,12 @@ RC RecordFileHandler::visit_record(const RID &rid, bool readonly, std::function<
     LOG_WARN("failed to get record from record page handle. rid=%s, rc=%s", rid.to_string().c_str(), strrc(rc));
     return rc;
   }
+
+  if (table_ == nullptr) {
+    LOG_WARN("RecordFileHandler: No table related, couldn't construct null information in returned record.");
+    return RC::RECORDFILEHANDLER_NO_TABLE;
+  }
+  table_->construct_null_info_in_record(&record);
 
   visitor(record);
   return rc;
@@ -578,6 +595,9 @@ RC RecordFileScanner::fetch_next_record_in_page()
     if (condition_filter_ != nullptr && !condition_filter_->filter(next_record_)) {
       continue;
     }
+
+    // Record内构造好空值信息
+    table_->construct_null_info_in_record(&next_record_);
 
     // 如果是某个事务上遍历数据，还要看看事务访问是否有冲突
     if (trx_ == nullptr) {

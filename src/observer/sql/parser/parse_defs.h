@@ -52,6 +52,8 @@ enum CompOp
   LESS_THAN,    ///< "<"
   GREAT_EQUAL,  ///< ">="
   GREAT_THAN,   ///< ">"
+  IS_NULL,
+  IS_NOT_NULL,
   NO_OP
 };
 
@@ -62,6 +64,10 @@ enum CompOp
  * 一个条件比较是有两部分组成的，称为左边和右边。
  * 左边和右边理论上都可以是任意的数据，比如是字段（属性，列），也可以是数值常量。
  * 这个结构中记录的仅仅支持字段和值。
+ */
+/*
+ * 现在有一元运算了(is null/is not null)
+ * 出现一元运算时，只有left_value/left_attr中的值是有效的
  */
 struct ConditionSqlNode
 {
@@ -150,6 +156,7 @@ struct AttrInfoSqlNode
   AttrType    type;       ///< Type of attribute
   std::string name;       ///< Attribute name
   size_t      length;     ///< Length of attribute
+  bool nullable = false;  // 是否能为空值
 };
 
 /**

@@ -97,6 +97,9 @@ RC insert_record_from_file(Table *table,
       case CHARS: {
         record_values[i].set_string(file_value.c_str());
       } break;
+      case NULL_TYPE: {
+        record_values[i].set_type(NULL_TYPE);
+      } break;
       default: {
         errmsg << "Unsupported field type to loading: " << field->type();
         rc = RC::SCHEMA_FIELD_TYPE_MISMATCH;
