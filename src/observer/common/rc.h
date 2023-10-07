@@ -39,6 +39,7 @@ See the Mulan PSL v2 for more details. */
   DEFINE_RC(RECORD_EOF)                     \
   DEFINE_RC(RECORD_NOT_EXIST)               \
   DEFINE_RC(RECORD_INVISIBLE)               \
+  DEFINE_RC(RECORDFILEHANDLER_NO_TABLE)     \
   DEFINE_RC(SCHEMA_DB_EXIST)                \
   DEFINE_RC(SCHEMA_DB_NOT_EXIST)            \
   DEFINE_RC(SCHEMA_DB_NOT_OPENED)           \
@@ -47,6 +48,7 @@ See the Mulan PSL v2 for more details. */
   DEFINE_RC(SCHEMA_FIELD_NOT_EXIST)         \
   DEFINE_RC(SCHEMA_FIELD_MISSING)           \
   DEFINE_RC(SCHEMA_FIELD_TYPE_MISMATCH)     \
+  DEFINE_RC(SCHEMA_FIELD_FORBIDDEN_NULL)    \
   DEFINE_RC(SCHEMA_INDEX_NAME_REPEAT)       \
   DEFINE_RC(IOERR_READ)                     \
   DEFINE_RC(IOERR_WRITE)                    \

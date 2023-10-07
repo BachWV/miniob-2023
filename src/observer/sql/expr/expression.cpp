@@ -89,8 +89,27 @@ ComparisonExpr::~ComparisonExpr()
 RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &result) const
 {
   RC rc = RC::SUCCESS;
+
+  /* 如果是一元谓词 */
+  if (comp_ == CompOp::IS_NULL) {
+    result = left.is_null_value();
+    return rc;
+  }
+
+  if (comp_ == CompOp::IS_NOT_NULL) {
+    result = !left.is_null_value();
+    return rc;
+  }
+
+  /* 下面是二元比较 */
+  if (left.attr_type() == NULL_TYPE || right.attr_type() == NULL_TYPE) {
+    result = false;  // NULL无论怎么比较都是false
+    return rc;
+  }
+
   int cmp_result = left.compare(right);
   result = false;
+
   switch (comp_) {
     case EQUAL_TO: {
       result = (0 == cmp_result);

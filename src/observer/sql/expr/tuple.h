@@ -171,6 +171,12 @@ public:
       return RC::INVALID_ARGUMENT;
     }
 
+    // 目前而言，RowTuple一定是包含表中所有字段的，这里的index就是构造表时各属性的index
+    if (record_->is_null_value(index)) {
+      cell.set_type(AttrType::NULL_TYPE);
+      return RC::SUCCESS;
+    }
+
     FieldExpr *field_expr = speces_[index];
     const FieldMeta *field_meta = field_expr->field().meta();
     cell.set_type(field_meta->type());

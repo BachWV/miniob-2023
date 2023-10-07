@@ -102,6 +102,11 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         DATE_T
         ORDER_BY
         ASC
+        NULLABLE
+        NOT_NULL
+        NULL_VALUE
+        PREDICATE_IS_NULL
+        PREDICATE_IS_NOT_NULL
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -141,6 +146,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <comp>                comp_op
 %type <rel_attr>            rel_attr
 %type <attr_infos>          attr_def_list
+%type <attr_info>           basic_attr_def
 %type <attr_info>           attr_def
 %type <value_list>          value_list
 %type <condition_list>      where
@@ -327,8 +333,26 @@ attr_def_list:
       delete $2;
     }
     ;
-    
+
 attr_def:
+    basic_attr_def 
+    {
+      $1->nullable = false;
+      $$ = $1;
+    }
+    | basic_attr_def NOT_NULL 
+    {
+      $1->nullable = false;
+      $$ = $1;
+    }
+    | basic_attr_def NULLABLE 
+    {
+      $1->nullable = true;
+      $$ = $1;
+    }
+    ;
+
+basic_attr_def:
     ID type LBRACE number RBRACE 
     {
       $$ = new AttrInfoSqlNode;
@@ -346,6 +370,7 @@ attr_def:
       free($1);
     }
     ;
+
 number:
     NUMBER {$$ = $1;}
     ;
@@ -408,6 +433,10 @@ value:
         yyerror (&yylloc, sql_string, sql_result, scanner, YY_("date invalid"));
       }
       $$ = new Value(time, AttrType::DATES);
+    }
+    |NULL_VALUE {
+      $$ = new Value();
+      $$->set_type(AttrType::NULL_TYPE);
     }
     ;
     
@@ -661,6 +690,46 @@ condition:
 
       delete $1;
       delete $3;
+    }
+    | rel_attr PREDICATE_IS_NULL
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 1;
+      $$->left_attr = *$1;
+      $$->comp = CompOp::IS_NULL;
+      $$->right_is_attr = 0;  // 兼容FilterUnit
+
+      delete $1;
+    }
+    | value PREDICATE_IS_NULL
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 0;
+      $$->left_value = *$1;
+      $$->comp = CompOp::IS_NULL;
+      $$->right_is_attr = 0;
+
+      delete $1;
+    }
+    | rel_attr PREDICATE_IS_NOT_NULL
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 1;
+      $$->left_attr = *$1;
+      $$->comp = CompOp::IS_NOT_NULL;
+      $$->right_is_attr = 0;
+
+      delete $1;
+    }
+    | value PREDICATE_IS_NOT_NULL
+    {
+      $$ = new ConditionSqlNode;
+      $$->left_is_attr = 0;
+      $$->left_value = *$1;
+      $$->comp = CompOp::IS_NOT_NULL;
+      $$->right_is_attr = 0;
+
+      delete $1;
     }
     ;
 

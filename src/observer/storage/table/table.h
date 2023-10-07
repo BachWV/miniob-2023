@@ -84,6 +84,7 @@ public:
    */
   RC insert_record(Record &record);
   RC delete_record(const Record &record);
+  RC update_record(const Record &record);
   RC visit_record(const RID &rid, bool readonly, std::function<void(Record &)> visitor);
   RC get_record(const RID &rid, Record &record);
 
@@ -106,6 +107,9 @@ public:
   const TableMeta &table_meta() const;
 
   RC sync();
+
+  /* 由RecordFileHandler或RecordFileScanner在get_record返回前，以及visit_record回调调用前，在Record对象中构造is_null数组 */
+  void construct_null_info_in_record(Record *rec);
 
 private:
   RC insert_entry_of_indexes(const char *record, const RID &rid);

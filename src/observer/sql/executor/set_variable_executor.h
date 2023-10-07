@@ -100,6 +100,9 @@ private:
       }
       rc = RC::VARIABLE_NOT_VALID;
     }
+    else {
+      bool_value = false;
+    }
 
     return rc;
   }

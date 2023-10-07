@@ -106,6 +106,7 @@ public:
     data_  = other.data_;
     len_   = other.len_;
     owner_ = other.owner_;
+    is_null = other.is_null;
 
     if (other.owner_) {
       char *tmp = (char *)malloc(other.len_);
@@ -154,10 +155,40 @@ public:
   RID       &rid() { return rid_; }
   const RID &rid() const { return rid_; }
 
+  /* index从0开始，判断第index个属性是否为空值 */
+  bool is_null_value(int index) const {
+    return is_null[index];
+  }
+
+  void set_null_flag(int index) {
+    if (index >= is_null.size())
+      is_null.resize(index + 1, false);
+    is_null[index] = true;
+  }
+
+  const std::vector<bool> &get_null_states() const {
+    return is_null;
+  }
+
+  void set_null_states(const std::vector<bool> &null_states) {
+    is_null = null_states;
+  }
+
+  void clear_null_states() {
+    is_null.clear();
+  }
+
+  void set_null_states_size(int bit_num) {
+    is_null.resize(bit_num, false);
+  }
+
 private:
   RID rid_;
 
   char *data_  = nullptr;
   int   len_   = 0;       /// 如果不是record自己来管理内存，这个字段可能是无效的
   bool  owner_ = false;   /// 表示当前是否由record来管理内存
+
+  // 空值位图。这个位图是给读记录时的读者的，因为读者无法从data_中提取位图。插入新记录时，位图通过table->make_record直接记在data_中。
+  std::vector<bool> is_null;
 };

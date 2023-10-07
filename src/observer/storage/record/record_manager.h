@@ -252,7 +252,12 @@ public:
    *
    * @param buffer_pool 当前操作的是哪个文件
    */
-  RC init(DiskBufferPool *buffer_pool);
+  /*
+   * 为了支持空值，在返回Record时需要初始化其中的is_null数组，表示各个属性是否为null。
+   * 但原本RecordFileHandler没有表的元数据，所以它需要引用所属的Table以获取元数据
+   * 采取接口兼容的方式进行修改。
+   */
+  RC init(DiskBufferPool *buffer_pool, Table *table = nullptr);
 
   /**
    * @brief 关闭，做一些资源清理的工作
@@ -315,6 +320,7 @@ private:
   DiskBufferPool             *disk_buffer_pool_ = nullptr;
   std::unordered_set<PageNum> free_pages_;  ///< 没有填充满的页面集合
   common::Mutex               lock_;        ///< 当编译时增加-DCONCURRENCY=ON 选项时，才会真正的支持并发
+  Table *table_;  // 所属的表
 };
 
 /**

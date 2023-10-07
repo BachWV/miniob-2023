@@ -26,6 +26,9 @@ static const Json::StaticString FIELD_TABLE_ID("table_id");
 static const Json::StaticString FIELD_TABLE_NAME("table_name");
 static const Json::StaticString FIELD_FIELDS("fields");
 static const Json::StaticString FIELD_INDEXES("indexes");
+static const Json::StaticString FIELD_RECORD_SIZE("record_size");
+static const Json::StaticString FIELD_NULL_BITMAP_OFFSET("null_bitmap_offset");
+static const Json::StaticString FIELD_NULL_BITMAP_SIZE("null_bitmap_size");
 
 TableMeta::TableMeta(const TableMeta &other)
     : table_id_(other.table_id_),
@@ -78,7 +81,7 @@ RC TableMeta::init(int32_t table_id, const char *name, int field_num, const Attr
   for (int i = 0; i < field_num; i++) {
     const AttrInfoSqlNode &attr_info = attributes[i];
     rc = fields_[i + trx_field_num].init(attr_info.name.c_str(), 
-            attr_info.type, field_offset, attr_info.length, true/*visible*/);
+            attr_info.type, field_offset, attr_info.length, true/*visible*/, attr_info.nullable);
     if (rc != RC::SUCCESS) {
       LOG_ERROR("Failed to init field meta. table name=%s, field name: %s", name, attr_info.name.c_str());
       return rc;
@@ -87,7 +90,18 @@ RC TableMeta::init(int32_t table_id, const char *name, int field_num, const Attr
     field_offset += attr_info.length;
   }
 
-  record_size_ = field_offset;
+  /* 增加对nullable的支持，在末尾增加一个隐藏属性，表示空位图
+   * 但该隐藏属性不能放在fields_数组中，否则和其它部分不兼容(desc table, select *, ...)，需要修改的更多
+   * 此处选择使用额外的数据结构(null_bitmap_offset和null_bitmap_len)记录null_bitmap的信息
+   * 注意此处位图也包括sys_fields，这样可以在各处统一访问属性的下标
+   * 
+   * 由于表元数据在序列化为文件时，没有写入record_size，它是在反序列化时根据各个field长度计算出来的
+   * 这里不把null_bitmap放在field中，就需要把record_size，描述位图的数据都进行序列化
+   */
+  null_bitmap_offset = field_offset;
+  null_bitmap_len = (field_num + trx_field_num + 7) / 8;  // 向上取整，位图需要的字节数
+
+  record_size_ = field_offset + null_bitmap_len;
 
   table_id_ = table_id;
   name_     = name;
@@ -214,6 +228,11 @@ int TableMeta::serialize(std::ostream &ss) const
     indexes_value.append(std::move(index_value));
   }
   table_value[FIELD_INDEXES] = std::move(indexes_value);
+
+  /* 增加record_size, null_bitmap信息的序列化 */
+  table_value[FIELD_RECORD_SIZE] = record_size_;
+  table_value[FIELD_NULL_BITMAP_OFFSET] = null_bitmap_offset;
+  table_value[FIELD_NULL_BITMAP_SIZE] = null_bitmap_len;
  
   Json::StreamWriterBuilder builder;
   Json::StreamWriter *writer = builder.newStreamWriter();
@@ -280,7 +299,29 @@ int TableMeta::deserialize(std::istream &is)
   table_id_ = table_id;
   name_.swap(table_name);
   fields_.swap(fields);
-  record_size_ = fields_.back().offset() + fields_.back().len() - fields_.begin()->offset();
+  // record_size_ = fields_.back().offset() + fields_.back().len() - fields_.begin()->offset();
+
+  /* 增加NULL支持：record_size不再根据fields计算出来，而是直接反序列化 */
+  const Json::Value &record_size_value = table_value[FIELD_RECORD_SIZE];
+  if (!record_size_value.isInt()) {
+    LOG_ERROR("Invalid record size. json value=%s", record_size_value.toStyledString().c_str());
+    return -1;
+  }
+  record_size_ = record_size_value.asInt();
+
+  const Json::Value &null_bitmap_offset_value = table_value[FIELD_NULL_BITMAP_OFFSET];
+  if (!null_bitmap_offset_value.isInt()) {
+    LOG_ERROR("Invalid null bitmap offset. json value=%s", null_bitmap_offset_value.toStyledString().c_str());
+    return -1;
+  }
+  null_bitmap_offset = null_bitmap_offset_value.asInt();
+
+  const Json::Value &null_bitmap_len_value = table_value[FIELD_NULL_BITMAP_SIZE];
+  if (!null_bitmap_len_value.isInt()) {
+    LOG_ERROR("Invalid null bitmap offset. json value=%s", null_bitmap_len_value.toStyledString().c_str());
+    return -1;
+  }
+  null_bitmap_len = null_bitmap_len_value.asInt();
 
   const Json::Value &indexes_value = table_value[FIELD_INDEXES];
   if (!indexes_value.empty()) {
