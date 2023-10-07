@@ -98,12 +98,14 @@ extern int yydebug;
     GE = 299,                      /* GE  */
     NE = 300,                      /* NE  */
     DATE_T = 301,                  /* DATE_T  */
-    DATE_STR = 302,                /* DATE_STR  */
-    NUMBER = 303,                  /* NUMBER  */
-    FLOAT = 304,                   /* FLOAT  */
-    ID = 305,                      /* ID  */
-    SSS = 306,                     /* SSS  */
-    UMINUS = 307                   /* UMINUS  */
+    ORDER_BY = 302,                /* ORDER_BY  */
+    ASC = 303,                     /* ASC  */
+    DATE_STR = 304,                /* DATE_STR  */
+    NUMBER = 305,                  /* NUMBER  */
+    FLOAT = 306,                   /* FLOAT  */
+    ID = 307,                      /* ID  */
+    SSS = 308,                     /* SSS  */
+    UMINUS = 309                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -112,7 +114,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 105 "yacc_sql.y"
+#line 107 "yacc_sql.y"
 
   ParsedSqlNode *                   sql_node;
   ConditionSqlNode *                condition;
@@ -130,8 +132,10 @@ union YYSTYPE
   char *                            string;
   int                               number;
   float                             floats;
+  OrderByAttrSqlNode*               order_by_attr;
+  std::vector<OrderByAttrSqlNode>*  order_by_list;
 
-#line 135 "yacc_sql.hpp"
+#line 139 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

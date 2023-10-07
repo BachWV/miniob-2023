@@ -531,6 +531,8 @@ Index *Table::find_index(const char *index_name) const
   }
   return nullptr;
 }
+
+// 看当前的field上有没有建立索引 
 Index *Table::find_index_by_field(const char *field_name) const
 {
   const TableMeta &table_meta = this->table_meta();

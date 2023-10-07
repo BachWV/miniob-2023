@@ -100,6 +100,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         GE
         NE
         DATE_T
+        ORDER_BY
+        ASC
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -119,6 +121,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   char *                            string;
   int                               number;
   float                             floats;
+  OrderByAttrSqlNode*               order_by_attr;
+  std::vector<OrderByAttrSqlNode>*  order_by_list;
 }
 
 /* %token <number> DATE */
@@ -169,6 +173,10 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <sql_node>            command_wrapper
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
+// order by
+%type <order_by_list>       order_by
+%type <order_by_list>       order_by_list
+%type <order_by_attr>       order_by_attr
 
 %left '+' '-'
 %left '*' '/'
@@ -431,7 +439,7 @@ update_stmt:      /*  update 语句的语法解析树*/
     }
     ;
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT select_attr FROM ID rel_list where
+    SELECT select_attr FROM ID rel_list where order_by
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
       if ($2 != nullptr) {
@@ -449,6 +457,13 @@ select_stmt:        /*  select 语句的语法解析树*/
         $$->selection.conditions.swap(*$6);
         delete $6;
       }
+
+      if ($7 != nullptr) {
+        $$->selection.order_by_attrs.swap(*$7);
+        std::reverse($$->selection.order_by_attrs.begin(), $$->selection.order_by_attrs.end());
+        delete $7;
+      }
+
       free($4);
     }
     ;
@@ -524,6 +539,7 @@ select_attr:
     }
     ;
 
+/* 属性匹配了table.field和单独的feild */
 rel_attr:
     ID {
       $$ = new RelAttrSqlNode;
@@ -647,6 +663,58 @@ condition:
       delete $3;
     }
     ;
+
+// order by
+// 之所以这么写的原因是 "field1, field2, firld3" 中逗号要匹配
+order_by:
+    /* empty */
+    {
+      $$ = nullptr;
+    }
+    | ORDER_BY order_by_list {
+      $$ = $2;  
+    }
+    ;
+
+order_by_list:
+    /* empty */
+    {
+      $$ = nullptr;
+    }
+    | order_by_attr 
+    {
+      $$ = new std::vector<OrderByAttrSqlNode>;
+      $$->emplace_back(*$1);
+      delete $1;
+    }
+    | order_by_attr COMMA order_by_list
+    {
+      $$ = $3;
+      $$->emplace_back(*$1);
+      delete $1;
+    }
+
+order_by_attr:
+    rel_attr{
+      $$ = new OrderByAttrSqlNode;
+      $$->attr = *$1;
+      $$->is_acs = true;
+      delete $1;
+    }
+    | rel_attr ASC
+    {
+      $$ = new OrderByAttrSqlNode;
+      $$->attr = *$1;
+      $$->is_acs = true;
+      delete $1;
+    }
+    | rel_attr DESC
+    {
+      $$ = new OrderByAttrSqlNode;
+      $$->attr = *$1;
+      $$->is_acs = false;
+      delete $1;
+    }
 
 comp_op:
       EQ { $$ = EQUAL_TO; }

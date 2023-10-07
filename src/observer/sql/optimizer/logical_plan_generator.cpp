@@ -24,6 +24,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/join_logical_operator.h"
 #include "sql/operator/project_logical_operator.h"
 #include "sql/operator/explain_logical_operator.h"
+#include "sql/operator/sort_logical_operator.h"
 
 #include "sql/stmt/stmt.h"
 #include "sql/stmt/calc_stmt.h"
@@ -32,6 +33,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/insert_stmt.h"
 #include "sql/stmt/delete_stmt.h"
 #include "sql/stmt/explain_stmt.h"
+#include <memory>
 
 using namespace std;
 
@@ -69,6 +71,7 @@ RC LogicalPlanGenerator::create(Stmt *stmt, unique_ptr<LogicalOperator> &logical
   }
   return rc;
 }
+
 
 RC LogicalPlanGenerator::create_plan(CalcStmt *calc_stmt, std::unique_ptr<LogicalOperator> &logical_operator)
 {
@@ -110,6 +113,12 @@ RC LogicalPlanGenerator::create_plan(
     return rc;
   }
 
+  // order by
+  unique_ptr<LogicalOperator> sort_oper = nullptr;
+  if(!select_stmt->order_fields().empty()){
+    sort_oper = make_unique<SortLogicalOperator>(select_stmt->order_fields());
+  }
+
   unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_fields));
   if (predicate_oper) {
     if (table_oper) {
@@ -121,7 +130,7 @@ RC LogicalPlanGenerator::create_plan(
       project_oper->add_child(std::move(table_oper));
     }
   }
-
+  
   logical_operator.swap(project_oper);
   return RC::SUCCESS;
 }
@@ -148,6 +157,7 @@ RC LogicalPlanGenerator::create_plan(
   }
 
   unique_ptr<PredicateLogicalOperator> predicate_oper;
+  // 这里为什么cmp_exprs会为空呢？哪种语句解析出来这边是空？
   if (!cmp_exprs.empty()) {
     unique_ptr<ConjunctionExpr> conjunction_expr(new ConjunctionExpr(ConjunctionExpr::Type::AND, cmp_exprs));
     predicate_oper = unique_ptr<PredicateLogicalOperator>(new PredicateLogicalOperator(std::move(conjunction_expr)));
