@@ -767,21 +767,21 @@ order_by_attr:
     rel_attr{
       $$ = new OrderByAttrSqlNode;
       $$->attr = *$1;
-      $$->is_acs = true;
+      $$->is_asc = true;
       delete $1;
     }
     | rel_attr ASC
     {
       $$ = new OrderByAttrSqlNode;
       $$->attr = *$1;
-      $$->is_acs = true;
+      $$->is_asc = true;
       delete $1;
     }
     | rel_attr DESC
     {
       $$ = new OrderByAttrSqlNode;
       $$->attr = *$1;
-      $$->is_acs = false;
+      $$->is_asc = false;
       delete $1;
     }
 

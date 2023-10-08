@@ -77,7 +77,6 @@ RC check_order_by_field(Db *db, const std::unordered_map<std::string, Table *>& 
         LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr.attribute_name.c_str());
         return RC::SCHEMA_FIELD_MISSING;
       }
-
       order_fields.push_back(FieldWithOrder(table, field_meta, node.is_asc));
     }
   }

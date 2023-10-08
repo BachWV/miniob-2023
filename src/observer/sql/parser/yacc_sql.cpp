@@ -2527,7 +2527,7 @@ yyreduce:
             {
       (yyval.order_by_attr) = new OrderByAttrSqlNode;
       (yyval.order_by_attr)->attr = *(yyvsp[0].rel_attr);
-      (yyval.order_by_attr)->is_acs = true;
+      (yyval.order_by_attr)->is_asc = true;
       delete (yyvsp[0].rel_attr);
     }
 #line 2534 "yacc_sql.cpp"
@@ -2538,7 +2538,7 @@ yyreduce:
     {
       (yyval.order_by_attr) = new OrderByAttrSqlNode;
       (yyval.order_by_attr)->attr = *(yyvsp[-1].rel_attr);
-      (yyval.order_by_attr)->is_acs = true;
+      (yyval.order_by_attr)->is_asc = true;
       delete (yyvsp[-1].rel_attr);
     }
 #line 2545 "yacc_sql.cpp"
@@ -2549,7 +2549,7 @@ yyreduce:
     {
       (yyval.order_by_attr) = new OrderByAttrSqlNode;
       (yyval.order_by_attr)->attr = *(yyvsp[-1].rel_attr);
-      (yyval.order_by_attr)->is_acs = false;
+      (yyval.order_by_attr)->is_asc = false;
       delete (yyvsp[-1].rel_attr);
     }
 #line 2556 "yacc_sql.cpp"

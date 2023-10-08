@@ -14,7 +14,9 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include <initializer_list>
 #include <memory>
+#include <vector>
 
 #include "common/rc.h"
 
@@ -38,6 +40,7 @@ public:
 
 private:
   RC create_plan(CalcStmt *calc_stmt, std::unique_ptr<LogicalOperator> &logical_operator);
+  std::unique_ptr<LogicalOperator> create_select_oper_tree(std::vector<std::unique_ptr<LogicalOperator>>&);
   RC create_plan(SelectStmt *select_stmt, std::unique_ptr<LogicalOperator> &logical_operator);
   RC create_plan(FilterStmt *filter_stmt, std::unique_ptr<LogicalOperator> &logical_operator);
   RC create_plan(InsertStmt *insert_stmt, std::unique_ptr<LogicalOperator> &logical_operator);

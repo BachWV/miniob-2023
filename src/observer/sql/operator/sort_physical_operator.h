@@ -2,6 +2,9 @@
 
 #include "sql/expr/tuple.h"
 #include "sql/operator/physical_operator.h"
+#include "common/lang/comparator.h"
+#include "sql/parser/value.h"
+#include "storage/field/field.h"
 #include <functional>
 #include <vector>
 
@@ -14,15 +17,11 @@ class Trx;
 class SortPhysicalOperator : public PhysicalOperator
 {
 public:
-  SortPhysicalOperator(std::vector<FieldWithOrder> order_fields) : order_fields_(order_fields)
-  {}
+  SortPhysicalOperator(std::vector<FieldWithOrder> order_fields) : order_fields_(order_fields) {}
 
-  virtual ~SortPhysicalOperator() = default;
+  virtual ~SortPhysicalOperator();
 
-  PhysicalOperatorType type() const override
-  {
-    return PhysicalOperatorType::SORT;
-  }
+  PhysicalOperatorType type() const override { return PhysicalOperatorType::SORT; }
 
   // 获得下层算子所有的tuple并排好序
   RC open(Trx *trx) override;
@@ -32,13 +31,18 @@ public:
 
   Tuple *current_tuple() override;
 
-  bool generate_cmp_function();
+  bool generate_cmp_functions();
+  bool cmp_function(const Tuple *, const Tuple *);
+
+  class CmpFunctor;
 
 private:
   Trx *trx_ = nullptr;
 
-  int current_tuple_index_{0};
-  std::vector<Tuple*> tuples;    // 子算子的所有tuple
-  std::vector<FieldWithOrder> order_fields_;
-  std::vector<std::function<bool(const Value&, const Value&)>> cmp_functions;   // 根据order_fields_生成的比较函数
+  int                            current_tuple_index_{0};
+  std::vector<Tuple *>::iterator it;
+  std::vector<Tuple *>           tuples_;  // 子算子的所有tuple
+  std::vector<FieldWithOrder>    order_fields_;
+  std::vector<std::function<bool(const Tuple *, const Tuple *, bool &equal)>>
+      cmp_functions_;  // 根据order_fields_生成的比较函数
 };

@@ -86,10 +86,36 @@ RC LogicalPlanGenerator::create_plan(CalcStmt *calc_stmt, std::unique_ptr<Logica
   return RC::SUCCESS;
 }
 
+// op1 -> op2 -> op3
+// 没做为空的检查，调用者自己去保证正确性
+std::unique_ptr<LogicalOperator> LogicalPlanGenerator::create_select_oper_tree(std::vector<std::unique_ptr<LogicalOperator>>& opers){
+  auto curr = opers.begin();
+  // 找到第一个不为null的oper
+  while(curr != opers.end() && *curr == nullptr ){
+    curr++;
+  }
+  auto next = curr+1;
+  while(next != opers.end() && *next == nullptr){
+    next++;
+  }
+
+  while(next != opers.end()){
+    (*next)->add_child(std::move((*curr)));
+    curr = next;
+    
+    do{
+      next++;
+    }while(next != opers.end() && *next == nullptr);
+  }
+
+  return std::move(*curr);
+}
+
 RC LogicalPlanGenerator::create_plan(
     SelectStmt *select_stmt, unique_ptr<LogicalOperator> &logical_operator)
 {
   unique_ptr<LogicalOperator> table_oper(nullptr);
+  std::vector<std::unique_ptr<LogicalOperator>> opers;
 
   const std::vector<Table *> &tables = select_stmt->tables();
   const std::vector<Field> &all_fields = select_stmt->query_fields();
@@ -112,6 +138,7 @@ RC LogicalPlanGenerator::create_plan(
       table_oper = unique_ptr<LogicalOperator>(join_oper);
     }
   }
+  opers.push_back(std::move(table_oper));
 
   unique_ptr<LogicalOperator> predicate_oper;
   RC rc = create_plan(select_stmt->filter_stmt(), predicate_oper);
@@ -119,26 +146,22 @@ RC LogicalPlanGenerator::create_plan(
     LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
     return rc;
   }
+  opers.push_back(std::move(predicate_oper));
+
+  // group-by
 
   // order by
   unique_ptr<LogicalOperator> sort_oper = nullptr;
   if(!select_stmt->order_fields().empty()){
     sort_oper = make_unique<SortLogicalOperator>(select_stmt->order_fields());
   }
+  opers.push_back(std::move(sort_oper));
 
   unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_fields));
-  if (predicate_oper) {
-    if (table_oper) {
-      predicate_oper->add_child(std::move(table_oper));
-    }
-    project_oper->add_child(std::move(predicate_oper));
-  } else {
-    if (table_oper) {
-      project_oper->add_child(std::move(table_oper));
-    }
-  }
+  opers.push_back(std::move(project_oper));
+  auto top_oper = create_select_oper_tree(opers);
   
-  logical_operator.swap(project_oper);
+  logical_operator.swap(top_oper);
   return RC::SUCCESS;
 }
 
