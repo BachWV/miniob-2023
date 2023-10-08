@@ -389,7 +389,7 @@ RC Table::init_record_handler(const char *base_dir)
   }
 
   record_handler_ = new RecordFileHandler();
-  rc = record_handler_->init(data_buffer_pool_);
+  rc = record_handler_->init(data_buffer_pool_, this);
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Failed to init record handler. rc=%s", strrc(rc));
     data_buffer_pool_->close_file();
