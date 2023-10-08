@@ -57,9 +57,13 @@ public:
   {
     return filter_stmt_;
   }
+  const std::vector<FieldWithOrder>& order_fields() const{
+    return order_fields_;
+  }
 
 private:
   std::vector<Field> query_fields_;
   std::vector<Table *> tables_;
+  std::vector<FieldWithOrder> order_fields_;
   FilterStmt *filter_stmt_ = nullptr;
 };

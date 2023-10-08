@@ -1,4 +1,4 @@
-/* A Bison parser, made by GNU Bison 3.8.  */
+/* A Bison parser, made by GNU Bison 3.8.2.  */
 
 /* Bison interface for Yacc-like parsers in C
 
@@ -98,17 +98,19 @@ extern int yydebug;
     GE = 299,                      /* GE  */
     NE = 300,                      /* NE  */
     DATE_T = 301,                  /* DATE_T  */
-    NULLABLE = 302,                /* NULLABLE  */
-    NOT_NULL = 303,                /* NOT_NULL  */
-    NULL_VALUE = 304,              /* NULL_VALUE  */
-    PREDICATE_IS_NULL = 305,       /* PREDICATE_IS_NULL  */
-    PREDICATE_IS_NOT_NULL = 306,   /* PREDICATE_IS_NOT_NULL  */
-    DATE_STR = 307,                /* DATE_STR  */
-    NUMBER = 308,                  /* NUMBER  */
-    FLOAT = 309,                   /* FLOAT  */
-    ID = 310,                      /* ID  */
-    SSS = 311,                     /* SSS  */
-    UMINUS = 312                   /* UMINUS  */
+    ORDER_BY = 302,                /* ORDER_BY  */
+    ASC = 303,                     /* ASC  */
+    NULLABLE = 304,                /* NULLABLE  */
+    NOT_NULL = 305,                /* NOT_NULL  */
+    NULL_VALUE = 306,              /* NULL_VALUE  */
+    PREDICATE_IS_NULL = 307,       /* PREDICATE_IS_NULL  */
+    PREDICATE_IS_NOT_NULL = 308,   /* PREDICATE_IS_NOT_NULL  */
+    DATE_STR = 309,                /* DATE_STR  */
+    NUMBER = 310,                  /* NUMBER  */
+    FLOAT = 311,                   /* FLOAT  */
+    ID = 312,                      /* ID  */
+    SSS = 313,                     /* SSS  */
+    UMINUS = 314                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -117,7 +119,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 110 "yacc_sql.y"
+#line 112 "yacc_sql.y"
 
   ParsedSqlNode *                   sql_node;
   ConditionSqlNode *                condition;
@@ -135,8 +137,10 @@ union YYSTYPE
   char *                            string;
   int                               number;
   float                             floats;
+  OrderByAttrSqlNode*               order_by_attr;
+  std::vector<OrderByAttrSqlNode>*  order_by_list;
 
-#line 140 "yacc_sql.hpp"
+#line 144 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

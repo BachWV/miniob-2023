@@ -220,7 +220,7 @@ protected:
    * 
    * @param 指定的记录槽位
    */
-  char *get_record_data(SlotNum slot_num)
+  char * get_record_data(SlotNum slot_num)
   {
     return frame_->data() + page_header_->first_record_offset + (page_header_->record_size * slot_num);
   }

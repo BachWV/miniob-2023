@@ -49,11 +49,10 @@ RC TableScanPhysicalOperator::next()
     }
 
     if (filter_result) {
-      // 找到一条符合的，将其保存在current_record中
-      // Q:但是找到一条就返回吗？？？
       sql_debug("get a tuple: %s", tuple_.to_string().c_str());
       break;
     } else {
+      // 继续循环
       sql_debug("a tuple is filtered: %s", tuple_.to_string().c_str());
       rc = RC::RECORD_EOF;
     }

@@ -640,6 +640,7 @@ RC RecordFileScanner::next(Record &record)
   record = next_record_;
 
   RC rc = fetch_next_record();
+  // 这个if啥意思啊
   if (rc == RC::RECORD_EOF) {
     rc = RC::SUCCESS;
   }

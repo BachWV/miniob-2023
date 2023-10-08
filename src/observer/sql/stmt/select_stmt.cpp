@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "common/lang/string.h"
 #include "storage/db/db.h"
+#include "storage/field/field.h"
 #include "storage/table/table.h"
 
 SelectStmt::~SelectStmt()
@@ -34,6 +35,52 @@ static void wildcard_fields(Table *table, std::vector<Field> &field_metas)
   for (int i = table_meta.sys_field_num(); i < field_num; i++) {
     field_metas.push_back(Field(table, table_meta.field(i)));
   }
+}
+
+// @param order_fields[out]
+RC check_order_by_field(Db *db, const std::unordered_map<std::string, Table *>& table_map, const std::vector<Table *>& tables,
+  const std::vector<OrderByAttrSqlNode>& order_sql_nodes, std::vector<FieldWithOrder>& order_fields)
+{
+  for(auto& node : order_sql_nodes){
+    const RelAttrSqlNode &relation_attr = node.attr;
+
+    if (!common::is_blank(relation_attr.relation_name.c_str())) {
+      // 表名非空
+      const char *table_name = relation_attr.relation_name.c_str();
+      const char *field_name = relation_attr.attribute_name.c_str();
+      
+      // 常规情况，table.field
+      auto iter = table_map.find(table_name);
+      if (iter == table_map.end()) {
+        LOG_WARN("no such table in from list: %s", table_name);
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+      
+      Table *table = iter->second;
+        const FieldMeta *field_meta = table->table_meta().field(field_name);
+        if (nullptr == field_meta) {
+          // 进行field合法性检查
+          LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
+          return RC::SCHEMA_FIELD_MISSING;
+        }
+        order_fields.push_back(FieldWithOrder(table, field_meta, node.is_asc));
+    } else {
+      // 没写table名，默认从第一个table中找
+      if (tables.size() != 1) {
+        LOG_WARN("invalid. I do not know the attr's table. attr=%s", relation_attr.attribute_name.c_str());
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+
+      Table *table = tables[0];
+      const FieldMeta *field_meta = table->table_meta().field(relation_attr.attribute_name.c_str());
+      if (nullptr == field_meta) {
+        LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr.attribute_name.c_str());
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+      order_fields.push_back(FieldWithOrder(table, field_meta, node.is_asc));
+    }
+  }
+  return RC::SUCCESS;
 }
 
 RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
@@ -150,12 +197,21 @@ RC SelectStmt::create(Db *db, const SelectSqlNode &select_sql, Stmt *&stmt)
     return rc;
   }
 
+  // collect query fields in `order by` statement
+  std::vector<FieldWithOrder> order_fields;
+  rc = check_order_by_field(db, table_map, tables, select_sql.order_by_attrs, order_fields);
+  if(rc != RC::SUCCESS){
+    // log在check_order_by_field中打过了
+    return rc;
+  }
+
   // everything alright
   SelectStmt *select_stmt = new SelectStmt();
   // TODO add expression copy
   select_stmt->tables_.swap(tables);
   select_stmt->query_fields_.swap(query_fields);
   select_stmt->filter_stmt_ = filter_stmt;
+  select_stmt->order_fields_ = order_fields;
   stmt = select_stmt;
   return RC::SUCCESS;
 }

@@ -116,6 +116,8 @@ LOAD                                    RETURN_TOKEN(LOAD);
 DATA                                    RETURN_TOKEN(DATA);
 INFILE                                  RETURN_TOKEN(INFILE);
 EXPLAIN                                 RETURN_TOKEN(EXPLAIN);
+"ORDER BY"                              RETURN_TOKEN(ORDER_BY);
+ASC                                     RETURN_TOKEN(ASC);
 NULLABLE                                RETURN_TOKEN(NULLABLE);
 "not null"                              RETURN_TOKEN(NOT_NULL);
 "is null"                               RETURN_TOKEN(PREDICATE_IS_NULL);

@@ -34,6 +34,8 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/join_physical_operator.h"
 #include "sql/operator/calc_logical_operator.h"
 #include "sql/operator/calc_physical_operator.h"
+#include "sql/operator/sort_logical_operator.h"
+#include "sql/operator/sort_physical_operator.h"
 #include "sql/expr/expression.h"
 #include "common/log/log.h"
 
@@ -78,6 +80,10 @@ RC PhysicalPlanGenerator::create(LogicalOperator &logical_operator, unique_ptr<P
       return create_plan(static_cast<JoinLogicalOperator &>(logical_operator), oper);
     } break;
 
+    case LogicalOperatorType::SORT:{
+      return create_plan(static_cast<SortLogicalOperator &>(logical_operator), oper);
+    }break;
+
     default: {
       return RC::INVALID_ARGUMENT;
     }
@@ -85,8 +91,21 @@ RC PhysicalPlanGenerator::create(LogicalOperator &logical_operator, unique_ptr<P
   return rc;
 }
 
+RC PhysicalPlanGenerator::create_plan(SortLogicalOperator &sort_logical_oper, std::unique_ptr<PhysicalOperator> &oper){
+  LogicalOperator* child_logical_oper = sort_logical_oper.children().front().get();
+  unique_ptr<PhysicalOperator> child_phy_oper;
+  RC rc = create(*child_logical_oper, child_phy_oper);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to create child operator of sort operator. rc=%s", strrc(rc));
+    return rc;
+  }
+  oper = make_unique<SortPhysicalOperator>(sort_logical_oper.get_order_fields());
+  oper->add_child(std::move(child_phy_oper));
+  return rc;
+}
+
 // 目前tableGet只能实现等值查询？？
-RC PhysicalPlanGenerator::create_plan(TableGetLogicalOperator &table_get_oper, unique_ptr<PhysicalOperator> &oper)
+RC PhysicalPlanGenerator:: create_plan(TableGetLogicalOperator &table_get_oper, unique_ptr<PhysicalOperator> &oper)
 {
   vector<unique_ptr<Expression>> &predicates = table_get_oper.predicates();
   // 看看是否有可以用于索引查找的表达式
@@ -163,7 +182,6 @@ RC PhysicalPlanGenerator::create_plan(PredicateLogicalOperator &pred_oper, uniqu
   LogicalOperator &child_oper = *children_opers.front();
 
   unique_ptr<PhysicalOperator> child_phy_oper;
-  // 啥情况 怎么还递归
   RC rc = create(child_oper, child_phy_oper);
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to create child operator of predicate operator. rc=%s", strrc(rc));

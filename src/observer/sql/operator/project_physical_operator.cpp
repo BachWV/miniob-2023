@@ -33,8 +33,6 @@ RC ProjectPhysicalOperator::open(Trx *trx)
   return RC::SUCCESS;
 }
 
-// 啥意思啊，为啥投影的物理操作是最child[0]执行next啊？？？
-// 
 RC ProjectPhysicalOperator::next()
 {
   if (children_.empty()) {
@@ -50,6 +48,7 @@ RC ProjectPhysicalOperator::close()
   }
   return RC::SUCCESS;
 }
+
 Tuple *ProjectPhysicalOperator::current_tuple()
 {
   tuple_.set_tuple(children_[0]->current_tuple());

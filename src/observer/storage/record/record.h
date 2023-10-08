@@ -127,6 +127,21 @@ public:
     return *this;
   }
 
+  Record* get_replica(int record_size = 0){
+    auto replica = new Record();
+    replica->rid_   = rid_;
+    replica->len_   = record_size == 0 ? len_ : record_size;
+    replica->owner_ = true;
+    replica->is_null = is_null;
+
+    char *tmp = (char *)malloc(replica->len_);
+    ASSERT(nullptr != tmp, "failed to allocate memory. size=%d", replica->len_);
+    memcpy(tmp, data_, replica->len_);
+    replica->data_ = tmp;
+
+    return replica;
+  }
+
   void set_data(char *data, int len = 0)
   {
     this->data_ = data;

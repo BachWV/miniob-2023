@@ -108,6 +108,13 @@ public:
    */
   virtual RC find_cell(const TupleCellSpec &spec, Value &cell) const = 0;
 
+  // 浅拷贝生成的对象在销毁的时候会导致底层record对象被析构，其他对象无法访问record
+  // 只能用这个拷贝函数
+  // 由于继承和多态的限制，上层不知道底层Tuple是什么类型，我们只能传入基类指针，然后在每个类型内部分配每个类型
+  // 传入未分配的指针，该函数会给你返回分配好的对象
+  virtual Tuple* get_replica(){return nullptr;};
+  virtual bool is_data_owner(){return is_data_owner_;}
+
   virtual std::string to_string() const
   {
     std::string str;
@@ -126,6 +133,8 @@ public:
     }
     return str;
   }
+protected:
+  bool is_data_owner_{false};
 };
 
 /**
@@ -137,12 +146,32 @@ class RowTuple : public Tuple
 {
 public:
   RowTuple() = default;
+
+  RowTuple(const Table *table, const std::vector<FieldExpr *>& speces){
+    table_ = table;
+    for(auto spece : speces){
+      speces_.push_back(new FieldExpr(*spece));
+    }
+  }
+
   virtual ~RowTuple()
   {
     for (FieldExpr *spec : speces_) {
       delete spec;
     }
     speces_.clear();
+
+    if(is_data_owner_){
+      delete record_;
+    }
+  }
+
+  virtual Tuple* get_replica() override{
+    auto replica = new RowTuple(table_, speces_);
+
+    replica->record_ = record_->get_replica(table_->table_meta().record_size());
+    replica->is_data_owner_ = true;
+    return replica;
   }
 
   void set_record(Record *record)
@@ -162,7 +191,7 @@ public:
   int cell_num() const override
   {
     return speces_.size();
-  }
+  } 
 
   RC cell_at(int index, Value &cell) const override
   {
@@ -247,6 +276,20 @@ public:
       delete spec;
     }
     speces_.clear();
+
+    if(is_data_owner_){
+      delete tuple_;
+    }
+  }
+
+  virtual Tuple* get_replica() override{
+    auto replica = new ProjectTuple();
+    for (TupleCellSpec *spec : speces_) {
+      replica->speces_.push_back(new TupleCellSpec(*spec));
+    }
+    replica->is_data_owner_ = true;
+    replica->tuple_ = tuple_->get_replica();
+    return replica;
   }
 
   void set_tuple(Tuple *tuple)
@@ -388,7 +431,20 @@ class JoinedTuple : public Tuple
 {
 public:
   JoinedTuple() = default;
-  virtual ~JoinedTuple() = default;
+  virtual ~JoinedTuple(){
+    if(is_data_owner_){
+      delete left_;
+      delete right_;
+    }
+  }
+
+  virtual Tuple* get_replica() override{
+    auto replica = new JoinedTuple();
+    replica->left_ = left_->get_replica();
+    replica->right_ = right_->get_replica();
+    replica->is_data_owner_ = true;
+    return replica;
+  }
 
   void set_left(Tuple *left)
   {

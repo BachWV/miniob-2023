@@ -22,6 +22,11 @@ class TupleCellSpec
 {
 public:
   TupleCellSpec(const char *table_name, const char *field_name, const char *alias = nullptr);
+  TupleCellSpec(const TupleCellSpec& other){
+    table_name_ = other.table_name_;
+    field_name_ = other.field_name_;
+    alias_ = other.alias_;
+  }
   TupleCellSpec(const char *alias);
 
   const char *table_name() const

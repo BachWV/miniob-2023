@@ -70,3 +70,13 @@ private:
   const Table *table_ = nullptr;
   const FieldMeta *field_ = nullptr;
 };
+
+// 用于排序
+class FieldWithOrder{
+public:
+  FieldWithOrder(const Table *table, const FieldMeta *field, bool is_asc) : field(Field(table, field)), is_asc_(is_asc){}
+  Field field;
+  bool get_is_acs(){return is_asc_;}
+private:
+  bool is_asc_;
+};
