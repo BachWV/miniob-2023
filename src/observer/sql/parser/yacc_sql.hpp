@@ -1,4 +1,4 @@
-/* A Bison parser, made by GNU Bison 3.8.2.  */
+/* A Bison parser, made by GNU Bison 3.8.  */
 
 /* Bison interface for Yacc-like parsers in C
 
@@ -103,14 +103,20 @@ extern int yydebug;
     NULLABLE = 304,                /* NULLABLE  */
     NOT_NULL = 305,                /* NOT_NULL  */
     NULL_VALUE = 306,              /* NULL_VALUE  */
-    PREDICATE_IS_NULL = 307,       /* PREDICATE_IS_NULL  */
-    PREDICATE_IS_NOT_NULL = 308,   /* PREDICATE_IS_NOT_NULL  */
-    DATE_STR = 309,                /* DATE_STR  */
-    NUMBER = 310,                  /* NUMBER  */
-    FLOAT = 311,                   /* FLOAT  */
-    ID = 312,                      /* ID  */
-    SSS = 313,                     /* SSS  */
-    UMINUS = 314                   /* UMINUS  */
+    SYM_IS_NULL = 307,             /* SYM_IS_NULL  */
+    SYM_IS_NOT_NULL = 308,         /* SYM_IS_NOT_NULL  */
+    SYM_IN = 309,                  /* SYM_IN  */
+    SYM_NOT_IN = 310,              /* SYM_NOT_IN  */
+    SYM_AVG = 311,                 /* SYM_AVG  */
+    SYM_MIN = 312,                 /* SYM_MIN  */
+    SYM_MAX = 313,                 /* SYM_MAX  */
+    SYM_COUNT = 314,               /* SYM_COUNT  */
+    DATE_STR = 315,                /* DATE_STR  */
+    NUMBER = 316,                  /* NUMBER  */
+    FLOAT = 317,                   /* FLOAT  */
+    ID = 318,                      /* ID  */
+    SSS = 319,                     /* SSS  */
+    UMINUS = 320                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -119,7 +125,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 112 "yacc_sql.y"
+#line 118 "yacc_sql.y"
 
   ParsedSqlNode *                   sql_node;
   ConditionSqlNode *                condition;
@@ -140,7 +146,17 @@ union YYSTYPE
   OrderByAttrSqlNode*               order_by_attr;
   std::vector<OrderByAttrSqlNode>*  order_by_list;
 
-#line 144 "yacc_sql.hpp"
+  // 重构后，表达式的语法解析树节点
+  ExprSqlNode *                     expr_node;
+
+  // 重构后，select之后跟的每一项要么是表达式，要么是聚集函数，用SelectExprSqlNode表示
+  SelectExprSqlNode *               select_expr;
+  std::vector<SelectExprSqlNode> *  select_exprs;
+
+  // 聚集函数
+  AggregateSqlNode *                aggregation;
+
+#line 160 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

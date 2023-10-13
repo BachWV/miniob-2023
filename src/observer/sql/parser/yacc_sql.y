@@ -105,8 +105,14 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         NULLABLE
         NOT_NULL
         NULL_VALUE
-        PREDICATE_IS_NULL
-        PREDICATE_IS_NOT_NULL
+        SYM_IS_NULL
+        SYM_IS_NOT_NULL
+        SYM_IN
+        SYM_NOT_IN
+        SYM_AVG
+        SYM_MIN
+        SYM_MAX
+        SYM_COUNT
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -128,6 +134,16 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   float                             floats;
   OrderByAttrSqlNode*               order_by_attr;
   std::vector<OrderByAttrSqlNode>*  order_by_list;
+
+  // 重构后，表达式的语法解析树节点
+  ExprSqlNode *                     expr_node;
+
+  // 重构后，select之后跟的每一项要么是表达式，要么是聚集函数，用SelectExprSqlNode表示
+  SelectExprSqlNode *               select_expr;
+  std::vector<SelectExprSqlNode> *  select_exprs;
+
+  // 聚集函数
+  AggregateSqlNode *                aggregation;
 }
 
 /* %token <number> DATE */
@@ -184,6 +200,13 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <order_by_list>       order_by_list
 %type <order_by_attr>       order_by_attr
 
+%type <expr_node>           expr identifier sub_query
+%type <select_expr>         select_expr
+%type <select_exprs>        select_expr_list
+%type <aggregation>         aggregation
+
+%nonassoc SYM_IS_NULL SYM_IS_NOT_NULL SYM_IN SYM_NOT_IN
+%left EQ LT GT LE GE NE
 %left '+' '-'
 %left '*' '/'
 %nonassoc UMINUS
@@ -467,7 +490,8 @@ update_stmt:      /*  update 语句的语法解析树*/
       free($4);
     }
     ;
-select_stmt:        /*  select 语句的语法解析树*/
+
+/* select_stmt:        
     SELECT select_attr FROM ID rel_list where order_by
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
@@ -495,7 +519,14 @@ select_stmt:        /*  select 语句的语法解析树*/
 
       free($4);
     }
+    ; */
+
+select_stmt:        
+    SELECT select_expr_list FROM ID rel_list where order_by
+    {
+    }
     ;
+
 calc_stmt:
     CALC expression_list
     {
@@ -601,6 +632,54 @@ attr_list:
     }
     ;
 
+select_expr:
+    expr
+    {
+
+    }
+    | aggregation
+    {
+
+    }
+    | '*'
+    {
+
+    }
+    ;
+
+select_expr_list:
+    select_expr
+    {
+      $$ = new std::vector<SelectExprSqlNode>;
+      $$->emplace_back(*$1);
+      delete $1;
+    }
+    | select_expr_list COMMA select_expr
+    {
+      $$ = $1;
+      $$->emplace_back(*$3);
+      delete $3;
+    }
+    ;
+
+aggregation:
+    SYM_AVG LBRACE identifier RBRACE
+    {
+    }
+    | SYM_MIN LBRACE identifier RBRACE
+    {
+    }
+    | SYM_MAX LBRACE identifier RBRACE
+    {
+    }
+    | SYM_COUNT LBRACE identifier RBRACE
+    {
+    }
+    | SYM_COUNT LBRACE '*' RBRACE
+    {
+    }
+    ;
+
 rel_list:
     /* empty */
     {
@@ -691,7 +770,7 @@ condition:
       delete $1;
       delete $3;
     }
-    | rel_attr PREDICATE_IS_NULL
+    | rel_attr SYM_IS_NULL
     {
       $$ = new ConditionSqlNode;
       $$->left_is_attr = 1;
@@ -701,7 +780,7 @@ condition:
 
       delete $1;
     }
-    | value PREDICATE_IS_NULL
+    | value SYM_IS_NULL
     {
       $$ = new ConditionSqlNode;
       $$->left_is_attr = 0;
@@ -711,7 +790,7 @@ condition:
 
       delete $1;
     }
-    | rel_attr PREDICATE_IS_NOT_NULL
+    | rel_attr SYM_IS_NOT_NULL
     {
       $$ = new ConditionSqlNode;
       $$->left_is_attr = 1;
@@ -721,7 +800,7 @@ condition:
 
       delete $1;
     }
-    | value PREDICATE_IS_NOT_NULL
+    | value SYM_IS_NOT_NULL
     {
       $$ = new ConditionSqlNode;
       $$->left_is_attr = 0;
@@ -730,6 +809,87 @@ condition:
       $$->right_is_attr = 0;
 
       delete $1;
+    }
+    ;
+
+expr:
+    value
+    {
+      
+    }
+    | identifier
+    {
+      $$ = std::move($1);
+    }
+    | '+' expr %prec UMINUS
+    {
+      $$ = std::move($2);
+    }
+    | '-' expr %prec UMINUS
+    {
+      
+    }
+    | expr '+' expr
+    {
+
+    }
+    | expr '-' expr
+    {
+
+    }
+    | expr '*' expr
+    {
+
+    }
+    | expr '/' expr
+    {
+
+    }
+    | expr comp_op expr %prec NE
+    {
+
+    }
+    | expr SYM_IN LBRACE sub_query RBRACE
+    {
+
+    }
+    | expr SYM_NOT_IN LBRACE sub_query RBRACE
+    {
+
+    }
+    | expr SYM_IS_NULL
+    {
+
+    }
+    | expr SYM_IS_NOT_NULL
+    {
+
+    }
+    | LBRACE expr RBRACE
+    {
+      $$ = std::move($2);
+    }
+    | LBRACE sub_query RBRACE
+    {
+      $$ = std::move($2);
+    }
+    ;
+
+identifier:
+    ID
+    {
+
+    }
+    | ID DOT ID
+    {
+
+    }
+    ;
+
+sub_query:
+    select_stmt
+    {
+
     }
     ;
 

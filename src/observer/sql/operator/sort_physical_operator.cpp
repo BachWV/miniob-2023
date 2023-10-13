@@ -18,7 +18,7 @@ RC SortPhysicalOperator::open(Trx *trx)
   // 为啥(const Tuple *&l_tuple, const Tuple *&r_tuple)加了引用就不行
   auto cmp_func = std::bind(&SortPhysicalOperator::cmp_function, this, std::placeholders::_1, std::placeholders::_2);
   std::sort(tuples_.begin(), tuples_.end(), cmp_func);
-  it = --tuples_.begin();
+  it = --tuples_.begin();  // 未定义行为！
   return RC::SUCCESS;
 }
 
