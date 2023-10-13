@@ -148,6 +148,7 @@ union YYSTYPE
 
   // 重构后，表达式的语法解析树节点
   ExprSqlNode *                     expr_node;
+  std::vector<std::unique_ptr<ExprSqlNode>> * expr_node_list;
 
   // 重构后，select之后跟的每一项要么是表达式，要么是聚集函数，用SelectExprSqlNode表示
   SelectExprSqlNode *               select_expr;
@@ -156,7 +157,7 @@ union YYSTYPE
   // 聚集函数
   AggregateSqlNode *                aggregation;
 
-#line 160 "yacc_sql.hpp"
+#line 161 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

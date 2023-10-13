@@ -137,6 +137,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 
   // 重构后，表达式的语法解析树节点
   ExprSqlNode *                     expr_node;
+  std::vector<std::unique_ptr<ExprSqlNode>> * expr_node_list;
 
   // 重构后，select之后跟的每一项要么是表达式，要么是聚集函数，用SelectExprSqlNode表示
   SelectExprSqlNode *               select_expr;
@@ -201,6 +202,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <order_by_attr>       order_by_attr
 
 %type <expr_node>           expr identifier sub_query
+%type <expr_node_list>      expr_list
 %type <select_expr>         select_expr
 %type <select_exprs>        select_expr_list
 %type <aggregation>         aggregation
@@ -701,24 +703,20 @@ where:
     {
       $$ = nullptr;
     }
-    | WHERE condition_list {
-      $$ = $2;  
+    | WHERE expr_list {
+      /* TODO */ 
     }
     ;
-condition_list:
+expr_list:
     /* empty */
     {
       $$ = nullptr;
     }
-    | condition {
-      $$ = new std::vector<ConditionSqlNode>;
-      $$->emplace_back(*$1);
-      delete $1;
+    | expr {
+      /* TODO */ 
     }
-    | condition AND condition_list {
-      $$ = $3;
-      $$->emplace_back(*$1);
-      delete $1;
+    | expr_list AND expr {
+      /* TODO */ 
     }
     ;
 condition:
