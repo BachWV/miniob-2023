@@ -1,5 +1,6 @@
 #include"parser_helper_func.h"
 #include <cstring>
+#include"event/sql_debug.h"
 
 
 bool CheckLeap(int y, int m, int d)
@@ -17,6 +18,7 @@ bool CheckLeap(int y, int m, int d)
 bool CheckTimeRange(const char* s, int &time){
   string str(s);
   vector<int> nums(3);
+  //sql_debug(s);
   int start = 1, end;
   for(auto& num : nums){
     int index = str.find('-', start) ;
@@ -41,7 +43,12 @@ bool CheckTimeRange(const char* s, int &time){
 
   // 给定的年份不能超过int最大值，且最低1970年
   time_t tm_time = mktime(&tm_);
+  // if(tm_time ==2147558400) {
+  //   time = 2147483647;
+  //   return true;
+  // }
   if(tm_time < 0 || tm_time > max){
+    sql_debug("time out of range");
     return false;
   }
 
