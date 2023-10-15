@@ -29,7 +29,8 @@ enum AttrType
   INTS,           ///< 整数类型(4字节)
   FLOATS,         ///< 浮点数类型(4字节)
   NULL_TYPE,  // 空值类型，当Value是这个类型时，任何get值的方法返回的都是无效值，不应使用
-  BOOLEANS        ///< boolean类型，当前不是由parser解析出来的，是程序内部使用的
+  BOOLEANS,        ///< boolean类型，当前不是由parser解析出来的，是程序内部使用的
+  TEXTS,           ///< 文本类型
 };
 
 const char *attr_type_to_string(AttrType type);
@@ -72,6 +73,7 @@ public:
   void set_float(float val);
   void set_boolean(bool val);
   void set_string(const char *s, int len = 0);
+  void set_text_string(const char *s, int len = 0);
   void set_value(const Value &value);
 
   std::string to_string() const;

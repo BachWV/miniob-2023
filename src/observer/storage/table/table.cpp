@@ -329,6 +329,8 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   for (int i = 0; i < value_num; i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &value = values[i];
+    if(field->type() == TEXTS && value.attr_type() == CHARS) continue;
+
     if (field->type() != value.attr_type() && value.attr_type() != NULL_TYPE) {
       LOG_ERROR("Invalid value type. table name =%s, field name=%s, type=%d, but given=%d",
                 table_meta_.name(), field->name(), field->type(), value.attr_type());

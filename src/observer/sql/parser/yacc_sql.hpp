@@ -98,17 +98,18 @@ extern int yydebug;
     GE = 299,                      /* GE  */
     NE = 300,                      /* NE  */
     DATE_T = 301,                  /* DATE_T  */
-    NULLABLE = 302,                /* NULLABLE  */
-    NOT_NULL = 303,                /* NOT_NULL  */
-    NULL_VALUE = 304,              /* NULL_VALUE  */
-    PREDICATE_IS_NULL = 305,       /* PREDICATE_IS_NULL  */
-    PREDICATE_IS_NOT_NULL = 306,   /* PREDICATE_IS_NOT_NULL  */
-    DATE_STR = 307,                /* DATE_STR  */
-    NUMBER = 308,                  /* NUMBER  */
-    FLOAT = 309,                   /* FLOAT  */
-    ID = 310,                      /* ID  */
-    SSS = 311,                     /* SSS  */
-    UMINUS = 312                   /* UMINUS  */
+    TEXT_T = 302,                  /* TEXT_T  */
+    NULLABLE = 303,                /* NULLABLE  */
+    NOT_NULL = 304,                /* NOT_NULL  */
+    NULL_VALUE = 305,              /* NULL_VALUE  */
+    PREDICATE_IS_NULL = 306,       /* PREDICATE_IS_NULL  */
+    PREDICATE_IS_NOT_NULL = 307,   /* PREDICATE_IS_NOT_NULL  */
+    DATE_STR = 308,                /* DATE_STR  */
+    NUMBER = 309,                  /* NUMBER  */
+    FLOAT = 310,                   /* FLOAT  */
+    ID = 311,                      /* ID  */
+    SSS = 312,                     /* SSS  */
+    UMINUS = 313                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -117,7 +118,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 110 "yacc_sql.y"
+#line 111 "yacc_sql.y"
 
   ParsedSqlNode *                   sql_node;
   ConditionSqlNode *                condition;
@@ -136,7 +137,7 @@ union YYSTYPE
   int                               number;
   float                             floats;
 
-#line 140 "yacc_sql.hpp"
+#line 141 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

@@ -19,11 +19,11 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/comparator.h"
 #include "common/lang/string.h"
 
-const char *ATTR_TYPE_NAME[] = {"undefined", "chars", "ints", "floats", "booleans", "null_type"};
+const char *ATTR_TYPE_NAME[] = {"undefined","date", "chars", "ints", "floats", "null_type", "booleans","texts"};
 
 const char *attr_type_to_string(AttrType type)
 {
-  if (type >= UNDEFINED && type <= FLOATS) {
+  if (type >= UNDEFINED && type <= TEXTS) {
     return ATTR_TYPE_NAME[type];
   }
   return "unknown";
@@ -69,6 +69,9 @@ void Value::set_data(char *data, int length)
   switch (attr_type_) {
     case CHARS: {
       set_string(data, length);
+    } break;
+    case TEXTS: {
+      set_text_string(data, length);
     } break;
     case DATES:
     case INTS: {
@@ -126,6 +129,17 @@ void Value::set_string(const char *s, int len /*= 0*/)
   }
   length_ = str_value_.length();
 }
+void Value::set_text_string(const char *s, int len /*= 0*/)
+{
+  attr_type_ = TEXTS;
+  if (len > 0) {
+    len = strnlen(s, len);
+    str_value_.assign(s, len);
+  } else {
+    str_value_.assign(s);
+  }
+  length_ = str_value_.length();
+}
 
 void Value::set_value(const Value &value)
 {
@@ -148,6 +162,9 @@ void Value::set_value(const Value &value)
     case DATES: {
       set_date(value.get_int());
     } break;
+    case TEXTS: {
+      set_text_string(value.get_string().c_str());
+    } break;
   }
 }
 
@@ -155,6 +172,9 @@ const char *Value::data() const
 {
   switch (attr_type_) {
     case CHARS: {
+      return str_value_.c_str();
+    } break;
+    case TEXTS: {
       return str_value_.c_str();
     } break;
     default: {
@@ -201,6 +221,9 @@ std::string Value::to_string() const
     case NULL_TYPE: {
       os << "NULL";
     } break;
+    case TEXTS: {
+      os << str_value_;
+    } break;
     default: {
       LOG_WARN("unsupported attr type: %d", attr_type_);
     } break;
@@ -231,6 +254,12 @@ int Value::compare(const Value &other) const
       }
       case NULL_TYPE:
         return 0;  // 这里是三路比较，但NULL值的比较不满足三路比较（无论如何都是false），因此只能在compare的调用者处再做特判了，这里随便返回。
+      case TEXTS: {
+        return common::compare_string((void *)this->str_value_.c_str(),
+            this->str_value_.length(),
+            (void *)other.str_value_.c_str(),
+            other.str_value_.length());
+      }
       default: {
         LOG_WARN("unsupported type: %d", this->attr_type_);
       }

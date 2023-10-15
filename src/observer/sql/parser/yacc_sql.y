@@ -100,6 +100,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         GE
         NE
         DATE_T
+        TEXT_T
         NULLABLE
         NOT_NULL
         NULL_VALUE
@@ -361,6 +362,14 @@ basic_attr_def:
       $$->length = 4;
       free($1);
     }
+    | ID TEXT_T
+    {
+      $$ = new AttrInfoSqlNode;
+      $$->type = TEXTS;
+      $$->name = $1;
+      $$->length = 4096;
+      free($1);
+    }
     ;
 
 number:
@@ -372,6 +381,7 @@ type:
     | STRING_T { $$=CHARS; }
     | FLOAT_T  { $$=FLOATS; }
     | DATE_T   { $$=DATES; }
+    | TEXT_T   { $$=TEXTS; }
     ;
 insert_stmt:        /*insert   语句的语法解析树*/
     INSERT INTO ID VALUES LBRACE value value_list RBRACE 

@@ -111,6 +111,7 @@ INT                                     RETURN_TOKEN(INT_T);
 CHAR                                    RETURN_TOKEN(STRING_T);
 FLOAT                                   RETURN_TOKEN(FLOAT_T);
 DATE                                    RETURN_TOKEN(DATE_T);
+TEXT                                    RETURN_TOKEN(TEXT_T);
 {QUOTE}[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}{QUOTE} yylval->string=strdup(yytext);RETURN_TOKEN(DATE_STR);
 LOAD                                    RETURN_TOKEN(LOAD);
 DATA                                    RETURN_TOKEN(DATA);
