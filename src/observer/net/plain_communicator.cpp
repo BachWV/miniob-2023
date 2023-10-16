@@ -157,10 +157,11 @@ RC PlainCommunicator::write_debug(SessionEvent *request, bool &need_disconnect)
 
 RC PlainCommunicator::write_result(SessionEvent *event, bool &need_disconnect)
 {
-  RC rc = write_result_internal(event, need_disconnect);
   if (!need_disconnect) {
     (void)write_debug(event, need_disconnect);
   }
+  RC rc = write_result_internal(event, need_disconnect);
+  
   writer_->flush(); // TODO handle error
   return rc;
 }
