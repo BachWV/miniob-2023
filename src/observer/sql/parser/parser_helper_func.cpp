@@ -37,7 +37,7 @@ bool CheckTimeRange(const char* s, int &time){
   tm_.tm_year = nums[0] - 1900;
   tm_.tm_mon = nums[1] - 1;
   tm_.tm_mday = nums[2];
-  tm_.tm_hour = 8;
+  tm_.tm_hour = 0;
   tm_.tm_min = 0;
   tm_.tm_sec = 0;
 
@@ -48,12 +48,10 @@ bool CheckTimeRange(const char* s, int &time){
   //   return true;
   // }
   if(tm_time < 0 || tm_time > max){
-    sql_debug("tm_time=");
-    sql_debug(std::to_string(tm_time).c_str());
-    sql_debug("max=");
-    sql_debug(std::to_string(max).c_str());
-    sql_debug(s);
     sql_debug("time out of range");
+    sql_debug(std::to_string(tm_time).c_str());
+    sql_debug(s);
+   
     return false;
   }
 
