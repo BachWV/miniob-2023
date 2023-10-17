@@ -35,7 +35,7 @@ bool CheckTimeRange(const char* s, int &time){
   tm_.tm_year = nums[0] - 1900;
   tm_.tm_mon = nums[1] - 1;
   tm_.tm_mday = nums[2];
-  tm_.tm_hour = 8;
+  tm_.tm_hour = 0;
   tm_.tm_min = 0;
   tm_.tm_sec = 0;
 
