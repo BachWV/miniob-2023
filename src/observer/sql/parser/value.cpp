@@ -190,21 +190,10 @@ std::string Value::to_string() const
   std::stringstream os;
   switch (attr_type_) {
     case DATES:{
-      struct tm *ptm; 
-      const time_t tt = static_cast<time_t>(num_value_.int_value_);
-      ptm = gmtime(&tt);
-
-      std::string mon = std::to_string(ptm->tm_mon + 1);
-      if(ptm->tm_mon + 1 < 10){
-        mon.insert(0, 1, '0');
-      }
-
-      std::string day = std::to_string(ptm->tm_mday);
-      if( ptm->tm_mday < 10){
-        day.insert(0, 1, '0');
-      }
-      
-      os << ptm->tm_year + 1900 <<"-"<<mon<<"-"<<day;
+      int year = num_value_.int_value_ / 10000;
+      int month = (num_value_.int_value_ % 10000) / 100;
+      int day = num_value_.int_value_ % 100;
+      os << year <<"-"<<month<<"-"<<day;
     }break;
     case INTS: {
       os << num_value_.int_value_;
