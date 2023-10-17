@@ -193,7 +193,16 @@ std::string Value::to_string() const
       int year = num_value_.int_value_ / 10000;
       int month = (num_value_.int_value_ % 10000) / 100;
       int day = num_value_.int_value_ % 100;
-      os << year <<"-"<<month<<"-"<<day;
+      std::string month_string = std::to_string(month);
+      if(month < 10){
+        month_string.insert(0, 1, '0');
+      }
+
+      std::string day_string = std::to_string(day);
+      if(day < 10){
+        day_string.insert(0, 1, '0');
+      }
+      os << year <<"-"<<month_string<<"-"<<day_string;
     }break;
     case INTS: {
       os << num_value_.int_value_;
