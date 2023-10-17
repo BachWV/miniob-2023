@@ -48,6 +48,10 @@ bool CheckTimeRange(const char* s, int &time){
   //   return true;
   // }
   if(tm_time < 0 || tm_time > max){
+    sql_debug("tm_time=");
+    sql_debug(std::to_string(tm_time).c_str());
+    sql_debug("max=");
+    sql_debug(std::to_string(max).c_str());
     sql_debug(s);
     sql_debug("time out of range");
     return false;
