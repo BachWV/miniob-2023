@@ -280,8 +280,8 @@ RC PhysicalPlanGenerator::create_plan(UpdateLogicalOperator &update_oper, unique
       return rc;
     }
   }
-  const Value value = update_oper.value();
-  oper = unique_ptr<PhysicalOperator>(new UpdatePhysicalOperator(update_oper.table(), value,update_oper.field_meta_index()));
+  std::unordered_map<int,Value> values=update_oper.value_list();
+  oper = unique_ptr<PhysicalOperator>(new UpdatePhysicalOperator(update_oper.table(), values));
 
   if (child_physical_oper) {
     oper->add_child(std::move(child_physical_oper));

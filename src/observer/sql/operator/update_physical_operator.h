@@ -13,7 +13,7 @@ class UpdateStmt;
 class UpdatePhysicalOperator : public PhysicalOperator
 {
 public:
-  UpdatePhysicalOperator(Table *table,const Value value,int field_meta_index) : table_(table), value_(value), field_meta_index_(field_meta_index) {};
+  UpdatePhysicalOperator(Table *table,std::unordered_map<int,Value> value_list):table_(table),value_list_(value_list){};
 
   virtual ~UpdatePhysicalOperator() = default;
 
@@ -30,7 +30,6 @@ public:
 
 private:
   Table *table_ = nullptr;
-  const Value value_;
-  int field_meta_index_ ;
+  std::unordered_map<int, Value> value_list_;
   Trx *trx_ = nullptr;
 };

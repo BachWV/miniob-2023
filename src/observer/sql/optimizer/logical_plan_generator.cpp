@@ -264,9 +264,8 @@ RC LogicalPlanGenerator::create_plan(
   if (rc != RC::SUCCESS) {
     return rc;
   }
-  const Value value=update_stmt->value();
-  int field_meta_index=update_stmt->field_meta_index();
-  unique_ptr<LogicalOperator> update_oper(new UpdateLogicalOperator(table, value,field_meta_index));
+  std::unordered_map<int,Value> value_list=update_stmt->value_list();
+  unique_ptr<LogicalOperator> update_oper(new UpdateLogicalOperator(table,value_list));
 
   if (predicate_oper) {
     predicate_oper->add_child(std::move(table_get_oper));

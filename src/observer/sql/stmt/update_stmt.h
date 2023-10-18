@@ -28,7 +28,7 @@ class UpdateStmt : public Stmt
 {
 public:
   UpdateStmt() = default;
-  UpdateStmt(Table *table,const Value value,int field_meta_index,FilterStmt *filter_stmt);
+  UpdateStmt(Table *table,std::unordered_map<int,Value> value_list,FilterStmt *filter_stmt);
 
   ~UpdateStmt() override;
   FilterStmt *filter_stmt() const
@@ -50,18 +50,13 @@ public:
   {
     return table_;
   }
-  const Value value() const
+  const std::unordered_map<int, Value> &value_list() const
   {
-    return value_;
-  }
-  int field_meta_index() const
-  {
-    return field_meta_index_;
+    return value_list_;
   }
 
 private:
   Table *table_ = nullptr;
-  const Value value_;
-  int field_meta_index_ ;
+  std::unordered_map<int, Value> value_list_;
   FilterStmt *filter_stmt_ = nullptr;
 };

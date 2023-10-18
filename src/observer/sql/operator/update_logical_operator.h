@@ -12,7 +12,7 @@
 class UpdateLogicalOperator : public LogicalOperator
 {
 public:
-  UpdateLogicalOperator(Table *table,const Value value,int field_meta_index);
+  UpdateLogicalOperator(Table *table,std::unordered_map<int,Value> value_list);
   virtual ~UpdateLogicalOperator() = default;
 
   LogicalOperatorType type() const override
@@ -21,12 +21,9 @@ public:
   }
 
   Table *table() const { return table_; }
-  const Value value() const { return value_; } // fix: add return type
-  //const FieldMeta *field_meta() const{ return field_meta_; }
-  int field_meta_index() const { return field_meta_index_; }
+  std::unordered_map<int,Value> value_list() const { return value_list_; }
 
 private:
   Table *table_ = nullptr;
-  const Value value_;
-  int field_meta_index_ ;
+  std::unordered_map<int,Value> value_list_;
 };

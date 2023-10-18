@@ -47,16 +47,17 @@ RC UpdatePhysicalOperator::next()
     //tuple已经拿到数据了，tuple存有record的指针
   
     Record record_new;
-    vector<Value> values_;
-    int cell_numddd=row_tuple->cell_num();
-    for (int i = 0; i < cell_numddd; i++) {
-      if(i==field_meta_index_){
-          values_.push_back(value_);
-          continue;
-      }
-        Value value ;
-        row_tuple->cell_at(i, value);
-        values_.push_back(value);
+
+    int cell_num=row_tuple->cell_num();
+    vector<Value> values_new;
+    values_new.resize(cell_num);
+    for(int i=0;i<cell_num;i++){
+      Value value;
+      row_tuple->cell_at(i,value);
+      values_new.at(i)=value;
+    }
+    for(auto &value:value_list_){
+      values_new.at(value.first)=value.second;
     }
     
 
@@ -66,7 +67,7 @@ RC UpdatePhysicalOperator::next()
       return rc;
     }
 
-    RC rc = table_->make_record(static_cast<int>(values_.size()), values_.data(), record_new);
+    RC rc = table_->make_record(static_cast<int>(values_new.size()), values_new.data(), record_new);
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to make record. rc=%s", strrc(rc));
       return rc;

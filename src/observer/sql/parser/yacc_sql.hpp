@@ -139,8 +139,10 @@ union YYSTYPE
   float                             floats;
   OrderByAttrSqlNode*               order_by_attr;
   std::vector<OrderByAttrSqlNode>*  order_by_list;
+  std::vector<SetValueSqlNode> *    set_value_list;
+  SetValueSqlNode *                 set_value;
 
-#line 144 "yacc_sql.hpp"
+#line 146 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;
