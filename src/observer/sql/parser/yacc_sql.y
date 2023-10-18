@@ -460,13 +460,16 @@ update_stmt:      /*  update 语句的语法解析树*/
     {
       $$ = new ParsedSqlNode(SCF_UPDATE);
       $$->update.relation_name = $2;
-      if ($4 != nullptr && $5 != nullptr) {
+      if ($4 != nullptr) {
         $$->update.set_value_list.swap(*$4);
+        delete $4;
+      }
+      if ($5 != nullptr){
         $$->update.conditions.swap(*$5);
+        delete $5;
       }
       delete $2;
-      delete $4;
-      delete $5;
+      
     }
     ;
 set_value_list:
