@@ -77,8 +77,8 @@ QUOTE            [\'\"]
 {WHITE_SAPCE}                                        // ignore whitespace
 \n                                                   ;
 
-[\-]?{DIGIT}+                           yylval->number=atoi(yytext); RETURN_TOKEN(NUMBER);
-[\-]?{DIGIT}+{DOT}{DIGIT}+              yylval->floats=(float)(atof(yytext)); RETURN_TOKEN(FLOAT);
+{DIGIT}+                           yylval->number=atoi(yytext); RETURN_TOKEN(NUMBER);
+{DIGIT}+{DOT}{DIGIT}+              yylval->floats=(float)(atof(yytext)); RETURN_TOKEN(FLOAT);
 
 ";"                                     RETURN_TOKEN(SEMICOLON);
 {DOT}                                   RETURN_TOKEN(DOT);
@@ -124,11 +124,9 @@ NULLABLE                                RETURN_TOKEN(NULLABLE);
 "is not null"                           RETURN_TOKEN(SYM_IS_NOT_NULL);
 "in"                                    RETURN_TOKEN(SYM_IN);
 "not in"                                RETURN_TOKEN(SYM_NOT_IN);
+"exists"                                RETURN_TOKEN(SYM_EXISTS);
+"not exists"                            RETURN_TOKEN(SYM_NOT_EXISTS);
 NULL                                    RETURN_TOKEN(NULL_VALUE);
-AVG                                     RETURN_TOKEN(SYM_AVG);
-MAX                                     RETURN_TOKEN(SYM_MAX);
-MIN                                     RETURN_TOKEN(SYM_MIN);
-COUNT                                   RETURN_TOKEN(SYM_COUNT);
 {ID}                                    yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                     RETURN_TOKEN(LBRACE);
 ")"                                     RETURN_TOKEN(RBRACE);

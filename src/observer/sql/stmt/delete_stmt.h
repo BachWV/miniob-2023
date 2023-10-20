@@ -17,8 +17,12 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/stmt.h"
 #include "sql/parser/parse_defs.h"
 
+#include <vector>
+#include <memory>
+
 class Table;
 class FilterStmt;
+class Expression;
 
 /**
  * @brief Delete 语句
@@ -27,16 +31,15 @@ class FilterStmt;
 class DeleteStmt : public Stmt 
 {
 public:
-  DeleteStmt(Table *table, FilterStmt *filter_stmt);
-  ~DeleteStmt() override;
+  DeleteStmt(Table *table, std::vector<std::unique_ptr<Expression>> &&cond_exprs);
 
   Table *table() const
   {
     return table_;
   }
-  FilterStmt *filter_stmt() const
-  {
-    return filter_stmt_;
+  
+  std::vector<std::unique_ptr<Expression>>& fetch_cond_exprs() {
+    return cond_exprs_;
   }
 
   StmtType type() const override
@@ -49,5 +52,5 @@ public:
 
 private:
   Table *table_ = nullptr;
-  FilterStmt *filter_stmt_ = nullptr;
+  std::vector<std::unique_ptr<Expression>> cond_exprs_;
 };

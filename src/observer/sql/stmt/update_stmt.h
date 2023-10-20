@@ -20,6 +20,8 @@ See the Mulan PSL v2 for more details. */
 
 class Table;
 class Db;
+class Expression;
+
 /**
  * @brief 更新语句
  * @ingroup Statement
@@ -27,13 +29,11 @@ class Db;
 class UpdateStmt : public Stmt 
 {
 public:
-  UpdateStmt() = default;
-  UpdateStmt(Table *table,const Value value,int field_meta_index,FilterStmt *filter_stmt);
-
-  ~UpdateStmt() override;
-  FilterStmt *filter_stmt() const
+  UpdateStmt(Table *table,const Value value,int field_meta_index, std::vector<std::unique_ptr<Expression>> &&cond_exprs);
+ 
+  std::vector<std::unique_ptr<Expression>>& fetch_cond_exprs()
   {
-    return filter_stmt_;
+    return cond_exprs_;
   }
 
   StmtType type() const override
@@ -63,5 +63,5 @@ private:
   Table *table_ = nullptr;
   const Value value_;
   int field_meta_index_ ;
-  FilterStmt *filter_stmt_ = nullptr;
+  std::vector<std::unique_ptr<Expression>> cond_exprs_;
 };

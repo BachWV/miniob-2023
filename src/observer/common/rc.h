@@ -49,6 +49,7 @@ See the Mulan PSL v2 for more details. */
   DEFINE_RC(SCHEMA_FIELD_MISSING)           \
   DEFINE_RC(SCHEMA_FIELD_TYPE_MISMATCH)     \
   DEFINE_RC(SCHEMA_FIELD_FORBIDDEN_NULL)    \
+  DEFINE_RC(SCHEMA_FIELD_AMBIGUOUS)          \
   DEFINE_RC(SCHEMA_INDEX_NAME_REPEAT)       \
   DEFINE_RC(IOERR_READ)                     \
   DEFINE_RC(IOERR_WRITE)                    \

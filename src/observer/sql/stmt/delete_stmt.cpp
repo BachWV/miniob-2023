@@ -17,17 +17,12 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/filter_stmt.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
+#include "sql/expr/parsed_expr.h"
+#include "sql/stmt/apply_stmt.h"
 
-DeleteStmt::DeleteStmt(Table *table, FilterStmt *filter_stmt) : table_(table), filter_stmt_(filter_stmt)
+DeleteStmt::DeleteStmt(Table *table, std::vector<std::unique_ptr<Expression>> &&cond_exprs) 
+  : table_(table), cond_exprs_(std::move(cond_exprs))
 {}
-
-DeleteStmt::~DeleteStmt()
-{
-  if (nullptr != filter_stmt_) {
-    delete filter_stmt_;
-    filter_stmt_ = nullptr;
-  }
-}
 
 RC DeleteStmt::create(Db *db, const DeleteSqlNode &delete_sql, Stmt *&stmt)
 {
@@ -44,17 +39,28 @@ RC DeleteStmt::create(Db *db, const DeleteSqlNode &delete_sql, Stmt *&stmt)
     return RC::SCHEMA_TABLE_NOT_EXIST;
   }
 
-  std::unordered_map<std::string, Table *> table_map;
-  table_map.insert(std::pair<std::string, Table *>(std::string(table_name), table));
+  // 处理where子句
+  ExprResolveContext expr_ctx;
+  StmtResolveContext delete_ctx;
 
-  FilterStmt *filter_stmt = nullptr;
-  RC rc = FilterStmt::create(
-      db, table, &table_map, delete_sql.conditions.data(), static_cast<int>(delete_sql.conditions.size()), filter_stmt);
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to create filter statement. rc=%d:%s", rc, strrc(rc));
-    return rc;
+  RC rc = RC::SUCCESS;
+  delete_ctx.add_table_to_namespace(table_name, table);
+  expr_ctx.push_stmt_ctx(&delete_ctx);
+
+  std::vector<std::unique_ptr<Expression>> cond_exprs;
+  for (auto &cond_expr_sql_node: delete_sql.conditions)
+  {
+    ExprResolveResult result;
+    rc = cond_expr_sql_node->resolve(&expr_ctx, &result);
+    if (rc != RC::SUCCESS)
+      return rc;
+
+    /* 目前delete中不会有子查询的情况，所以只用result中的expr树就行了 */
+    cond_exprs.emplace_back(result.owns_result_expr_tree());
   }
 
-  stmt = new DeleteStmt(table, filter_stmt);
+  expr_ctx.pop_stmt_ctx();
+
+  stmt = new DeleteStmt(table, std::move(cond_exprs));
   return rc;
 }

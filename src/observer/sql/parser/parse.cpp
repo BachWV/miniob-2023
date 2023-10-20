@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/parser/parse.h"
 #include "common/log/log.h"
 #include "sql/expr/expression.h"
+#include "sql/expr/parsed_expr.h"
 
 RC parse(char *st, ParsedSqlNode *sqln);
 

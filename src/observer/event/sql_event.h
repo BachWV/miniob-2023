@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include <memory>
 #include "common/seda/stage_event.h"
 #include "sql/operator/physical_operator.h"
+#include "sql/expr/parsed_expr.h"
 
 class SessionEvent;
 class Stmt;

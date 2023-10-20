@@ -107,16 +107,14 @@ extern int yydebug;
     SYM_IS_NOT_NULL = 308,         /* SYM_IS_NOT_NULL  */
     SYM_IN = 309,                  /* SYM_IN  */
     SYM_NOT_IN = 310,              /* SYM_NOT_IN  */
-    SYM_AVG = 311,                 /* SYM_AVG  */
-    SYM_MIN = 312,                 /* SYM_MIN  */
-    SYM_MAX = 313,                 /* SYM_MAX  */
-    SYM_COUNT = 314,               /* SYM_COUNT  */
-    DATE_STR = 315,                /* DATE_STR  */
-    NUMBER = 316,                  /* NUMBER  */
-    FLOAT = 317,                   /* FLOAT  */
-    ID = 318,                      /* ID  */
-    SSS = 319,                     /* SSS  */
-    UMINUS = 320                   /* UMINUS  */
+    SYM_EXISTS = 311,              /* SYM_EXISTS  */
+    SYM_NOT_EXISTS = 312,          /* SYM_NOT_EXISTS  */
+    DATE_STR = 313,                /* DATE_STR  */
+    NUMBER = 314,                  /* NUMBER  */
+    FLOAT = 315,                   /* FLOAT  */
+    ID = 316,                      /* ID  */
+    SSS = 317,                     /* SSS  */
+    UMINUS = 318                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -128,7 +126,6 @@ union YYSTYPE
 #line 118 "yacc_sql.y"
 
   ParsedSqlNode *                   sql_node;
-  ConditionSqlNode *                condition;
   Value *                           value;
   enum CompOp                       comp;
   RelAttrSqlNode *                  rel_attr;
@@ -137,7 +134,6 @@ union YYSTYPE
   Expression *                      expression;
   std::vector<Expression *> *       expression_list;
   std::vector<Value> *              value_list;
-  std::vector<ConditionSqlNode> *   condition_list;
   std::vector<RelAttrSqlNode> *     rel_attr_list;
   std::vector<std::string> *        relation_list;
   char *                            string;
@@ -148,16 +144,9 @@ union YYSTYPE
 
   // 重构后，表达式的语法解析树节点
   ExprSqlNode *                     expr_node;
-  std::vector<std::unique_ptr<ExprSqlNode>> * expr_node_list;
+  and_conditions_type* expr_node_list;
 
-  // 重构后，select之后跟的每一项要么是表达式，要么是聚集函数，用SelectExprSqlNode表示
-  SelectExprSqlNode *               select_expr;
-  std::vector<SelectExprSqlNode> *  select_exprs;
-
-  // 聚集函数
-  AggregateSqlNode *                aggregation;
-
-#line 161 "yacc_sql.hpp"
+#line 150 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;
