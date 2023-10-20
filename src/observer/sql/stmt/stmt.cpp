@@ -31,6 +31,9 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/load_data_stmt.h"
 #include "sql/stmt/calc_stmt.h"
 #include "sql/stmt/drop_table_stmt.h"
+#include "sql/expr/expression.h"
+#include "sql/expr/parsed_expr.h"
+#include "common/log/log.h"
 
 RC Stmt::create_stmt(Db *db, ParsedSqlNode &sql_node, Stmt *&stmt)
 {
@@ -47,7 +50,17 @@ RC Stmt::create_stmt(Db *db, ParsedSqlNode &sql_node, Stmt *&stmt)
       return UpdateStmt::create(db, sql_node.update, stmt);
     }
     case SCF_SELECT: {
-      return SelectStmt::create(db, sql_node.selection, stmt);
+      ExprResolveContext ctx;
+      std::unordered_map<size_t, std::vector<CorrelateExpr*>> correlate_exprs;
+      RC rc = SelectStmt::create(db, &ctx, sql_node.selection, stmt, &correlate_exprs);
+      if (rc != RC::SUCCESS) {
+        return rc;
+      }
+      if (!correlate_exprs.empty()) {
+        LOG_ERROR("correlate expressions are not null after resolve top level select stmt.");
+        return RC::INTERNAL;
+      }
+      return RC::SUCCESS;
     }
 
     case SCF_EXPLAIN: {

@@ -43,6 +43,9 @@ enum class ExprType
   COMPARISON,   ///< 需要做比较的表达式
   CONJUNCTION,  ///< 多个表达式使用同一种关系(AND或OR)来联结
   ARITHMETIC,   ///< 算术运算
+  CORRELATE,    // 子查询关联表达式
+  IDENTIFIER,   // 我们自己定义的字段表达式，可用于表列名和虚拟列名
+  PREDNULL,     // is null/is not null谓词
 };
 
 /**
@@ -299,4 +302,63 @@ private:
   Type arithmetic_type_;
   std::unique_ptr<Expression> left_;
   std::unique_ptr<Expression> right_;
+};
+
+/*
+ * 用于相关子查询
+ * 当前层的查询维护它的子查询中，所有引用当前层Field的表达式
+ * 此表达式的值由当前层在调用子查询前设置，子查询中使用get_value获得值时，直接获得当前层设置的值
+ */
+class CorrelateExpr: public Expression
+{
+public:
+  CorrelateExpr(const FieldIdentifier &correlate_identifier) : correlate_field_(correlate_identifier) {}
+
+  // 直接返回设置好的value_
+  RC get_value(const Tuple &tuple, Value &value) const override;
+
+  ExprType type() const override { return ExprType::CORRELATE; }
+
+  AttrType value_type() const override{ return value_.attr_type(); }
+
+  // 外层子查询在调用内层子查询之前，设置内层子查询里的相关表达式值，tuple是外层子查询的当前行。
+  RC set_value_from_tuple(const Tuple &tuple);
+
+private:
+  FieldIdentifier correlate_field_;
+  Value value_;
+};
+
+/* 字段名表达式。FieldExpr和Field对象耦合，涉及到别名、虚拟列名时不好用，这里额外写一个 */
+class IdentifierExpr: public Expression
+{
+public:
+  IdentifierExpr(const FieldIdentifier &field) : field_(field) {}
+
+  RC get_value(const Tuple &tuple, Value &value) const override;
+
+  ExprType type() const override{ return ExprType::IDENTIFIER; }
+
+  /* 在FieldIdentifier内维护类型代价高，直接通过get_value返回的value就能拿到类型了，不应该用这个接口 */
+  AttrType value_type() const override{ return AttrType::UNDEFINED; }
+
+private:
+  FieldIdentifier field_;
+};
+
+/* expr is null / expr is not null表达式 */
+class PredNullExpr: public Expression
+{
+public:
+  PredNullExpr(PredNullOp op, std::unique_ptr<Expression> child) : op_(op), child_(std::move(child)) {}
+
+  RC get_value(const Tuple &tuple, Value &value) const override;
+
+  ExprType type() const override { return ExprType::PREDNULL; }
+
+  AttrType value_type() const override { return BOOLEANS; }
+
+private:
+  PredNullOp op_;
+  std::unique_ptr<Expression> child_;
 };

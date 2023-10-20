@@ -52,9 +52,14 @@ enum CompOp
   LESS_THAN,    ///< "<"
   GREAT_EQUAL,  ///< ">="
   GREAT_THAN,   ///< ">"
-  IS_NULL,
-  IS_NOT_NULL,
   NO_OP
+};
+
+/* Is Null或Is Not Null运算符*/
+enum PredNullOp
+{
+  IS_NULL,
+  IS_NOT_NULL
 };
 
 /**
@@ -88,6 +93,9 @@ struct OrderByAttrSqlNode{
 };
 
 
+class ExprSqlNode;
+using and_conditions_type = std::vector<std::unique_ptr<ExprSqlNode>>;
+
 /**
  * @brief 描述一个select语句
  * @ingroup SQLParser
@@ -103,7 +111,7 @@ struct SelectSqlNode
 {
   std::vector<RelAttrSqlNode>     attributes;    ///< attributes in select clause
   std::vector<std::string>        relations;     ///< 查询的表
-  std::vector<ConditionSqlNode>   conditions;    ///< 查询条件，使用AND串联起来多个条件
+  and_conditions_type   conditions;    ///< 查询条件，使用AND串联起来多个条件
   std::vector<OrderByAttrSqlNode>  order_by_attrs;  ///< 排序字段及升降序
 };
 
@@ -136,7 +144,7 @@ struct InsertSqlNode
 struct DeleteSqlNode
 {
   std::string                   relation_name;  ///< Relation to delete from
-  std::vector<ConditionSqlNode> conditions;
+  and_conditions_type conditions;
 };
 
 struct SetValueSqlNode
@@ -152,7 +160,7 @@ struct UpdateSqlNode
 {
   std::string                   relation_name;         ///< Relation to update
   std::vector<SetValueSqlNode>  set_value_list;        ///< 更新的字段，现支持多个字段 
-  std::vector<ConditionSqlNode> conditions;
+  and_conditions_type conditions;
 };
 
 /**

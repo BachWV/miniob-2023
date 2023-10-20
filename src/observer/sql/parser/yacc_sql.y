@@ -14,6 +14,7 @@
 #include "sql/parser/lex_sql.h"
 #include "sql/expr/expression.h"
 #include "sql/parser/parser_helper_func.h"
+#include "sql/expr/parsed_expr.h"
 
 using namespace std;
 
@@ -105,13 +106,17 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         NULLABLE
         NOT_NULL
         NULL_VALUE
-        PREDICATE_IS_NULL
-        PREDICATE_IS_NOT_NULL
+        SYM_IS_NULL
+        SYM_IS_NOT_NULL
+        SYM_IN
+        SYM_NOT_IN
+        SYM_EXISTS
+        SYM_NOT_EXISTS
+
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
   ParsedSqlNode *                   sql_node;
-  ConditionSqlNode *                condition;
   Value *                           value;
   enum CompOp                       comp;
   RelAttrSqlNode *                  rel_attr;
@@ -120,7 +125,6 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   Expression *                      expression;
   std::vector<Expression *> *       expression_list;
   std::vector<Value> *              value_list;
-  std::vector<ConditionSqlNode> *   condition_list;
   std::vector<RelAttrSqlNode> *     rel_attr_list;
   std::vector<std::string> *        relation_list;
   char *                            string;
@@ -130,6 +134,10 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   std::vector<OrderByAttrSqlNode>*  order_by_list;
   std::vector<SetValueSqlNode> *    set_value_list;
   SetValueSqlNode *                 set_value;
+
+  // 重构后，表达式的语法解析树节点
+  ExprSqlNode *                     expr_node;
+  and_conditions_type* expr_node_list;
 }
 
 /* %token <number> DATE */
@@ -142,8 +150,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 
 /** type 定义了各种解析后的结果输出的是什么类型。类型对应了 union 中的定义的成员变量名称 **/
 %type <number>              type
-%type <condition>           condition
-%type <value>               value
+%type <value>               value non_negative_value negative_value
 %type <number>              number
 %type <comp>                comp_op
 %type <rel_attr>            rel_attr
@@ -151,8 +158,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <attr_info>           basic_attr_def
 %type <attr_info>           attr_def
 %type <value_list>          value_list
-%type <condition_list>      where
-%type <condition_list>      condition_list
+%type <expr_node_list>      where
 %type <rel_attr_list>       select_attr
 %type <relation_list>       rel_list
 %type <rel_attr_list>       attr_list
@@ -187,6 +193,12 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <order_by_attr>       order_by_attr
 %type <set_value_list>      set_value_list
 %type <set_value>           set_value
+
+%type <expr_node>           expr identifier sub_query
+%type <expr_node_list>      expr_list
+
+%nonassoc SYM_IS_NULL SYM_IS_NOT_NULL SYM_IN SYM_NOT_IN
+%left EQ LT GT LE GE NE
 %left '+' '-'
 %left '*' '/'
 %nonassoc UMINUS
@@ -414,7 +426,20 @@ value_list:
       delete $2;
     }
     ;
+
+// 修复1-1中，-1被识别为1个token的BUG，将value分为negative和non-negative。expr中只允许non-negative，同时不影响其它部分
+// 如果value这么改后，expr中还引用value，则expr -> - expr; 和 value -> - number会产生rr冲突
+// expr中有-expr这条产生式，所以只需要使用non_negative_value，即可应对全部情况
 value:
+    non_negative_value {
+      $$ = $1;
+    }
+    | negative_value {
+      $$ = $1;
+    }
+    ;
+
+non_negative_value:
     NUMBER {
       $$ = new Value((int)$1);
       @$ = @1;
@@ -440,6 +465,15 @@ value:
     |NULL_VALUE {
       $$ = new Value();
       $$->set_type(AttrType::NULL_TYPE);
+    }
+    ;
+
+negative_value:
+    '-' NUMBER {
+      $$ = new Value((int)-$2);
+    }
+    |'-' FLOAT {
+      $$ = new Value((float)-$2);
     }
     ;
     
@@ -527,6 +561,7 @@ select_stmt:        /*  select 语句的语法解析树*/
       free($4);
     }
     ;
+
 calc_stmt:
     CALC expression_list
     {
@@ -573,7 +608,7 @@ expression:
     | '-' expression %prec UMINUS {
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::NEGATIVE, $2, nullptr, sql_string, &@$);
     }
-    | value {
+    | non_negative_value {
       $$ = new ValueExpr(*$1);
       $$->set_name(token_name(sql_string, &@$));
       delete $1;
@@ -648,119 +683,131 @@ rel_list:
       free($2);
     }
     ;
+
 where:
     /* empty */
     {
       $$ = nullptr;
     }
-    | WHERE condition_list {
-      $$ = $2;  
+    | WHERE expr_list {
+      $$ = $2;
     }
     ;
-condition_list:
-    /* empty */
-    {
-      $$ = nullptr;
+
+expr_list:
+    expr {
+      $$ = new std::vector<std::unique_ptr<ExprSqlNode>>;
+      $$->emplace_back($1);
     }
-    | condition {
-      $$ = new std::vector<ConditionSqlNode>;
-      $$->emplace_back(*$1);
-      delete $1;
-    }
-    | condition AND condition_list {
-      $$ = $3;
-      $$->emplace_back(*$1);
-      delete $1;
+    | expr_list AND expr {
+      $$ = $1;
+      $$->emplace_back($3);
     }
     ;
-condition:
-    rel_attr comp_op value
-    {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 1;
-      $$->left_attr = *$1;
-      $$->right_is_attr = 0;
-      $$->right_value = *$3;
-      $$->comp = $2;
 
-      delete $1;
-      delete $3;
+expr:
+    non_negative_value
+    {
+      $$ = new ValueExprSqlNode(token_name(sql_string, &@$), *$1);
     }
-    | value comp_op value 
+    | identifier
     {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 0;
-      $$->left_value = *$1;
-      $$->right_is_attr = 0;
-      $$->right_value = *$3;
-      $$->comp = $2;
-
-      delete $1;
-      delete $3;
+      $$ = $1;
     }
-    | rel_attr comp_op rel_attr
+    | '+' expr %prec UMINUS
     {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 1;
-      $$->left_attr = *$1;
-      $$->right_is_attr = 1;
-      $$->right_attr = *$3;
-      $$->comp = $2;
-
-      delete $1;
-      delete $3;
+      $$ = $2;
     }
-    | value comp_op rel_attr
+    | '-' expr %prec UMINUS
     {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 0;
-      $$->left_value = *$1;
-      $$->right_is_attr = 1;
-      $$->right_attr = *$3;
-      $$->comp = $2;
-
-      delete $1;
-      delete $3;
+      std::unique_ptr<ExprSqlNode> sub_expr($2);
+      $$ = new NegativeArithExprSqlNode(token_name(sql_string, &@$), std::move(sub_expr));
     }
-    | rel_attr PREDICATE_IS_NULL
+    | expr '+' expr
     {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 1;
-      $$->left_attr = *$1;
-      $$->comp = CompOp::IS_NULL;
-      $$->right_is_attr = 0;  // 兼容FilterUnit
-
-      delete $1;
+      std::unique_ptr<ExprSqlNode> left($1);
+      std::unique_ptr<ExprSqlNode> right($3);
+      $$ = new BinaryArithExprSqlNode(token_name(sql_string, &@$), std::move(left), std::move(right), 
+        BinaryArithExprSqlNode::BinaryArithType::Add);
     }
-    | value PREDICATE_IS_NULL
+    | expr '-' expr
     {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 0;
-      $$->left_value = *$1;
-      $$->comp = CompOp::IS_NULL;
-      $$->right_is_attr = 0;
-
-      delete $1;
+      std::unique_ptr<ExprSqlNode> left($1);
+      std::unique_ptr<ExprSqlNode> right($3);
+      $$ = new BinaryArithExprSqlNode(token_name(sql_string, &@$), std::move(left), std::move(right), 
+        BinaryArithExprSqlNode::BinaryArithType::Sub);
     }
-    | rel_attr PREDICATE_IS_NOT_NULL
+    | expr '*' expr
     {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 1;
-      $$->left_attr = *$1;
-      $$->comp = CompOp::IS_NOT_NULL;
-      $$->right_is_attr = 0;
-
-      delete $1;
+      std::unique_ptr<ExprSqlNode> left($1);
+      std::unique_ptr<ExprSqlNode> right($3);
+      $$ = new BinaryArithExprSqlNode(token_name(sql_string, &@$), std::move(left), std::move(right), 
+        BinaryArithExprSqlNode::BinaryArithType::Mul);
     }
-    | value PREDICATE_IS_NOT_NULL
+    | expr '/' expr
     {
-      $$ = new ConditionSqlNode;
-      $$->left_is_attr = 0;
-      $$->left_value = *$1;
-      $$->comp = CompOp::IS_NOT_NULL;
-      $$->right_is_attr = 0;
+      std::unique_ptr<ExprSqlNode> left($1);
+      std::unique_ptr<ExprSqlNode> right($3);
+      $$ = new BinaryArithExprSqlNode(token_name(sql_string, &@$), std::move(left), std::move(right), 
+        BinaryArithExprSqlNode::BinaryArithType::Div);
+    }
+    | expr comp_op expr %prec NE
+    {
+      std::unique_ptr<ExprSqlNode> left($1);
+      std::unique_ptr<ExprSqlNode> right($3);
+      $$ = new CompareExprSqlNode(token_name(sql_string, &@$), std::move(left), std::move(right), $2);
+    }
+    | expr SYM_IN LBRACE sub_query RBRACE
+    {
+      /* TODO */ 
+    }
+    | expr SYM_NOT_IN LBRACE sub_query RBRACE
+    {
+      /* TODO */
+    }
+    | expr SYM_IS_NULL
+    {
+      std::unique_ptr<ExprSqlNode> child($1);
+      $$ = new PredNullExprSqlNode(token_name(sql_string, &@$), std::move(child), IS_NULL);
+    }
+    | expr SYM_IS_NOT_NULL
+    {
+      std::unique_ptr<ExprSqlNode> child($1);
+      $$ = new PredNullExprSqlNode(token_name(sql_string, &@$), std::move(child), IS_NOT_NULL);
+    }
+    | LBRACE expr RBRACE
+    {
+      $$ = $2;
+    }
+    | LBRACE sub_query RBRACE
+    {
+      $$ = $2;
+    }
+    | SYM_EXISTS LBRACE sub_query RBRACE
+    {
+      /* TODO */
+    }
+    | SYM_NOT_EXISTS LBRACE sub_query RBRACE
+    {
+      /* TODO */
+    }
+    ;
 
-      delete $1;
+identifier:
+    ID
+    {
+      $$ = new IdentifierExprSqlNode(token_name(sql_string, &@$), std::string(), $1);
+    }
+    | ID DOT ID
+    {
+      $$ = new IdentifierExprSqlNode(token_name(sql_string, &@$), $1, $3);
+    }
+    ;
+
+sub_query:
+    select_stmt
+    {
+      /* TODO */
     }
     ;
 

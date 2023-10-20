@@ -16,18 +16,11 @@ See the Mulan PSL v2 for more details. */
 #include "storage/db/db.h"
 #include "storage/table/table.h"
 #include "sql/stmt/filter_stmt.h"
+#include "sql/expr/parsed_expr.h"
+#include "sql/stmt/apply_stmt.h"
 
-UpdateStmt::UpdateStmt(Table *table,std::unordered_map<int,Value> value_list,FilterStmt *filter_stmt)
-    : table_(table), value_list_(value_list),filter_stmt_(filter_stmt)
-{}
-
-UpdateStmt::~UpdateStmt()
-{
-  if (nullptr != filter_stmt_) {
-    delete filter_stmt_;
-    filter_stmt_ = nullptr;
-  }
-}
+UpdateStmt::UpdateStmt(Table *table,std::unordered_map<int,Value> value_list,std::vector<std::unique_ptr<Expression>> &&cond_exprs)
+    : table_(table),value_list_(value_list),cond_exprs_(std::move(cond_exprs)) {}
 
 RC UpdateStmt::create(Db *db, const UpdateSqlNode &update_sql, Stmt *&stmt)
 {
@@ -78,22 +71,30 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update_sql, Stmt *&stmt)
   }
 
 
-  //filter is the where clause
-  std::unordered_map<std::string, Table *> table_map;
-  table_map.insert(std::pair<std::string, Table *>(std::string(table_name), table));
+  // 处理where子句
+  ExprResolveContext expr_ctx;
+  StmtResolveContext update_ctx;
 
-  FilterStmt *filter_stmt = nullptr;
-  RC rc = FilterStmt::create(
-      db, table, &table_map, update_sql.conditions.data(), static_cast<int>(update_sql.conditions.size()), filter_stmt);
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to create filter statement. rc=%d:%s", rc, strrc(rc));
-    return rc;
+  RC rc = RC::SUCCESS;
+  update_ctx.add_table_to_namespace(table_name, table);
+  expr_ctx.push_stmt_ctx(&update_ctx);
+
+  std::vector<std::unique_ptr<Expression>> cond_exprs;
+  for (auto &cond_expr_sql_node: update_sql.conditions)
+  {
+    ExprResolveResult result;
+    rc = cond_expr_sql_node->resolve(&expr_ctx, &result);
+    if (rc != RC::SUCCESS)
+      return rc;
+
+    /* 目前update中不会有子查询的情况，所以只用result中的expr树就行了 */
+    cond_exprs.emplace_back(result.owns_result_expr_tree());
   }
-
   
+  expr_ctx.pop_stmt_ctx();
 
   //everything is ok, create the update statement
-  stmt = new UpdateStmt(table, value_list, filter_stmt);
+  stmt = new UpdateStmt(table, value_list, std::move(cond_exprs));
   return rc;    
 
 }

@@ -90,18 +90,6 @@ RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &re
 {
   RC rc = RC::SUCCESS;
 
-  /* 如果是一元谓词 */
-  if (comp_ == CompOp::IS_NULL) {
-    result = left.is_null_value();
-    return rc;
-  }
-
-  if (comp_ == CompOp::IS_NOT_NULL) {
-    result = !left.is_null_value();
-    return rc;
-  }
-
-  /* 下面是二元比较 */
   if (left.attr_type() == NULL_TYPE || right.attr_type() == NULL_TYPE) {
     result = false;  // NULL无论怎么比较都是false
     return rc;
@@ -316,11 +304,15 @@ RC ArithmeticExpr::get_value(const Tuple &tuple, Value &value) const
     LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
     return rc;
   }
-  rc = right_->get_value(tuple, right_value);
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
-    return rc;
+
+  if (arithmetic_type_ != Type::NEGATIVE) {
+    rc = right_->get_value(tuple, right_value);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
+      return rc;
+    }
   }
+  
   return calc_value(left_value, right_value, value);
 }
 
@@ -346,4 +338,37 @@ RC ArithmeticExpr::try_get_value(Value &value) const
   }
 
   return calc_value(left_value, right_value, value);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+RC CorrelateExpr::get_value(const Tuple &tuple, Value &value) const
+{
+  value = value_;
+  return RC::SUCCESS;
+}
+
+RC CorrelateExpr::set_value_from_tuple(const Tuple &tuple)
+{
+  return tuple.find_cell(correlate_field_.to_tuple_cell_spec(), value_);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+RC IdentifierExpr::get_value(const Tuple &tuple, Value &value) const
+{
+  return tuple.find_cell(field_.to_tuple_cell_spec(), value);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+RC PredNullExpr::get_value(const Tuple &tuple, Value &value) const
+{
+  Value child_val;
+  RC rc = child_->get_value(tuple, child_val);
+  if (rc != RC::SUCCESS)
+    return rc;
+  bool bool_val = op_ == IS_NULL ? child_val.is_null_value() : !child_val.is_null_value();
+  value.set_boolean(bool_val);
+  return RC::SUCCESS;
 }
