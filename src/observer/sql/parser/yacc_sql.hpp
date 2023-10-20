@@ -100,21 +100,20 @@ extern int yydebug;
     DATE_T = 301,                  /* DATE_T  */
     ORDER_BY = 302,                /* ORDER_BY  */
     ASC = 303,                     /* ASC  */
-    NULLABLE = 304,                /* NULLABLE  */
-    NOT_NULL = 305,                /* NOT_NULL  */
-    NULL_VALUE = 306,              /* NULL_VALUE  */
-    SYM_IS_NULL = 307,             /* SYM_IS_NULL  */
-    SYM_IS_NOT_NULL = 308,         /* SYM_IS_NOT_NULL  */
-    SYM_IN = 309,                  /* SYM_IN  */
-    SYM_NOT_IN = 310,              /* SYM_NOT_IN  */
-    SYM_EXISTS = 311,              /* SYM_EXISTS  */
-    SYM_NOT_EXISTS = 312,          /* SYM_NOT_EXISTS  */
-    DATE_STR = 313,                /* DATE_STR  */
-    NUMBER = 314,                  /* NUMBER  */
-    FLOAT = 315,                   /* FLOAT  */
-    ID = 316,                      /* ID  */
-    SSS = 317,                     /* SSS  */
-    UMINUS = 318                   /* UMINUS  */
+    SYM_NOT_NULL = 304,            /* SYM_NOT_NULL  */
+    SYM_NULL = 305,                /* SYM_NULL  */
+    SYM_IS_NULL = 306,             /* SYM_IS_NULL  */
+    SYM_IS_NOT_NULL = 307,         /* SYM_IS_NOT_NULL  */
+    SYM_IN = 308,                  /* SYM_IN  */
+    SYM_NOT_IN = 309,              /* SYM_NOT_IN  */
+    SYM_EXISTS = 310,              /* SYM_EXISTS  */
+    SYM_NOT_EXISTS = 311,          /* SYM_NOT_EXISTS  */
+    DATE_STR = 312,                /* DATE_STR  */
+    NUMBER = 313,                  /* NUMBER  */
+    FLOAT = 314,                   /* FLOAT  */
+    ID = 315,                      /* ID  */
+    SSS = 316,                     /* SSS  */
+    UMINUS = 317                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -123,7 +122,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 118 "yacc_sql.y"
+#line 117 "yacc_sql.y"
 
   ParsedSqlNode *                   sql_node;
   Value *                           value;
@@ -148,7 +147,7 @@ union YYSTYPE
   ExprSqlNode *                     expr_node;
   and_conditions_type* expr_node_list;
 
-#line 152 "yacc_sql.hpp"
+#line 151 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

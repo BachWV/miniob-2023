@@ -52,11 +52,3 @@ TARGET_LINK_LIBRARIES(observer_static ${LIBRARIES})
 INSTALL(TARGETS observer observer_static 
     RUNTIME DESTINATION bin
     ARCHIVE DESTINATION lib)
-
-# 在编译前先生成parser
-add_custom_target(
-    build_ob_parser
-    COMMAND bash gen_parser.sh
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/sql/parser
-)
-add_dependencies(observer build_ob_parser)

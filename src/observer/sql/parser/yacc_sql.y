@@ -103,9 +103,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         DATE_T
         ORDER_BY
         ASC
-        NULLABLE
-        NOT_NULL
-        NULL_VALUE
+        SYM_NOT_NULL
+        SYM_NULL
         SYM_IS_NULL
         SYM_IS_NOT_NULL
         SYM_IN
@@ -355,12 +354,12 @@ attr_def:
       $1->nullable = false;
       $$ = $1;
     }
-    | basic_attr_def NOT_NULL 
+    | basic_attr_def SYM_NOT_NULL 
     {
       $1->nullable = false;
       $$ = $1;
     }
-    | basic_attr_def NULLABLE 
+    | basic_attr_def SYM_NULL 
     {
       $1->nullable = true;
       $$ = $1;
@@ -462,7 +461,7 @@ non_negative_value:
       }
       $$ = new Value(time, AttrType::DATES);
     }
-    |NULL_VALUE {
+    |SYM_NULL {
       $$ = new Value();
       $$->set_type(AttrType::NULL_TYPE);
     }
