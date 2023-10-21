@@ -113,6 +113,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         SYM_EXISTS
         SYM_NOT_EXISTS
         SYM_LIKE
+        SYM_NOT_LIKE
 
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
@@ -202,7 +203,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %left EQ LT GT LE GE NE
 %left '+' '-'
 %left '*' '/'
-%nonassoc UMINUS SYM_LIKE
+%nonassoc UMINUS SYM_LIKE SYM_NOT_LIKE
 %%
 
 commands: command_wrapper opt_semicolon  //commands or sqls. parser starts here.
@@ -773,7 +774,14 @@ expr:
     {
       std::unique_ptr<ExprSqlNode> left($1);
       char *tmp = common::substr($3, 1, strlen($3) - 2);
-      $$ = new LikeExprSqlNode(token_name(sql_string, &@$), std::move(left), tmp);
+      $$ = new LikeExprSqlNode(token_name(sql_string, &@$), std::move(left), tmp, false);
+      free(tmp);
+    }
+    | expr SYM_NOT_LIKE SSS
+    {
+      std::unique_ptr<ExprSqlNode> left($1);
+      char *tmp = common::substr($3, 1, strlen($3) - 2);
+      $$ = new LikeExprSqlNode(token_name(sql_string, &@$), std::move(left), tmp, true);
       free(tmp);
     }
     | expr SYM_IN LBRACE sub_query RBRACE

@@ -389,6 +389,7 @@ RC LikeExpr::get_value(const Tuple &tuple, Value &value) const
   //if(value.type!= CHAR)
   // return re::INVALID_ARGUMENT;
   rc = regex_value(child_val.get_string(), like_pattern_, bool_value);
+  bool_value = is_not_like_? !bool_value:bool_value;
   value.set_boolean(bool_value);
 
   return rc;

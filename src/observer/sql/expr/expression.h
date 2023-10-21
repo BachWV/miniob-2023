@@ -367,7 +367,8 @@ private:
 class LikeExpr: public Expression
 {
 public:
-  LikeExpr(std::unique_ptr<Expression> child, std::string like_pattern) : child_(std::move(child)), like_pattern_(like_pattern) {}
+  LikeExpr(std::unique_ptr<Expression> child, std::string like_pattern, bool is_not_like)
+    : child_(std::move(child)), like_pattern_(std::move(like_pattern)), is_not_like_(is_not_like) {};
 
   RC get_value(const Tuple &tuple, Value &value) const override;
 
@@ -380,4 +381,5 @@ private:
 private:
   std::unique_ptr<Expression> child_;
   std::string like_pattern_;
+  bool is_not_like_;
 };
