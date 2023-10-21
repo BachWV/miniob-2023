@@ -46,6 +46,7 @@ enum class ExprType
   CORRELATE,    // 子查询关联表达式
   IDENTIFIER,   // 我们自己定义的字段表达式，可用于表列名和虚拟列名
   PREDNULL,     // is null/is not null谓词
+  LIKE,         // like谓词
 };
 
 /**
@@ -361,4 +362,22 @@ public:
 private:
   PredNullOp op_;
   std::unique_ptr<Expression> child_;
+};
+
+class LikeExpr: public Expression
+{
+public:
+  LikeExpr(std::unique_ptr<Expression> child, std::string like_pattern) : child_(std::move(child)), like_pattern_(like_pattern) {}
+
+  RC get_value(const Tuple &tuple, Value &value) const override;
+
+  ExprType type() const override { return ExprType::LIKE; }
+
+  AttrType value_type() const override { return BOOLEANS; }
+private:
+  RC regex_value(const std::string &string, const std::string &pattern, bool &value) const;
+
+private:
+  std::unique_ptr<Expression> child_;
+  std::string like_pattern_;
 };

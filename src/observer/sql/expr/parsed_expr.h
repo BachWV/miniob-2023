@@ -139,6 +139,7 @@ enum class ExprSqlNodeType
   Compare,
   PredNull,
   SubQuery,
+  Like,
 };
 
 class ExprSqlNode
@@ -255,4 +256,16 @@ public:
 
 private:
   std::unique_ptr<ParsedSqlNode> sql_;
+};
+
+class LikeExprSqlNode: public ExprSqlNode
+{
+public:
+  LikeExprSqlNode(const std::string &expr_name, std::unique_ptr<ExprSqlNode> left, std::string pattern)
+    : ExprSqlNode(expr_name, ExprSqlNodeType::Like), left_(std::move(left)), pattern_(std::move(pattern)) {}
+  RC resolve(ExprResolveContext *ctx, ExprResolveResult *result) const override;
+
+private:
+  std::unique_ptr<ExprSqlNode> left_;
+  std::string pattern_;
 };
