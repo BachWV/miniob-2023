@@ -329,6 +329,9 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   for (int i = 0; i < value_num; i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &value = values[i];
+    if(field->type() == TEXTS && value.attr_type() == CHARS) {
+      continue;
+    }
     if (field->type() != value.attr_type() && value.attr_type() != NULL_TYPE) {
       LOG_ERROR("Invalid value type. table name =%s, field name=%s, type=%d, but given=%d",
                 table_meta_.name(), field->name(), field->type(), value.attr_type());
@@ -370,6 +373,38 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
       if (copy_len > data_len) {
         copy_len = data_len + 1;
       }
+    }
+    if(field->type() == TEXTS) {
+
+      std::string md5 = value.get_text_md5();
+      std::string file_path = base_dir_ + common::FILE_PATH_SPLIT_STR  + md5 ;
+      int fd = ::open(file_path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);  
+
+      if (fd<0) {  // 如果文件无法打开
+        if (EEXIST == errno) {
+          LOG_ERROR("Failed to create file, it has been created. %s, EEXIST, %s", file_path, strerror(errno));
+          return RC::FILE_EXIST;
+        }
+        LOG_ERROR("Create file failed. filename=%s, errmsg=%d:%s", file_path, errno, strerror(errno));
+        return RC::IOERR_OPEN;
+      }
+      close(fd);
+      std::fstream fs;
+    
+      fs.open(file_path, std::ios_base::out | std::ios_base::binary);
+      if (!fs.is_open()) {
+        LOG_ERROR("Failed to open file for write. file name=%s, errmsg=%s", file_path.c_str(), strerror(errno));
+        return RC::IOERR_OPEN;
+      }
+      fs<<value.get_text_string();
+      fs.close();
+
+      
+      copy_len = md5.length()+1 ;
+      memcpy(record_data + field->offset(), md5.c_str(), copy_len);
+      continue;
+
+      
     }
     memcpy(record_data + field->offset(), value.data(), copy_len);
   }

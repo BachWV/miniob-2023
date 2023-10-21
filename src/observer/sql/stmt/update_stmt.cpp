@@ -62,7 +62,7 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update_sql, Stmt *&stmt)
     const FieldMeta &field_meta = table_meta.field_metas()->at(index);
     const AttrType &field_type = field_meta.type();
     const AttrType &value_type = set_value.value.attr_type();
-    if(field_type != value_type){
+    if(!(field_type==TEXTS && value_type==CHARS) && field_type!=value_type){
       LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
                table->name(), field_meta.name(), field_type, value_type);
       return RC::SCHEMA_FIELD_TYPE_MISMATCH;

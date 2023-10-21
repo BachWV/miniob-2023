@@ -19,11 +19,11 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/comparator.h"
 #include "common/lang/string.h"
 
-const char *ATTR_TYPE_NAME[] = {"undefined", "chars", "ints", "floats", "booleans", "null_type", "dates"};
+const char *ATTR_TYPE_NAME[] = {"undefined", "chars", "ints", "floats", "booleans", "null_type", "dates", "texts"};
 
 const char *attr_type_to_string(AttrType type)
 {
-  if (type >= UNDEFINED && type <= DATES) {
+  if (type >= UNDEFINED && type <= TEXTS) {
     return ATTR_TYPE_NAME[type];
   }
   return "unknown";
@@ -69,6 +69,9 @@ void Value::set_data(char *data, int length)
   switch (attr_type_) {
     case CHARS: {
       set_string(data, length);
+    } break;
+    case TEXTS: {
+      set_text_string(data, length);
     } break;
     case DATES:
     case INTS: {
@@ -126,6 +129,17 @@ void Value::set_string(const char *s, int len /*= 0*/)
   }
   length_ = str_value_.length();
 }
+void Value::set_text_string(const char *s, int len /*= 0*/)
+{
+  attr_type_ = TEXTS;
+  if (len > 0) {
+    len = strnlen(s, len);
+    str_value_.assign(s, len);
+  } else {
+    str_value_.assign(s);
+  }
+  length_ = str_value_.length();
+}
 
 void Value::set_value(const Value &value)
 {
@@ -147,6 +161,9 @@ void Value::set_value(const Value &value)
     } break;
     case DATES: {
       set_date(value.get_int());
+    } break;
+    case TEXTS: {
+      set_text_string(value.get_string().c_str());
     } break;
   }
 }
@@ -201,12 +218,35 @@ std::string Value::to_string() const
     case NULL_TYPE: {
       os << "NULL";
     } break;
+    case TEXTS: {
+       std::string file_path = "miniob/db/sys/"+ str_value_;
+       std::ifstream fs(file_path);  // 打开文件 example.txt
+       if (!fs.is_open()) {
+        LOG_ERROR("Failed to open file for read. file name=%s, errmsg=%s", file_path.c_str(), strerror(errno));
+        return os.str();
+      }
+      os << fs.rdbuf();  // 将文件内容读取到字符串流中
+
+      fs.close();  // 关闭文件
+
+    } break;
     default: {
       LOG_WARN("unsupported attr type: %d", attr_type_);
     } break;
   }
   return os.str();
 }
+std::string Value::get_text_md5() const{
+    unsigned char digest[16];
+    common::MD5String(const_cast<char *>(str_value_.c_str()), digest);
+    std::string result;
+    for (int i = 0; i < 16; i++) {
+        char buf[3];
+        sprintf(buf, "%02X", digest[i]);
+        result += buf;
+    }
+    return result;
+ }
 
 int Value::compare(const Value &other) const
 {
@@ -221,6 +261,12 @@ int Value::compare(const Value &other) const
         return common::compare_float((void *)&this->num_value_.float_value_, (void *)&other.num_value_.float_value_);
       } break;
       case CHARS: {
+        return common::compare_string((void *)this->str_value_.c_str(),
+            this->str_value_.length(),
+            (void *)other.str_value_.c_str(),
+            other.str_value_.length());
+      } break;
+      case TEXTS: {
         return common::compare_string((void *)this->str_value_.c_str(),
             this->str_value_.length(),
             (void *)other.str_value_.c_str(),
@@ -309,6 +355,12 @@ float Value::get_float() const
 
 std::string Value::get_string() const
 {
+  return this->to_string();
+}
+std::string Value::get_text_string() const
+{
+  
+  
   return this->to_string();
 }
 

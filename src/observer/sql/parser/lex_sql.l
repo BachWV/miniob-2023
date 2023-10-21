@@ -126,6 +126,7 @@ ASC                                     RETURN_TOKEN(ASC);
 "exists"                                RETURN_TOKEN(SYM_EXISTS);
 "not exists"                            RETURN_TOKEN(SYM_NOT_EXISTS);
 NULL                                    RETURN_TOKEN(SYM_NULL);
+TEXT                                    RETURN_TOKEN(TEXT_T);
 {ID}                                    yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                     RETURN_TOKEN(LBRACE);
 ")"                                     RETURN_TOKEN(RBRACE);

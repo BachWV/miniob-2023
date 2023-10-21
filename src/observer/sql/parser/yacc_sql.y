@@ -101,6 +101,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         GE
         NE
         DATE_T
+        TEXT_T
         ORDER_BY
         ASC
         SYM_NOT_NULL
@@ -382,6 +383,14 @@ basic_attr_def:
       $$->name = $1;
       $$->length = 4;
       free($1);
+    } 
+    | ID TEXT_T
+    {
+      $$ = new AttrInfoSqlNode;
+      $$->type = TEXTS;
+      $$->name = $1;
+      $$->length = 32;
+      free($1);
     }
     ;
 
@@ -451,6 +460,9 @@ non_negative_value:
       // 这里为什么要-2
       // A: 注意这里有双引号
       char *tmp = common::substr($1,1,strlen($1)-2);
+      if(strlen(tmp) > 65535){
+        yyerror (&yylloc, sql_string, sql_result, scanner, YY_("string too long"));
+      }
       $$ = new Value(tmp);
       free(tmp);
     }
