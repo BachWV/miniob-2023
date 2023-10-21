@@ -100,6 +100,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         GE
         NE
         DATE_T
+        TEXT_T
         ORDER_BY
         ASC
         NULLABLE
@@ -370,6 +371,14 @@ basic_attr_def:
       $$->type = (AttrType)$2;
       $$->name = $1;
       $$->length = 4;
+      free($1);
+    } 
+    | ID TEXT_T
+    {
+      $$ = new AttrInfoSqlNode;
+      $$->type = TEXTS;
+      $$->name = $1;
+      $$->length = 32;
       free($1);
     }
     ;

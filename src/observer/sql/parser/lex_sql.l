@@ -123,6 +123,7 @@ NULLABLE                                RETURN_TOKEN(NULLABLE);
 "is null"                               RETURN_TOKEN(PREDICATE_IS_NULL);
 "is not null"                           RETURN_TOKEN(PREDICATE_IS_NOT_NULL);
 NULL                                    RETURN_TOKEN(NULL_VALUE);
+TEXT                                    RETURN_TOKEN(TEXT_T);
 {ID}                                    yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                     RETURN_TOKEN(LBRACE);
 ")"                                     RETURN_TOKEN(RBRACE);

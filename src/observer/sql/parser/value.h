@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 
 #include <string>
 #include <ctime>
+#include "common/math/md5.h"
 
 /**
  * @brief 属性的类型
@@ -30,6 +31,7 @@ enum AttrType
   BOOLEANS,        ///< boolean类型，当前不是由parser解析出来的，是程序内部使用的
   NULL_TYPE,  // 空值类型，当Value是这个类型时，任何get值的方法返回的都是无效值，不应使用
   DATES,
+  TEXTS,
 };
 
 const char *attr_type_to_string(AttrType type);
@@ -72,6 +74,7 @@ public:
   void set_float(float val);
   void set_boolean(bool val);
   void set_string(const char *s, int len = 0);
+  void set_text_string(const char *s, int len = 0);
   void set_value(const Value &value);
 
   std::string to_string() const;
@@ -102,6 +105,8 @@ public:
   int get_int() const;
   float get_float() const;
   std::string get_string() const;
+  std::string get_text_string() const;
+  std::string get_text_md5() const;
   bool get_boolean() const;
 
 private:
