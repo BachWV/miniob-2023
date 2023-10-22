@@ -14,6 +14,11 @@ See the Mulan PSL v2 for more details. */
 
 #include <utility>
 
+#include "sql/operator/aggregate_logical_operator.h"
+#include "sql/operator/aggregate_physical_operator.h"
+#include "sql/operator/deduplicate_logical_operator.h"
+#include "sql/operator/deduplicate_physical_operator.h"
+#include "sql/operator/logical_operator.h"
 #include "sql/optimizer/physical_plan_generator.h"
 #include "sql/operator/table_get_logical_operator.h"
 #include "sql/operator/table_scan_physical_operator.h"
@@ -84,6 +89,14 @@ RC PhysicalPlanGenerator::create(LogicalOperator &logical_operator, unique_ptr<P
       return create_plan(static_cast<SortLogicalOperator &>(logical_operator), oper);
     }break;
 
+    case LogicalOperatorType::DEDUPLICATE:{
+      return create_plan(static_cast<DeduplicateLogicalOperator &>(logical_operator), oper);
+    }break;
+
+    case LogicalOperatorType::AGGREGATE:{
+      return create_plan(static_cast<AggregateLogicalOperator &>(logical_operator), oper);
+    }break;
+
     default: {
       return RC::INVALID_ARGUMENT;
     }
@@ -104,7 +117,44 @@ RC PhysicalPlanGenerator::create_plan(SortLogicalOperator &sort_logical_oper, st
   return rc;
 }
 
-// 目前tableGet只能实现等值查询？？
+RC PhysicalPlanGenerator::create_plan(DeduplicateLogicalOperator& deduplicate_oper, std::unique_ptr<PhysicalOperator> &oper){
+  vector<unique_ptr<LogicalOperator>> &child_opers = deduplicate_oper.children();
+  unique_ptr<PhysicalOperator> child_phy_oper;
+
+  RC rc = RC::SUCCESS;
+  if (!child_opers.empty()) {
+    LogicalOperator *child_oper = child_opers.front().get();
+    rc = create(*child_oper, child_phy_oper);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to create project logical operator's child physical operator. rc=%s", strrc(rc));
+      return rc;
+    }
+  }
+
+  oper = make_unique<DeduplicateAggPhysicalOperator>(deduplicate_oper.get_deduplicate_fields(), deduplicate_oper.get_only_put_one());
+  oper->add_child(std::move(child_phy_oper));
+  return rc;
+}
+
+RC PhysicalPlanGenerator::create_plan(AggregateLogicalOperator& aggregate_oper, std::unique_ptr<PhysicalOperator> &oper){
+  vector<unique_ptr<LogicalOperator>> &child_opers = aggregate_oper.children();
+  unique_ptr<PhysicalOperator> child_phy_oper;
+
+  RC rc = RC::SUCCESS;
+  if (!child_opers.empty()) {
+    LogicalOperator *child_oper = child_opers.front().get();
+    rc = create(*child_oper, child_phy_oper);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to create project logical operator's child physical operator. rc=%s", strrc(rc));
+      return rc;
+    }
+  }
+  
+  oper = make_unique<AggregatePhysicalOperator>(aggregate_oper.get_agg_field(), aggregate_oper.get_new_meta(), aggregate_oper.get_group_fields(), aggregate_oper.get_op());
+  oper->add_child(std::move(child_phy_oper));
+  return rc;
+}
+
 RC PhysicalPlanGenerator:: create_plan(TableGetLogicalOperator &table_get_oper, unique_ptr<PhysicalOperator> &oper)
 {
   vector<unique_ptr<Expression>> &predicates = table_get_oper.predicates();
@@ -214,7 +264,7 @@ RC PhysicalPlanGenerator::create_plan(ProjectLogicalOperator &project_oper, uniq
     }
   }
 
-  ProjectPhysicalOperator *project_operator = new ProjectPhysicalOperator;
+  ProjectPhysicalOperator *project_operator = new ProjectPhysicalOperator(project_oper.get_with_table_name());
   const vector<Field> &project_fields = project_oper.fields();
   for (const Field &field : project_fields) {
     project_operator->add_projection(field.table(), field.meta());
@@ -240,6 +290,7 @@ RC PhysicalPlanGenerator::create_plan(InsertLogicalOperator &insert_oper, unique
   oper.reset(insert_phy_oper);
   return RC::SUCCESS;
 }
+
 //delete语句的物理计划生成
 RC PhysicalPlanGenerator::create_plan(DeleteLogicalOperator &delete_oper, unique_ptr<PhysicalOperator> &oper)
 {

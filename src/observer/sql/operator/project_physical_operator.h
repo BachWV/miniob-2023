@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #pragma once
 
 #include "sql/operator/physical_operator.h"
+#include "sql/expr/tuple.h"
 
 /**
  * @brief 选择/投影物理算子
@@ -23,7 +24,7 @@ See the Mulan PSL v2 for more details. */
 class ProjectPhysicalOperator : public PhysicalOperator
 {
 public:
-  ProjectPhysicalOperator()
+  ProjectPhysicalOperator(bool with_table_name): with_table_name_(with_table_name)
   {}
 
   virtual ~ProjectPhysicalOperator() = default;
@@ -50,6 +51,12 @@ public:
 
   Tuple *current_tuple() override;
 
+  void set_schema(TupleSchema& schema, bool with_table){
+    schema = schema_;
+  }
+
 private:
   ProjectTuple tuple_;
+  TupleSchema schema_;
+  bool with_table_name_;
 };

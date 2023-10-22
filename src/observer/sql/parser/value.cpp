@@ -164,8 +164,11 @@ void Value::set_value(const Value &value)
     } break;
     case TEXTS: {
       set_text_string(value.get_string().c_str());
+    case NULL_TYPE:{
+      attr_type_ = NULL_TYPE;
     } break;
   }
+}
 }
 
 const char *Value::data() const
@@ -236,6 +239,7 @@ std::string Value::to_string() const
   }
   return os.str();
 }
+
 std::string Value::get_text_md5() const{
     unsigned char digest[16];
     common::MD5String(const_cast<char *>(str_value_.c_str()), digest);
@@ -246,7 +250,7 @@ std::string Value::get_text_md5() const{
         result += buf;
     }
     return result;
- }
+}
 
 int Value::compare(const Value &other) const
 {

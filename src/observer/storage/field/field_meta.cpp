@@ -98,7 +98,8 @@ void FieldMeta::desc(std::ostream &os) const
 void FieldMeta::to_json(Json::Value &json_value) const
 {
   json_value[FIELD_NAME] = name_;
-  json_value[FIELD_TYPE] = attr_type_to_string(attr_type_);
+  auto ats = attr_type_to_string(attr_type_);
+  json_value[FIELD_TYPE] = ats;
   json_value[FIELD_OFFSET] = attr_offset_;
   json_value[FIELD_LEN] = attr_len_;
   json_value[FIELD_VISIBLE] = visible_;

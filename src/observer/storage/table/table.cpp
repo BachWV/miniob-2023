@@ -382,10 +382,10 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
 
       if (fd<0) {  // 如果文件无法打开
         if (EEXIST == errno) {
-          LOG_ERROR("Failed to create file, it has been created. %s, EEXIST, %s", file_path, strerror(errno));
+          LOG_ERROR("Failed to create file, it has been created. %s, EEXIST, %s", file_path.c_str(), strerror(errno));
           return RC::FILE_EXIST;
         }
-        LOG_ERROR("Create file failed. filename=%s, errmsg=%d:%s", file_path, errno, strerror(errno));
+        LOG_ERROR("Create file failed. filename=%s, errmsg=%d:%s", file_path.c_str(), errno, strerror(errno));
         return RC::IOERR_OPEN;
       }
       close(fd);

@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include <memory>
 #include "sql/operator/physical_operator.h"
 #include "sql/expr/expression.h"
+#include "sql/expr/tuple.h"
 
 class FilterStmt;
 

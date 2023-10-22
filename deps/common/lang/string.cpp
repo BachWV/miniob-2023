@@ -285,4 +285,12 @@ std::string double_to_str(double v)
 
   return std::string(buf, len);
 }
+
+bool str_equal(const char* s1, const char* s2){
+  if(s1 == nullptr || s2 == nullptr){
+    return false;
+  }
+  
+  return 0 == strcmp(s1, s2);
+}
 }  // namespace common

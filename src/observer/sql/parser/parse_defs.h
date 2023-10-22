@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 
 #include <stddef.h>
 #include <memory>
+#include <variant>
 #include <vector>
 #include <string>
 
@@ -92,6 +93,20 @@ struct OrderByAttrSqlNode{
   bool is_asc;
 };
 
+enum AggregateOp{
+  AGG_MAX = 0,
+  AGG_MIN,
+  AGG_COUNT,
+  AGG_AVG,
+};
+extern std::string agg_str_name[4];
+
+//对于group by 的处理延缓到resolver中
+struct AggregateFuncSqlNode{
+  AggregateOp agg_op;
+  RelAttrSqlNode attr;
+};
+
 
 class ExprSqlNode;
 using and_conditions_type = std::vector<std::unique_ptr<ExprSqlNode>>;
@@ -107,12 +122,14 @@ using and_conditions_type = std::vector<std::unique_ptr<ExprSqlNode>>;
  * 甚至可以包含复杂的表达式。
  */
 
+using SelectExprSqlNode = std::variant<RelAttrSqlNode, AggregateFuncSqlNode>;
 struct SelectSqlNode
 {
-  std::vector<RelAttrSqlNode>     attributes;    ///< attributes in select clause
+  std::vector<SelectExprSqlNode>  select_exprs;
   std::vector<std::string>        relations;     ///< 查询的表
   and_conditions_type   conditions;    ///< 查询条件，使用AND串联起来多个条件
   std::vector<OrderByAttrSqlNode>  order_by_attrs;  ///< 排序字段及升降序
+  std::vector<RelAttrSqlNode>     group_by_attrs;
 };
 
 /**

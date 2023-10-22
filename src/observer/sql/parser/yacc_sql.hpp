@@ -109,12 +109,17 @@ extern int yydebug;
     SYM_NOT_IN = 310,              /* SYM_NOT_IN  */
     SYM_EXISTS = 311,              /* SYM_EXISTS  */
     SYM_NOT_EXISTS = 312,          /* SYM_NOT_EXISTS  */
-    DATE_STR = 313,                /* DATE_STR  */
-    NUMBER = 314,                  /* NUMBER  */
-    FLOAT = 315,                   /* FLOAT  */
-    ID = 316,                      /* ID  */
-    SSS = 317,                     /* SSS  */
-    UMINUS = 318                   /* UMINUS  */
+    MIN = 313,                     /* MIN  */
+    MAX = 314,                     /* MAX  */
+    AVG = 315,                     /* AVG  */
+    COUNT = 316,                   /* COUNT  */
+    GROUP_BY = 317,                /* GROUP_BY  */
+    DATE_STR = 318,                /* DATE_STR  */
+    NUMBER = 319,                  /* NUMBER  */
+    FLOAT = 320,                   /* FLOAT  */
+    ID = 321,                      /* ID  */
+    SSS = 322,                     /* SSS  */
+    UMINUS = 323                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -123,7 +128,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 118 "yacc_sql.y"
+#line 122 "yacc_sql.y"
 
   ParsedSqlNode *                   sql_node;
   Value *                           value;
@@ -147,8 +152,11 @@ union YYSTYPE
   // 重构后，表达式的语法解析树节点
   ExprSqlNode *                     expr_node;
   and_conditions_type* expr_node_list;
+  AggregateFuncSqlNode*             agg_func;
+  std::vector<SelectExprSqlNode>*    select_expr_list;
+  SelectExprSqlNode*                 select_expr;
 
-#line 152 "yacc_sql.hpp"
+#line 160 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

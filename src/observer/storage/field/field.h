@@ -14,9 +14,12 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include "sql/parser/value.h"
 #include "storage/table/table.h"
 #include "storage/field/field_meta.h"
 #include "sql/expr/tuple_cell.h"
+
+enum AggregateOp;
 
 /**
  * @brief 字段
@@ -76,6 +79,7 @@ private:
 class FieldWithOrder{
 public:
   FieldWithOrder(const Table *table, const FieldMeta *field, bool is_asc) : field(Field(table, field)), is_asc_(is_asc){}
+  FieldWithOrder(Field f, bool is_asc): field(f), is_asc_(is_asc){}
   Field field;
   bool get_is_acs(){return is_asc_;}
 private:
@@ -107,4 +111,44 @@ private:
   /* 若table_name_不为空，则identifier是表的列名。否则，field_name_表示虚拟列名(表达式/聚集/用于替代子查询表达式的名字) */
   std::string table_name_, field_name_;
   bool is_table_field_identifier;
+};
+
+// group by; 感觉groupBy不应该开一个stmt，并且resolver是在做校验，所以在这里定义了
+class FieldsWithGroupBy{
+public:
+  FieldsWithGroupBy(const Field agg_field, const std::vector<Field> group_fields, AggregateOp op, bool with_table_name)
+    : agg_field_(agg_field), group_fields_(group_fields), op_(op), with_table_name_(with_table_name){}
+  Field agg_field_;
+  std::vector<Field> group_fields_;
+  AggregateOp op_;
+  bool with_table_name_;
+
+  // 返回了一个FieldMeta为堆内存的Field，调用者要保证内存管理
+  Field get_tmp_field() const{
+    std::string field_name;
+    if(with_table_name_){
+      field_name = agg_str_name[op_] + "(" + agg_field_.table_name() + "." + agg_field_.field_name() + ")";
+      transform(field_name.begin(), field_name.end(), field_name.begin(), ::toupper);
+    }else{
+      field_name = agg_str_name[op_] + "(" + agg_field_.field_name() + ")";
+      transform(field_name.begin(), field_name.end(), field_name.begin(), ::toupper);
+    }
+
+    AttrType attr_type;
+    int attr_len;
+    if(AggregateOp::AGG_COUNT == op_){
+      attr_type = INTS;
+      attr_len = 4;
+    }else if(AggregateOp::AGG_AVG == op_){
+      attr_type = FLOATS;
+      attr_len = 4;
+    }else{
+      attr_type = agg_field_.attr_type();
+      attr_len = agg_field_.meta()->len();
+    }
+    FieldMeta* fm = new FieldMeta(field_name.c_str(), attr_type, 1, attr_len, true, false);
+
+    // 这里返回的是nullptr，之后会不会有问题
+    return Field(nullptr, fm);
+  }
 };

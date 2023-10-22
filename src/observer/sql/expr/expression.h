@@ -22,6 +22,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/parser/value.h"
 #include "common/log/log.h"
 
+class PhysicalOperator;
 class Tuple;
 
 /**
@@ -46,6 +47,8 @@ enum class ExprType
   CORRELATE,    // 子查询关联表达式
   IDENTIFIER,   // 我们自己定义的字段表达式，可用于表列名和虚拟列名
   PREDNULL,     // is null/is not null谓词
+  SELECTEXPR,
+  COMPNULL
 };
 
 /**

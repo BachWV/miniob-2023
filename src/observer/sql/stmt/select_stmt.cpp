@@ -15,22 +15,25 @@ See the Mulan PSL v2 for more details. */
 #include <cassert>
 
 #include "sql/stmt/select_stmt.h"
+#include "sql/parser/parse_defs.h"
 #include "sql/stmt/filter_stmt.h"
 #include "common/log/log.h"
 #include "common/lang/string.h"
 #include "storage/db/db.h"
 #include "storage/field/field.h"
+#include "storage/field/field_meta.h"
 #include "storage/table/table.h"
 #include "sql/expr/parsed_expr.h"
 #include "sql/expr/expression.h"
 #include "sql/stmt/apply_stmt.h"
+#include <cstring>
 
-static void wildcard_fields(Table *table, std::vector<Field> &field_metas)
+static void wildcard_fields(Table *table, std::vector<SelectExprField>& select_expr_fields)
 {
   const TableMeta &table_meta = table->table_meta();
   const int field_num = table_meta.field_num();
   for (int i = table_meta.sys_field_num(); i < field_num; i++) {
-    field_metas.push_back(Field(table, table_meta.field(i)));
+    select_expr_fields.push_back(Field(table, table_meta.field(i)));
   }
 }
 
@@ -80,6 +83,51 @@ RC check_order_by_field(Db *db, const std::unordered_map<std::string, Table *>& 
   return RC::SUCCESS;
 }
 
+// 只检查具名的字段(如id，name等)，带有"*"不会通过check
+// 成功返回RC::success，并返回构建好的field；失败返回RC::SCHEMA_FIELD_MISSING
+RC resolve_common_field(Db *db, const std::unordered_map<std::string, Table *>& table_map, const std::vector<Table *>& tables,
+  const RelAttrSqlNode& relation_attr, Field& field){
+    
+    if (!common::is_blank(relation_attr.relation_name.c_str())) {
+      // 表名非空
+      const char *table_name = relation_attr.relation_name.c_str();
+      const char *field_name = relation_attr.attribute_name.c_str();
+      
+      // 常规情况，table.field
+      auto iter = table_map.find(table_name);
+      if (iter == table_map.end()) {
+        LOG_WARN("no such table in from list: %s", table_name);
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+      
+      Table *table = iter->second;
+        const FieldMeta *field_meta = table->table_meta().field(field_name);
+        if (nullptr == field_meta) {
+          // 进行field合法性检查
+          LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
+          return RC::SCHEMA_FIELD_MISSING;
+        }
+        field = Field(table, field_meta);
+        return RC::SUCCESS;
+    } else {
+      // 没写table名，默认从第一个table中找
+      if (tables.size() != 1) {
+        LOG_WARN("invalid. I do not know the attr's table. attr=%s", relation_attr.attribute_name.c_str());
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+
+      Table *table = tables[0];
+      const FieldMeta *field_meta = table->table_meta().field(relation_attr.attribute_name.c_str());
+      if (nullptr == field_meta) {
+        LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr.attribute_name.c_str());
+        return RC::SCHEMA_FIELD_MISSING;
+      }
+      field = Field(table, field_meta);
+      return RC::SUCCESS;
+    }
+  return RC::SCHEMA_FIELD_MISSING;
+}
+
 RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode &select_sql, Stmt *&stmt, 
     std::unordered_map<size_t, std::vector<CorrelateExpr*>> *correlate_exprs)
 {
@@ -114,74 +162,113 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
     current_where_resolve_ctx.add_table_to_namespace(table_name, table);
   }
 
-  // collect query fields in `select` statement
-  std::vector<Field> query_fields;
-  for (int i = static_cast<int>(select_sql.attributes.size()) - 1; i >= 0; i--) {
-    const RelAttrSqlNode &relation_attr = select_sql.attributes[i];
+  // collect fields in `group by` statement
+  std::vector<Field> group_fields;
+  for(const auto& rel_attr: select_sql.group_by_attrs){
+    Field group_by_field;
+    auto rc = resolve_common_field(db, table_map, tables, rel_attr, group_by_field);
+    if(rc != RC::SUCCESS){
+      return rc;
+    }
+    group_fields.push_back(group_by_field);
+  }
 
-    if (common::is_blank(relation_attr.relation_name.c_str()) &&
-        0 == strcmp(relation_attr.attribute_name.c_str(), "*")) {
-          // 空.*
-      for (Table *table : tables) {
-        wildcard_fields(table, query_fields);
-      }
+  // collect select_expr in `select` statement
+  // std::visit只能重载()传递单参数，重载lambda对参数捕获又太麻烦，怕环境编译器不支持太高级的特性，选择直接if else
+  std::vector<SelectExprField> select_expr_fields;
+  for(const auto& select_expr_field: select_sql.select_exprs){
+    if(auto relation_attr = get_if<RelAttrSqlNode>(&select_expr_field)){
 
-    } else if (!common::is_blank(relation_attr.relation_name.c_str())) {
-      // 表名非空
-      const char *table_name = relation_attr.relation_name.c_str();
-      const char *field_name = relation_attr.attribute_name.c_str();
-      
-      if (0 == strcmp(table_name, "*")) {
-        // 只能是*.*
-        if (0 != strcmp(field_name, "*")) {
-          LOG_WARN("invalid field name while table is *. attr=%s", field_name);
-          return RC::SCHEMA_FIELD_MISSING;
-        }
+      // 这里的代码Copy之前的验证Field字段的代码
+      if (common::is_blank(relation_attr->relation_name.c_str()) &&
+          0 == strcmp(relation_attr->attribute_name.c_str(), "*")) {
+
+        // 空.*
         for (Table *table : tables) {
-          wildcard_fields(table, query_fields);
-        }
-      } else {
-        // 常规情况，table.field
-        auto iter = table_map.find(table_name);
-        if (iter == table_map.end()) {
-          LOG_WARN("no such table in from list: %s", table_name);
-          return RC::SCHEMA_FIELD_MISSING;
-        }
+          wildcard_fields(table, select_expr_fields);
+        }// next loop
 
-        Table *table = iter->second;
-        if (0 == strcmp(field_name, "*")) {
-          // table.*
-          wildcard_fields(table, query_fields);
+      } else if (!common::is_blank(relation_attr->relation_name.c_str())) {
+
+        // 表名非空
+        const char *table_name = relation_attr->relation_name.c_str();
+        const char *field_name = relation_attr->attribute_name.c_str();
+        
+        if (0 == strcmp(table_name, "*")) {
+          // 只能是*.*
+          if (0 != strcmp(field_name, "*")) {
+            LOG_WARN("invalid field name while table is *. attr=%s", field_name);
+            return RC::SCHEMA_FIELD_MISSING;
+          }
+          for (Table *table : tables) {
+            wildcard_fields(table, select_expr_fields);
+          }// next loop
+
         } else {
-          const FieldMeta *field_meta = table->table_meta().field(field_name);
-          if (nullptr == field_meta) {
-            // 进行field合法性检查
-            LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
+          auto iter = table_map.find(table_name);
+          if (iter == table_map.end()) {
+            LOG_WARN("no such table in from list: %s", table_name);
             return RC::SCHEMA_FIELD_MISSING;
           }
 
-          query_fields.push_back(Field(table, field_meta));
+          Table *table = iter->second;
+          if (0 == strcmp(field_name, "*")) {
+            // table.*
+            wildcard_fields(table, select_expr_fields);
+            // next loop
+
+          } else {
+            // 常规情况，table.field
+            const FieldMeta *field_meta = table->table_meta().field(field_name);
+            if (nullptr == field_meta) {
+              LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
+              return RC::SCHEMA_FIELD_MISSING;
+            }
+
+            select_expr_fields.push_back(Field(table, field_meta));
+          }
+        }
+
+      } else {
+        // 没写table名，默认从第一个table中找
+        if (tables.size() != 1) {
+          LOG_WARN("invalid. I do not know the attr's table. attr=%s", relation_attr->attribute_name.c_str());
+          return RC::SCHEMA_FIELD_MISSING;
+        }
+
+        Table *table = tables[0];
+        const FieldMeta *field_meta = table->table_meta().field(relation_attr->attribute_name.c_str());
+        if (nullptr == field_meta) {
+          LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr->attribute_name.c_str());
+          return RC::SCHEMA_FIELD_MISSING;
+        }
+
+        select_expr_fields.push_back(Field(table, field_meta));
+      }
+
+    }else if(auto agg_sql_node = get_if<AggregateFuncSqlNode>(&select_expr_field)){
+      Field agg_field;
+      auto rc = resolve_common_field(db, table_map, tables, agg_sql_node->attr, agg_field);
+      if(rc != RC::SUCCESS){
+        // 若为COUNT(*)的处理。AGG算子中要手动释放agg_field的内存
+        if(agg_sql_node->agg_op == AGG_COUNT && 0 == strcmp(agg_sql_node->attr.attribute_name.c_str(), "*") ){
+          FieldMeta* meta =  new FieldMeta("*", INTS, 1,1,false, false);
+          assert(tables[0]);
+          agg_field = Field(tables[0], meta);
+        }else{
+          return rc;
         }
       }
-    } else {
-      // 没写table名，默认从第一个table中找
-      if (tables.size() != 1) {
-        LOG_WARN("invalid. I do not know the attr's table. attr=%s", relation_attr.attribute_name.c_str());
-        return RC::SCHEMA_FIELD_MISSING;
-      }
-
-      Table *table = tables[0];
-      const FieldMeta *field_meta = table->table_meta().field(relation_attr.attribute_name.c_str());
-      if (nullptr == field_meta) {
-        LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr.attribute_name.c_str());
-        return RC::SCHEMA_FIELD_MISSING;
-      }
-
-      query_fields.push_back(Field(table, field_meta));
+      bool with_table_name = tables.size() > 1;
+      select_expr_fields.push_back(FieldsWithGroupBy(agg_field, group_fields, agg_sql_node->agg_op, with_table_name));
+    }else{
+      // 出问题了，debug模式下直接kill
+      assert(0);
+      return RC::UNIMPLENMENT;
     }
   }
 
-  LOG_INFO("got %d tables in from stmt and %d fields in query stmt", tables.size(), query_fields.size());
+  LOG_INFO("got %d tables in from stmt and %d fields in query stmt", tables.size(), select_expr_fields.size());
 
   RC rc = RC::SUCCESS;
 
@@ -262,7 +349,8 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
   // everything alright
   SelectStmt *select_stmt = new SelectStmt();
   select_stmt->tables_.swap(tables);
-  select_stmt->query_fields_.swap(query_fields);
+  select_stmt->select_expr_fields_.swap(select_expr_fields);
+  select_stmt->group_by_field_.swap(group_fields);
   select_stmt->order_fields_ = order_fields;
   select_stmt->where_exprs_.swap(where_exprs);
   select_stmt->sub_querys_in_where_.swap(apply_stmts);

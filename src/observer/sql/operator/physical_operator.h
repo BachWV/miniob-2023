@@ -19,8 +19,9 @@ See the Mulan PSL v2 for more details. */
 #include <string>
 
 #include "common/rc.h"
-#include "sql/expr/tuple.h"
+// #include "sql/expr/tuple.h"
 
+class Tuple;
 class Record;
 class TupleCellSpec;
 class Trx;
@@ -49,6 +50,8 @@ enum class PhysicalOperatorType
   INSERT,
   SORT,
   UPDATE,
+  AGGREGATE,
+  DEDUPLICATE_AGG,
 };
 
 /**

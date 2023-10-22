@@ -85,6 +85,9 @@ enum class RC
 #undef DEFINE_RC
 };
 
+#define HANDLE_RC( rc ) if( rc != RC::SUCCESS) return rc;
+#define HANDLE_ASSERT_RC(rc) if(rc != RC::SUCCESS) assert(0);
+
 extern const char *strrc(RC rc);
 
 extern bool OB_SUCC(RC rc);

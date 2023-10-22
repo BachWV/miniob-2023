@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include <vector>
 #include "sql/operator/physical_operator.h"
 #include "sql/parser/parse.h"
+#include "sql/expr/tuple.h"
 
 class InsertStmt;
 

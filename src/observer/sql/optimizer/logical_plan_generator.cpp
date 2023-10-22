@@ -14,6 +14,9 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/optimizer/logical_plan_generator.h"
 
+#include "common/lang/string.h"
+#include "sql/operator/aggregate_logical_operator.h"
+#include "sql/operator/deduplicate_logical_operator.h"
 #include "sql/operator/logical_operator.h"
 #include "sql/operator/calc_logical_operator.h"
 #include "sql/operator/project_logical_operator.h"
@@ -36,6 +39,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/update_stmt.h"
 #include "sql/stmt/explain_stmt.h"
 #include "sql/stmt/apply_stmt.h"
+#include "storage/field/field.h"
 #include <memory>
 
 using namespace std;
@@ -119,13 +123,17 @@ RC LogicalPlanGenerator::create_plan(
   std::vector<std::unique_ptr<LogicalOperator>> opers;
 
   const std::vector<Table *> &tables = select_stmt->tables();
-  const std::vector<Field> &all_fields = select_stmt->query_fields();
+  const std::vector<SelectExprField>& select_expr_fields = select_stmt->select_expr_fields();
+
+  // table-get / join
   for (Table *table : tables) {
     std::vector<Field> fields;
     // 同一个Table中的Field拿出来
-    for (const Field &field : all_fields) {
-      if (0 == strcmp(field.table_name(), table->name())) {
-        fields.push_back(field);
+    for (const auto &sef : select_expr_fields) {
+      if(auto field = std::get_if<Field>(&sef)){
+        if (common::str_equal(field->table_name(), table->name())) {
+          fields.push_back(*field);
+        }
       }
     }
 
@@ -149,7 +157,52 @@ RC LogicalPlanGenerator::create_plan(
   }
   opers.push_back(std::move(predicate_oper));
 
-  // group-by
+  // agg / field-cul-expr: 构建算子的同时把all_fields按序构建出来
+  std::vector<Field> all_fields;
+  bool has_agg = false;
+  for(const auto &sef : select_expr_fields){
+    if(auto field = std::get_if<Field>(&sef)){
+      all_fields.push_back(*field);
+    }else if (auto fwgb = std::get_if<FieldsWithGroupBy>(&sef)) {
+      // 第一个group by聚集算子，在其之前构建一个sort；非group by的聚集没必要sort
+      if(!has_agg ){
+        has_agg = true;
+        
+        vector<FieldWithOrder> fwo;
+        // 构建fwo
+        if(!select_stmt->get_group_by_fields().empty()){
+          for(const auto & f:select_stmt->get_group_by_fields()){
+            fwo.push_back(FieldWithOrder(f, true));
+          }
+        }else{
+          // 按第一个字段排序
+          fwo.push_back(FieldWithOrder(tables[0] ,tables[0]->table_meta().field(0), true));
+        }
+
+        unique_ptr<LogicalOperator> sort_oper = make_unique<SortLogicalOperator>(fwo);
+        opers.push_back(std::move(sort_oper));
+      }
+      Field tmp_field = fwgb->get_tmp_field();
+      unique_ptr<LogicalOperator> agg_oper = std::make_unique<AggregateLogicalOperator>(const_cast<FieldMeta*>(tmp_field.meta()), fwgb->agg_field_, fwgb->group_fields_, fwgb->op_);
+
+      opers.push_back(std::move(agg_oper));
+      all_fields.push_back(tmp_field);
+    }else{
+      assert(0);
+    }
+  }
+
+  // deduplicate
+  if(has_agg){
+    if(select_stmt->get_group_by_fields().empty()){
+      // 无group by，只输出一条
+      unique_ptr<LogicalOperator> deduplicate_oper = make_unique<DeduplicateLogicalOperator>(select_stmt->get_group_by_fields(), true);
+      opers.push_back(std::move(deduplicate_oper));
+    }else{
+      unique_ptr<LogicalOperator> deduplicate_oper = make_unique<DeduplicateLogicalOperator>(select_stmt->get_group_by_fields(), false);
+      opers.push_back(std::move(deduplicate_oper));
+    }
+  }
 
   // order by
   unique_ptr<LogicalOperator> sort_oper = nullptr;
@@ -158,8 +211,12 @@ RC LogicalPlanGenerator::create_plan(
   }
   opers.push_back(std::move(sort_oper));
 
-  unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_fields));
+  // proj: 当前的proj中包含group-by / field-cul-expr构建的tep_field
+  bool with_table_name = select_stmt->tables().size() > 1;
+  unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_fields, with_table_name));
   opers.push_back(std::move(project_oper));
+
+  // top_oper
   auto top_oper = create_select_oper_tree(opers);
   
   logical_operator.swap(top_oper);
