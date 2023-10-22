@@ -8,37 +8,18 @@ RC AggregatePhysicalOperator::open(Trx *trx){
     LOG_WARN("aggregate operator must has one child");
     return RC::INTERNAL;
   }
-
   auto child = children_[0].get();
 	auto rc = child->open(trx);
 	HANDLE_RC(rc);
-
+	
 	rc = init_curr_group(true);
 	HANDLE_RC(rc);
-
 	// 有group by的先聚集一个gbk
 	// 无group by的直接聚集完全部
 	rc = do_group_agg();
 	HANDLE_RC(rc)
-	
-	return rc;
-}
 
-// 一个next：①拿到一个group里面的所有tuple；②维护计数器，输出这个group里面还剩多少条
-RC AggregatePhysicalOperator::next(){
-	auto size = aof_tuples_.size();
-	curr_group_count_++;
-
-  if(curr_group_count_ < size){
-		// 不是当前组最后一个
-		return RC::SUCCESS;
-
-	}else if(curr_group_count_ == size && is_last_group_){
-		// 当前组输出完成，是最后一组
-		return RC::RECORD_EOF;
-
-	}else{
-		// 当前组输出完成，但不是最后一组，无group by的聚集函数不会进入这个循环
+	while(!is_last_group_){
 		assert(!group_by_fields_.empty());
 
 		auto rc = init_curr_group(false);
@@ -46,13 +27,26 @@ RC AggregatePhysicalOperator::next(){
 
 		rc = do_group_agg();
 		HANDLE_RC(rc);
+	}
+	
+	return rc;
+}
+
+// 一个next：①拿到一个group里面的所有tuple；②维护计数器，输出这个group里面还剩多少条
+RC AggregatePhysicalOperator::next(){
+	auto size = all_aof_tuples_.size();
+	all_index_++;
+	if(all_index_ < size){
+		// 不是当前组最后一个
 		return RC::SUCCESS;
+	}else{
+		return RC::RECORD_EOF;
 	}
 }
 
 // [0, size)
 Tuple* AggregatePhysicalOperator::current_tuple(){
-	return &aof_tuples_[curr_group_count_];
+	return &all_aof_tuples_[all_index_];
 }
 
 RC AggregatePhysicalOperator::close(){
@@ -68,27 +62,28 @@ RC AggregatePhysicalOperator::close(){
 }
 
 bool AggregatePhysicalOperator::cmp_group_by_fields(const Tuple* cur_tuple, const std::vector<Value>& cur_group_by_value){
-		if(group_by_fields_.empty()){
-			// 无group by聚集函数，无视gbf的比较，直接全部累加
-			return true;
-		}
-
-		// 有group by
-		for(int i = 0; i < group_by_fields_.size(); i++){
-			Value v;
-			TupleCellSpec spec(group_by_fields_[i].table_name(), group_by_fields_[i].field_name());
-			auto rc = cur_tuple->find_cell(spec, v);
-			if(rc != RC::SUCCESS){
-				// 不应该发生，测试阶段，直接kill
-				assert(0);
-			}
-			if(0 != v.compare(cur_group_by_value[i])){
-				return false;
-			}
-		}
-
+	if(group_by_fields_.empty()){
+		// 无group by聚集函数，无视gbf的比较，直接全部累加
 		return true;
 	}
+
+	// 有group by
+	for(int i = 0; i < group_by_fields_.size(); i++){
+		Value v;
+		TupleCellSpec spec(group_by_fields_[i].table_name(), group_by_fields_[i].field_name());
+		auto rc = cur_tuple->find_cell(spec, v);
+		if(rc != RC::SUCCESS){
+			// 不应该发生，测试阶段，直接kill
+			assert(0);
+		}
+		if(0 != v.compare(cur_group_by_value[i])){
+			return false;
+		}
+	}
+
+	return true;
+}
+
 
 RC AggregatePhysicalOperator::set_group_by_value(const Tuple* tuple, std::vector<Value>& cur_group_by_value){
 	for(int i = 0; i < group_by_fields_.size(); i++){
@@ -113,16 +108,15 @@ RC AggregatePhysicalOperator::get_value(Tuple* tuple, Value& v){
 RC AggregatePhysicalOperator::init_curr_group(bool first){
 	PhysicalOperator *child = children_.front().get();
 	aof_tuples_.clear();
-	curr_group_count_ = 0;
 
 	RC rc;
-	Tuple* tuple;
+	Tuple* tuple = nullptr;
 	if(first){
 		// Open时的初始化，第一次open算子后，必须先next，才能拿到curr tuple
 		if(RC::SUCCESS == (rc = child->next())){
 			tuple = child->current_tuple();
-			curr_group_count_ = -1;
 		}
+		HANDLE_RC(rc);
 	}else{
 		// 正常状态下的init，直接设置当前curr tuple就可以，
 		// 使用next会忽略掉当前gbk的第一个值（因为上一轮末尾已经将其设置到了curr tuple）
@@ -178,6 +172,10 @@ RC AggregatePhysicalOperator::do_group_agg(){
 
 	for(auto & t: aof_tuples_){
 		t.set_new_field_value(curr_group_agg_value_);
+	}
+
+	for(const auto& tuple: aof_tuples_){
+		all_aof_tuples_.push_back(tuple);
 	}
 
 	return RC::SUCCESS;

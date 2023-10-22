@@ -12,7 +12,7 @@ RC DeduplicateAggPhysicalOperator::open(Trx *trx){
 	auto rc = child->open(trx);
 	HANDLE_RC(rc);
 
-	cur_group_by_value_.reserve(group_by_fields_.size());
+	cur_group_by_value_.resize(group_by_fields_.size());
 
 	if(RC::SUCCESS == (rc = child->next())){
 		auto tuple = child->current_tuple();
@@ -56,7 +56,7 @@ RC DeduplicateAggPhysicalOperator::next(){
 		finish_ = true;
 	}
 	
-	return rc;
+	return RC::SUCCESS;
 }
 
 Tuple* DeduplicateAggPhysicalOperator::current_tuple()

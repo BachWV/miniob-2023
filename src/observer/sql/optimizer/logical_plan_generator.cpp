@@ -211,7 +211,8 @@ RC LogicalPlanGenerator::create_plan(
   opers.push_back(std::move(sort_oper));
 
   // proj: 当前的proj中包含group-by / field-cul-expr构建的tep_field
-  unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_fields));
+  bool with_table_name = select_stmt->tables().size() > 1;
+  unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_fields, with_table_name));
   opers.push_back(std::move(project_oper));
 
   // top_oper

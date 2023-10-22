@@ -24,7 +24,7 @@ See the Mulan PSL v2 for more details. */
 class ProjectPhysicalOperator : public PhysicalOperator
 {
 public:
-  ProjectPhysicalOperator()
+  ProjectPhysicalOperator(bool with_table_name): with_table_name_(with_table_name)
   {}
 
   virtual ~ProjectPhysicalOperator() = default;
@@ -58,4 +58,5 @@ public:
 private:
   ProjectTuple tuple_;
   TupleSchema schema_;
+  bool with_table_name_;
 };

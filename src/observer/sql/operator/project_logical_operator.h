@@ -2,7 +2,7 @@
  * @Author: wyy 281484683@qq.com
  * @Date: 2023-09-25 09:03:31
  * @LastEditors: wyy 281484683@qq.com
- * @LastEditTime: 2023-09-28 20:31:55
+ * @LastEditTime: 2023-10-22 23:49:55
  * @FilePath: /miniob/src/observer/sql/operator/project_logical_operator.h
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -37,7 +37,7 @@ See the Mulan PSL v2 for more details. */
 class ProjectLogicalOperator : public LogicalOperator 
 {
 public:
-  ProjectLogicalOperator(const std::vector<Field> &fields);
+  ProjectLogicalOperator(const std::vector<Field> &fields, bool with_table_name);
   virtual ~ProjectLogicalOperator() = default;
 
   LogicalOperatorType type() const override
@@ -58,10 +58,15 @@ public:
     return fields_;
   } 
 
+  bool get_with_table_name(){
+    return with_table_name_;
+  }
+
 private:
   //! 投影映射的字段名称
   //! 并不是所有的select都会查看表字段，也可能是常量数字、字符串，
   //! 或者是执行某个函数。所以这里应该是表达式Expression。
   //! 不过现在简单处理，就使用字段来描述
   std::vector<Field> fields_;
+  bool with_table_name_;
 };

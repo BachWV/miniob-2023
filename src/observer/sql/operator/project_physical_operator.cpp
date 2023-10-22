@@ -64,11 +64,18 @@ void ProjectPhysicalOperator::add_projection(const Table *table, const FieldMeta
   const char* table_name;
   if(table != nullptr){
     table_name = table->name();
+      if (with_table_name_) {
+        schema_.append_cell(table->name(), field_meta->name());
+      } else {
+        schema_.append_cell(field_meta->name());
+      }
+
   }else{
     table_name = nullptr;
+    // 只是单独的agg
+    schema_.append_cell(field_meta->name());
   }
   
   TupleCellSpec *spec = new TupleCellSpec(table_name, field_meta->name(), field_meta->name());
-  schema_.append_cell(*spec);
   tuple_.add_cell_spec(spec);
 }

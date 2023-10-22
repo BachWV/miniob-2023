@@ -18,7 +18,7 @@ public:
 	AggregatePhysicalOperator(Field agg_field ,FieldMeta* new_meta, std::vector<Field> group_by_fields, AggregateOp op)
 		: agg_field_(agg_field), new_meta_(new_meta), group_by_fields_(group_by_fields), op_(op){
 			if(!group_by_fields.empty()){
-				cur_group_by_value_.reserve(group_by_fields.size());
+				cur_group_by_value_.resize(group_by_fields.size());
 			}
 		}
 	~AggregatePhysicalOperator() = default;
@@ -64,4 +64,7 @@ private:
 	Value curr_group_agg_value_;
 
 	bool is_last_group_{false};
+
+	int all_index_{-1};
+	std::vector<AddOneFieldTuple> all_aof_tuples_;
 };
