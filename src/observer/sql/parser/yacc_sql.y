@@ -63,7 +63,6 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         TABLE
         TABLES
         INDEX
-        MULTI_INDEX
         CALC
         SELECT
         DESC
