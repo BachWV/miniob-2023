@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include <cstring>
 #include <memory>
 #include <vector>
 #include <string>
@@ -110,8 +111,7 @@ public:
 
   // 浅拷贝生成的对象在销毁的时候会导致底层record对象被析构，其他对象无法访问record
   // 只能用这个拷贝函数
-  // 由于继承和多态的限制，上层不知道底层Tuple是什么类型，我们只能传入基类指针，然后在每个类型内部分配每个类型
-  // 传入未分配的指针，该函数会给你返回分配好的对象
+  // 由于继承和多态的限制，上层不知道底层Tuple是什么类型，该函数直接复制自己并返回基类指针
   virtual Tuple* get_replica(){return nullptr;};
   virtual bool is_data_owner(){return is_data_owner_;}
 
@@ -217,6 +217,9 @@ public:
   {
     const char *table_name = spec.table_name();
     const char *field_name = spec.field_name();
+
+    // 理论上传不到这里
+    assert(table_name != nullptr);
     if (0 != strcmp(table_name, table_->name())) {
       return RC::NOTFOUND;
     }
@@ -307,6 +310,7 @@ public:
   }
 
   // 我们找的时候找的是speces_中的字段，从speces拿到之后，在直接从我们绑定的普通tuple中find
+  // 传入的index经过speces过滤了一遍再返回
   RC cell_at(int index, Value &cell) const override
   {
     if (index < 0 || index >= static_cast<int>(speces_.size())) {
@@ -487,4 +491,84 @@ public:
 private:
   Tuple *left_ = nullptr;
   Tuple *right_ = nullptr;
+};
+
+
+class AddOneFieldTuple: public Tuple{
+public:
+  AddOneFieldTuple() = default;
+  AddOneFieldTuple(Tuple* original, FieldMeta new_field_meta): original_(original), new_field_meta_(new_field_meta){
+    new_value_.set_type(new_field_meta.type());
+  }
+  virtual ~AddOneFieldTuple(){
+    if(is_data_owner_){
+      delete original_;
+      // new_value是一个栈上的字段，自己会析构，不需要delete
+    }
+  }
+
+  virtual int cell_num() const override{
+    return original_->cell_num() +1;
+  }
+
+  virtual RC cell_at(int index, Value &cell) const override{
+    const int original_num = original_->cell_num();
+    if(index >= 0 && index < original_num){
+      return original_->cell_at(index, cell);
+    }else if( index == original_num){
+      cell = new_value_;
+      return RC::SUCCESS;
+    }
+    return RC::NOTFOUND;
+  }
+
+  virtual RC find_cell(const TupleCellSpec &spec, Value &cell) const override{
+    RC rc = original_->find_cell(spec, cell);
+    if (rc == RC::SUCCESS || rc != RC::NOTFOUND) {
+      return rc;
+    }
+    
+    // 虚拟字段没写表名的判断
+    if(0 == strcmp( spec.field_name(), new_field_meta_.name())){
+      cell = new_value_;
+      return RC::SUCCESS;
+    }
+    return RC::NOTFOUND;
+  }
+
+  // Value中的数据自己会复制
+  virtual Tuple* get_replica() override{
+    auto replica = new AddOneFieldTuple(original_->get_replica(), new_field_meta_);
+    replica->set_new_field_value(new_value_);
+    replica->is_data_owner_ = true;
+    return replica;
+  };
+
+  void set_original(Tuple *original){
+    original_ = original;
+  }
+
+  void set_new_field_meta(FieldMeta new_field_meta){
+    new_field_meta_ = new_field_meta;
+  }
+
+  // 用于设置值
+  void set_new_field_data(char *data, int length){
+    new_value_.set_data(data, length);
+  }
+
+  // set_value底层会拿到引用数据的值，以值拷贝的形式复制一份
+  void set_new_field_value(const Value& v){
+    new_value_.set_value(v);
+  }
+
+  // value里面一堆方法，直接把引用返回给上层，上层想干啥就干啥吧
+  Value& get_new_field_value(){
+    return new_value_;
+  }
+
+private:
+  Tuple *original_;
+  FieldMeta new_field_meta_;
+  Value new_value_;
 };

@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #pragma once
 
 // Basic includes
+#include <cstring>
 #include <cxxabi.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -170,5 +171,9 @@ std::string get_type_name(const T &val)
   ::free(stmp);
   return sret;
 }
+
+// nullptr 在其中会被忽略，
+// nullptr == nullptr怎么办？
+bool str_equal(const char* s1, const char* s2);
 
 }  // namespace common

@@ -42,6 +42,8 @@ enum class LogicalOperatorType
   EXPLAIN,    ///< 查看执行计划
   SORT,        ///< 排序
   UPDATE,     ///< 更新
+  AGGREGATE,
+  DEDUPLICATE,
 };
 
 /**

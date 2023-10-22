@@ -105,12 +105,17 @@ extern int yydebug;
     NULL_VALUE = 306,              /* NULL_VALUE  */
     PREDICATE_IS_NULL = 307,       /* PREDICATE_IS_NULL  */
     PREDICATE_IS_NOT_NULL = 308,   /* PREDICATE_IS_NOT_NULL  */
-    DATE_STR = 309,                /* DATE_STR  */
-    NUMBER = 310,                  /* NUMBER  */
-    FLOAT = 311,                   /* FLOAT  */
-    ID = 312,                      /* ID  */
-    SSS = 313,                     /* SSS  */
-    UMINUS = 314                   /* UMINUS  */
+    MIN = 309,                     /* MIN  */
+    MAX = 310,                     /* MAX  */
+    AVG = 311,                     /* AVG  */
+    COUNT = 312,                   /* COUNT  */
+    GROUP_BY = 313,                /* GROUP_BY  */
+    DATE_STR = 314,                /* DATE_STR  */
+    NUMBER = 315,                  /* NUMBER  */
+    FLOAT = 316,                   /* FLOAT  */
+    ID = 317,                      /* ID  */
+    SSS = 318,                     /* SSS  */
+    UMINUS = 319                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -119,7 +124,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 112 "yacc_sql.y"
+#line 117 "yacc_sql.y"
 
   ParsedSqlNode *                   sql_node;
   ConditionSqlNode *                condition;
@@ -139,8 +144,11 @@ union YYSTYPE
   float                             floats;
   OrderByAttrSqlNode*               order_by_attr;
   std::vector<OrderByAttrSqlNode>*  order_by_list;
+  AggregateFuncSqlNode*             agg_func;
+  std::vector<SelectExprSqlNode>*    select_expr_list;
+  SelectExprSqlNode*                 select_expr;
 
-#line 144 "yacc_sql.hpp"
+#line 152 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

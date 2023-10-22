@@ -22,6 +22,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/parser/value.h"
 #include "common/log/log.h"
 
+class PhysicalOperator;
 class Tuple;
 
 /**
@@ -43,6 +44,8 @@ enum class ExprType
   COMPARISON,   ///< 需要做比较的表达式
   CONJUNCTION,  ///< 多个表达式使用同一种关系(AND或OR)来联结
   ARITHMETIC,   ///< 算术运算
+  SELECTEXPR,
+  COMPNULL
 };
 
 /**

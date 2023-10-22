@@ -22,6 +22,7 @@ See the Mulan PSL v2 for more details. */
 #include "event/storage_event.h"
 #include "event/sql_event.h"
 #include "event/session_event.h"
+#include "sql/operator/project_physical_operator.h"
 #include "sql/stmt/stmt.h"
 #include "sql/stmt/select_stmt.h"
 #include "storage/default/default_handler.h"
@@ -72,13 +73,18 @@ RC ExecuteStage::handle_request_with_physical_operator(SQLStageEvent *sql_event)
       SelectStmt *select_stmt = static_cast<SelectStmt *>(stmt);
       bool with_table_name = select_stmt->tables().size() > 1;
 
-      for (const Field &field : select_stmt->query_fields()) {
-        if (with_table_name) {
-          schema.append_cell(field.table_name(), field.field_name());
-        } else {
-          schema.append_cell(field.field_name());
-        }
-      }
+      // // 用alias
+      // for (const Field &field : select_stmt->query_fields()) {
+      //   if (with_table_name) {
+      //     schema.append_cell(field.table_name(), field.field_name());
+      //   } else {
+      //     schema.append_cell(field.field_name());
+      //   }
+      // }
+
+      auto proj_oper = dynamic_cast<ProjectPhysicalOperator*>(physical_operator.get());
+      proj_oper->set_schema(schema, with_table_name);
+      
     } break;
 
     case StmtType::CALC: {

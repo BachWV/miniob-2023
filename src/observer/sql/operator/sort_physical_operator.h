@@ -2,6 +2,7 @@
 
 #include "sql/expr/tuple.h"
 #include "sql/operator/physical_operator.h"
+#include "sql/expr/tuple.h"
 #include "common/lang/comparator.h"
 #include "sql/parser/value.h"
 #include "storage/field/field.h"

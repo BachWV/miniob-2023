@@ -55,7 +55,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %parse-param { ParsedSqlResult * sql_result }
 %parse-param { void * scanner }
 
-//标识tokens
+//标识tokens, 终结符
 %token  SEMICOLON
         CREATE
         DROP
@@ -107,6 +107,11 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         NULL_VALUE
         PREDICATE_IS_NULL
         PREDICATE_IS_NOT_NULL
+        MIN
+        MAX
+        AVG
+        COUNT
+        GROUP_BY
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -128,6 +133,9 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   float                             floats;
   OrderByAttrSqlNode*               order_by_attr;
   std::vector<OrderByAttrSqlNode>*  order_by_list;
+  AggregateFuncSqlNode*             agg_func;
+  std::vector<SelectExprSqlNode>*    select_expr_list;
+  SelectExprSqlNode*                 select_expr;
 }
 
 /* %token <number> DATE */
@@ -179,10 +187,18 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <sql_node>            command_wrapper
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
+%type <select_expr_list>    select_expr_list
+%type <select_expr>         select_expr
 // order by
 %type <order_by_list>       order_by
 %type <order_by_list>       order_by_list
 %type <order_by_attr>       order_by_attr
+// aggregate func
+%type <agg_func>            agg_func
+// group by
+%type <rel_attr_list>       group_by
+%type <rel_attr_list>       group_by_list
+
 
 %left '+' '-'
 %left '*' '/'
@@ -468,11 +484,13 @@ update_stmt:      /*  update 语句的语法解析树*/
     }
     ;
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT select_attr FROM ID rel_list where order_by
+    SELECT select_expr_list FROM ID rel_list where group_by order_by
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
       if ($2 != nullptr) {
-        $$->selection.attributes.swap(*$2);
+        $$->selection.select_exprs.swap(*$2);
+        // 在这里直接把expr_list翻转过来
+        std::reverse($$->selection.select_exprs.begin(), $$->selection.select_exprs.end());
         delete $2;
       }
       if ($5 != nullptr) {
@@ -488,14 +506,47 @@ select_stmt:        /*  select 语句的语法解析树*/
       }
 
       if ($7 != nullptr) {
-        $$->selection.order_by_attrs.swap(*$7);
-        std::reverse($$->selection.order_by_attrs.begin(), $$->selection.order_by_attrs.end());
+        $$->selection.group_by_attrs.swap(*$7);
+        std::reverse($$->selection.group_by_attrs.begin(), $$->selection.group_by_attrs.end());
         delete $7;
+      }
+
+      if ($8 != nullptr) {
+        $$->selection.order_by_attrs.swap(*$8);
+        std::reverse($$->selection.order_by_attrs.begin(), $$->selection.order_by_attrs.end());
+        delete $8;
       }
 
       free($4);
     }
     ;
+
+group_by:
+      /* empty */
+    {
+      $$ = nullptr;
+    }
+    | GROUP_BY group_by_list {
+      $$ = $2;  
+    }
+    ;
+
+// rel_attr_node类型可以规约为attr_list，又可以规约成group_by，会不会有二义性
+// 
+group_by_list:
+    rel_attr 
+    {
+      $$ = new std::vector<RelAttrSqlNode>;
+      $$->emplace_back(*$1);
+      delete $1;
+    }
+    | rel_attr COMMA group_by_list
+    {
+      $$ = $3;
+      $$->emplace_back(*$1);
+      delete $1;
+    }
+
 calc_stmt:
     CALC expression_list
     {
@@ -823,6 +874,79 @@ set_variable_stmt:
       $$->set_variable.value = *$4;
       free($2);
       delete $4;
+    }
+    ;
+
+agg_func:
+    /* empty */
+    /* {
+      $$ = nullptr;
+    } */
+    MAX LBRACE rel_attr RBRACE{
+      $$ = new AggregateFuncSqlNode();
+      $$->agg_op = AggregateOp::AGG_MAX;
+      $$->attr = *$3;
+      delete $3;
+    }
+    | MIN LBRACE rel_attr RBRACE{
+      $$ = new AggregateFuncSqlNode();
+      $$->agg_op = AggregateOp::AGG_MIN;
+      $$->attr = *$3;
+      delete $3;
+    }
+    | AVG LBRACE rel_attr RBRACE{
+      $$ = new AggregateFuncSqlNode();
+      $$->agg_op = AggregateOp::AGG_AVG;
+      $$->attr = *$3;
+      delete $3;
+    }
+    | COUNT LBRACE rel_attr RBRACE{
+      $$ = new AggregateFuncSqlNode();
+      $$->agg_op = AggregateOp::AGG_COUNT;
+      $$->attr = *$3;
+      delete $3;
+    }
+    | COUNT LBRACE '*' RBRACE{
+      $$ = new AggregateFuncSqlNode();
+      $$->agg_op = AggregateOp::AGG_COUNT;
+
+      $$->attr = RelAttrSqlNode();
+      $$->attr.relation_name  = "";
+      $$->attr.attribute_name = "*";
+    }
+    ;
+
+// 写完之后放到上面去
+select_expr:
+    '*'{
+      $$ = new SelectExprSqlNode;
+      RelAttrSqlNode attr_node;
+      attr_node.relation_name  = "";
+      attr_node.attribute_name = "*";
+      *$$ = attr_node;
+    }
+    | agg_func {
+      $$ = new SelectExprSqlNode();
+      *$$ = *$1;
+      delete $1;
+    }
+    | rel_attr {
+      $$ = new SelectExprSqlNode();
+      *$$ = *$1;
+      delete $1;
+    }
+    ;
+
+select_expr_list:
+    select_expr{
+      $$ = new std::vector<SelectExprSqlNode>;
+      $$->emplace_back(*$1);
+      delete $1;
+    }
+    | select_expr COMMA select_expr_list{
+      $$ = $3;
+      $$->emplace_back(*$1);
+      delete $1;
     }
     ;
 
