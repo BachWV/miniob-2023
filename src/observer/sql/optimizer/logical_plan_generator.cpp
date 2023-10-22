@@ -215,10 +215,10 @@ RC LogicalPlanGenerator::create_plan(
     InsertStmt *insert_stmt, unique_ptr<LogicalOperator> &logical_operator)
 {
   Table *table = insert_stmt->table();
-  vector<Value> values(insert_stmt->values(), insert_stmt->values() + insert_stmt->value_amount());
+  vector<vector<Value>> value_rows(insert_stmt->value_rows());
 
   // 它为什么还要重新构建一个values呢？直接用stmt的values不行吗
-  InsertLogicalOperator *insert_operator = new InsertLogicalOperator(table, values);
+  InsertLogicalOperator *insert_operator = new InsertLogicalOperator(table, value_rows);
   logical_operator.reset(insert_operator);
   return RC::SUCCESS;
 }

@@ -126,6 +126,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   AttrInfoSqlNode *                 attr_info;
   Expression *                      expression;
   std::vector<Expression *> *       expression_list;
+  std::vector<Value> *              value_row;
+  std::vector<std::vector<Value>> *    value_rows;
   std::vector<Value> *              value_list;
   std::vector<RelAttrSqlNode> *     rel_attr_list;
   std::vector<std::string> *        relation_list;
@@ -169,6 +171,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <sql_node>            calc_stmt
 %type <sql_node>            select_stmt
 %type <sql_node>            insert_stmt
+%type <value_rows>          value_rows
+%type <value_row>           value_row
 %type <sql_node>            update_stmt
 %type <sql_node>            delete_stmt
 %type <sql_node>            create_table_stmt
@@ -411,17 +415,38 @@ type:
     | DATE_T   { $$=DATES; }
     ;
 insert_stmt:        /*insert   语句的语法解析树*/
-    INSERT INTO ID VALUES LBRACE value value_list RBRACE 
+    INSERT INTO ID VALUES value_rows
     {
       $$ = new ParsedSqlNode(SCF_INSERT);
       $$->insertion.relation_name = $3;
-      if ($7 != nullptr) {
-        $$->insertion.values.swap(*$7);
-      }
-      $$->insertion.values.emplace_back(*$6);
-      std::reverse($$->insertion.values.begin(), $$->insertion.values.end());
-      delete $6;
+      $$->insertion.value_rows.swap(*$5);
       free($3);
+    }
+    ;
+
+value_rows:
+    value_row
+    {
+      $$ = new std::vector<std::vector<Value>>();
+      $$->emplace_back(*$1);
+    }
+    | value_rows COMMA value_row
+    {
+      $$ = $1;
+      $$->emplace_back(*$3);
+    }
+    ;
+
+value_row:
+    LBRACE value value_list RBRACE
+    {
+      $$ = new std::vector<Value>();
+      if($3 != nullptr){
+        $$->swap(*$3);
+        delete $3;
+      }
+      $$->emplace_back(*$2);
+      std::reverse($$->begin(), $$->end());
     }
     ;
 

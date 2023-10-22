@@ -135,6 +135,8 @@ union YYSTYPE
   AttrInfoSqlNode *                 attr_info;
   Expression *                      expression;
   std::vector<Expression *> *       expression_list;
+  std::vector<Value> *              value_row;
+  std::vector<std::vector<Value>> *    value_rows;
   std::vector<Value> *              value_list;
   std::vector<RelAttrSqlNode> *     rel_attr_list;
   std::vector<std::string> *        relation_list;
@@ -150,7 +152,7 @@ union YYSTYPE
   ExprSqlNode *                     expr_node;
   and_conditions_type* expr_node_list;
 
-#line 154 "yacc_sql.hpp"
+#line 156 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;
