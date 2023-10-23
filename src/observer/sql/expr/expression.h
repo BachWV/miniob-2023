@@ -48,7 +48,8 @@ enum class ExprType
   IDENTIFIER,   // 我们自己定义的字段表达式，可用于表列名和虚拟列名
   PREDNULL,     // is null/is not null谓词
   SELECTEXPR,
-  COMPNULL
+  COMPNULL,
+  LIKE,         // like谓词
 };
 
 /**
@@ -327,6 +328,8 @@ public:
   // 外层子查询在调用内层子查询之前，设置内层子查询里的相关表达式值，tuple是外层子查询的当前行。
   RC set_value_from_tuple(const Tuple &tuple);
 
+  std::string identifier_name() const { return correlate_field_.table_name() + correlate_field_.field_name(); }
+
 private:
   FieldIdentifier correlate_field_;
   Value value_;
@@ -364,4 +367,24 @@ public:
 private:
   PredNullOp op_;
   std::unique_ptr<Expression> child_;
+};
+
+class LikeExpr: public Expression
+{
+public:
+  LikeExpr(std::unique_ptr<Expression> child, std::string like_pattern, bool is_not_like)
+    : child_(std::move(child)), like_pattern_(std::move(like_pattern)), is_not_like_(is_not_like) {};
+
+  RC get_value(const Tuple &tuple, Value &value) const override;
+
+  ExprType type() const override { return ExprType::LIKE; }
+
+  AttrType value_type() const override { return BOOLEANS; }
+private:
+  RC regex_value(const std::string &string, const std::string &pattern, bool &value) const;
+
+private:
+  std::unique_ptr<Expression> child_;
+  std::string like_pattern_;
+  bool is_not_like_;
 };

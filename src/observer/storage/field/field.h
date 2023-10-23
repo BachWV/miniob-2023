@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/table/table.h"
 #include "storage/field/field_meta.h"
 #include "sql/expr/tuple_cell.h"
+#include "common/log/log.h"
 
 enum AggregateOp;
 
@@ -90,6 +91,7 @@ private:
 class FieldIdentifier 
 {
 public:
+  FieldIdentifier() = default;
   FieldIdentifier(const std::string &table_name, const std::string &field_name) 
     : table_name_(table_name), field_name_(field_name) {}
   FieldIdentifier(const std::string &colunm_name) : field_name_(colunm_name) {}
@@ -114,7 +116,6 @@ private:
 
   /* 若table_name_不为空，则identifier是表的列名。否则，field_name_表示虚拟列名(表达式/聚集/用于替代子查询表达式的名字) */
   std::string table_name_, field_name_;
-  bool is_table_field_identifier;
 };
 
 struct FieldIdentifierHash{
@@ -144,6 +145,8 @@ public:
       field_name = agg_str_name[op_] + "(" + agg_field_.field_name() + ")";
       transform(field_name.begin(), field_name.end(), field_name.begin(), ::toupper);
     }
+
+    LOG_DEBUG("Field get_tmp_field()::field_name: %s", field_name.c_str());
 
     AttrType attr_type;
     int attr_len;

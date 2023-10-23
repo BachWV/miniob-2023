@@ -149,6 +149,18 @@ RC LogicalPlanGenerator::create_plan(
   }
   opers.push_back(std::move(table_oper));
 
+  // subquerys in where clause
+  std::vector<std::unique_ptr<ApplyStmt>> &apply_stmts = select_stmt->fetch_sub_querys_in_where();
+  for (std::unique_ptr<ApplyStmt> &apply_stmt : apply_stmts) {
+    unique_ptr<LogicalOperator> apply_oper;
+    RC rc = apply_stmt->create_logic_plan(apply_oper);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to create apply logical plan. rc=%s", strrc(rc));
+      return rc;
+    }
+    opers.push_back(std::move(apply_oper));
+  }
+
   unique_ptr<LogicalOperator> predicate_oper;
   RC rc = create_plan(select_stmt->fetch_where_exprs(), predicate_oper);
   if (rc != RC::SUCCESS) {
@@ -191,6 +203,12 @@ RC LogicalPlanGenerator::create_plan(
       assert(0);
     }
   }
+
+  // having
+  unique_ptr<LogicalOperator> having_pred_oper;
+  rc = create_plan(select_stmt->fetch_having_exprs(), having_pred_oper);
+  HANDLE_RC(rc);
+  opers.push_back(std::move(having_pred_oper));
 
   // deduplicate
   if(has_agg){
@@ -272,10 +290,10 @@ RC LogicalPlanGenerator::create_plan(
     InsertStmt *insert_stmt, unique_ptr<LogicalOperator> &logical_operator)
 {
   Table *table = insert_stmt->table();
-  vector<Value> values(insert_stmt->values(), insert_stmt->values() + insert_stmt->value_amount());
+  vector<vector<Value>> value_rows(insert_stmt->value_rows());
 
   // 它为什么还要重新构建一个values呢？直接用stmt的values不行吗
-  InsertLogicalOperator *insert_operator = new InsertLogicalOperator(table, values);
+  InsertLogicalOperator *insert_operator = new InsertLogicalOperator(table, value_rows);
   logical_operator.reset(insert_operator);
   return RC::SUCCESS;
 }

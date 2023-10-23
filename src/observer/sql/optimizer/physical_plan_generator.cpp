@@ -41,6 +41,8 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/calc_physical_operator.h"
 #include "sql/operator/sort_logical_operator.h"
 #include "sql/operator/sort_physical_operator.h"
+#include "sql/operator/apply_logical_operator.h"
+#include "sql/operator/apply_physical_operator.h"
 #include "sql/expr/expression.h"
 #include "common/log/log.h"
 
@@ -96,6 +98,18 @@ RC PhysicalPlanGenerator::create(LogicalOperator &logical_operator, unique_ptr<P
     case LogicalOperatorType::AGGREGATE:{
       return create_plan(static_cast<AggregateLogicalOperator &>(logical_operator), oper);
     }break;
+    
+    case LogicalOperatorType::SCALAR_SUBQUERY: {
+      return create_plan(static_cast<ScalarSubqueryLogicalOperator &>(logical_operator), oper);
+    } break;
+
+    case LogicalOperatorType::EXISTENTIAL_SUBQUERY: {
+      return create_plan(static_cast<ExistentialSubqueryLogicalOperator &>(logical_operator), oper);
+    } break;
+
+    case LogicalOperatorType::QUANTIFIEDCOMP_SUBQUERY: {
+      return create_plan(static_cast<QuantifiedCompSubqueryLogicalOperator &>(logical_operator), oper);
+    } break;
 
     default: {
       return RC::INVALID_ARGUMENT;
@@ -283,9 +297,9 @@ RC PhysicalPlanGenerator::create_plan(ProjectLogicalOperator &project_oper, uniq
 RC PhysicalPlanGenerator::create_plan(InsertLogicalOperator &insert_oper, unique_ptr<PhysicalOperator> &oper)
 {
   Table *table = insert_oper.table();
-  vector<Value> &values = insert_oper.values();
+  vector<vector<Value>> value_rows=insert_oper.value_rows();
   //VALUES是在这里传入insert_physical_operator的
-  InsertPhysicalOperator *insert_phy_oper = new InsertPhysicalOperator(table, std::move(values));
+  InsertPhysicalOperator *insert_phy_oper = new InsertPhysicalOperator(table, std::move(value_rows));
   //oper指向insert_physical_operator
   oper.reset(insert_phy_oper);
   return RC::SUCCESS;
@@ -394,3 +408,114 @@ RC PhysicalPlanGenerator::create_plan(CalcLogicalOperator &logical_oper, std::un
   return rc;
 }
 
+RC PhysicalPlanGenerator::create_plan(ScalarSubqueryLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper)
+{
+  std::unique_ptr<LogicalOperator> sub_query_logic_plan = logical_oper.fetch_subquery_logic_plan();
+
+  /* 生成子查询的物理计划 */
+  std::unique_ptr<PhysicalOperator> sub_query_phy_plan;
+  RC rc = create(*sub_query_logic_plan, sub_query_phy_plan);
+  if (rc != RC::SUCCESS)
+  {
+    LOG_WARN("failed to create subquery physical oper. rc=%s", strrc(rc));
+    return rc;
+  }
+  
+  /* 生成子算子的物理计划 */
+  auto &child_opers = logical_oper.children();
+  if (child_opers.size() != 1)
+  {
+    LOG_WARN("Apply should only have one child operator.");
+    return RC::INTERNAL;
+  }
+  std::unique_ptr<PhysicalOperator> child_phy_plan;
+  rc = create(*child_opers.front(), child_phy_plan);
+  if (rc != RC::SUCCESS)
+  {
+    LOG_WARN("failed to create physical child oper. rc=%s", strrc(rc));
+    return rc;
+  }
+
+  oper = std::make_unique<ApplyPhysicalOperator>(logical_oper.get_field_identifier(), 
+    std::move(logical_oper.fetch_correlate_exprs()),
+    std::make_unique<ScalarSubqueryEvaluator>(),
+    std::move(child_phy_plan), std::move(sub_query_phy_plan));
+  
+  return rc;
+}
+
+RC PhysicalPlanGenerator::create_plan(ExistentialSubqueryLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper)
+{
+  std::unique_ptr<LogicalOperator> sub_query_logic_plan = logical_oper.fetch_subquery_logic_plan();
+
+  /* 生成子查询的物理计划 */
+  std::unique_ptr<PhysicalOperator> sub_query_phy_plan;
+  RC rc = create(*sub_query_logic_plan, sub_query_phy_plan);
+  if (rc != RC::SUCCESS)
+  {
+    LOG_WARN("failed to create subquery physical oper. rc=%s", strrc(rc));
+    return rc;
+  }
+  
+  /* 生成子算子的物理计划 */
+  auto &child_opers = logical_oper.children();
+  if (child_opers.size() != 1)
+  {
+    LOG_WARN("Apply should only have one child operator.");
+    return RC::INTERNAL;
+  }
+  std::unique_ptr<PhysicalOperator> child_phy_plan;
+  rc = create(*child_opers.front(), child_phy_plan);
+  if (rc != RC::SUCCESS)
+  {
+    LOG_WARN("failed to create physical child oper. rc=%s", strrc(rc));
+    return rc;
+  }
+
+  auto evaluator = std::make_unique<ExistentialSubqueryEvaluator>(logical_oper.get_exist_op());
+  oper = std::make_unique<ApplyPhysicalOperator>(logical_oper.get_field_identifier(), 
+    std::move(logical_oper.fetch_correlate_exprs()),
+    std::move(evaluator),
+    std::move(child_phy_plan), std::move(sub_query_phy_plan));
+  
+  return rc;
+}
+
+RC PhysicalPlanGenerator::create_plan(QuantifiedCompSubqueryLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper)
+{
+  std::unique_ptr<LogicalOperator> sub_query_logic_plan = logical_oper.fetch_subquery_logic_plan();
+
+  /* 生成子查询的物理计划 */
+  std::unique_ptr<PhysicalOperator> sub_query_phy_plan;
+  RC rc = create(*sub_query_logic_plan, sub_query_phy_plan);
+  if (rc != RC::SUCCESS)
+  {
+    LOG_WARN("failed to create subquery physical oper. rc=%s", strrc(rc));
+    return rc;
+  }
+  
+  /* 生成子算子的物理计划 */
+  auto &child_opers = logical_oper.children();
+  if (child_opers.size() != 1)
+  {
+    LOG_WARN("Apply should only have one child operator.");
+    return RC::INTERNAL;
+  }
+  std::unique_ptr<PhysicalOperator> child_phy_plan;
+  rc = create(*child_opers.front(), child_phy_plan);
+  if (rc != RC::SUCCESS)
+  {
+    LOG_WARN("failed to create physical child oper. rc=%s", strrc(rc));
+    return rc;
+  }
+
+  auto evaluator = std::make_unique<QuantifiedCompSubqueryEvaluator>(logical_oper.owns_expr(), 
+    logical_oper.get_quantified_comp_op());
+  
+  oper = std::make_unique<ApplyPhysicalOperator>(logical_oper.get_field_identifier(),
+    std::move(logical_oper.fetch_correlate_exprs()),
+    std::move(evaluator),
+    std::move(child_phy_plan), std::move(sub_query_phy_plan));
+  
+  return RC::SUCCESS;
+}

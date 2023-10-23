@@ -110,11 +110,12 @@ public:
   {
     // 属性字段是否相同
     int result = attr_comparator_(v1, v2);
-    if (result != 0) {
+    if (result != 0) {// 属性值不相等
       return result;
     }
 
     // RID比较
+  // 属性值相等，比较RID
     const RID *rid1 = (const RID *)(v1 + attr_comparator_.attr_length());
     const RID *rid2 = (const RID *)(v2 + attr_comparator_.attr_length());
     return RID::compare(rid1, rid2);

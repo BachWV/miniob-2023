@@ -63,6 +63,20 @@ enum PredNullOp
   IS_NOT_NULL
 };
 
+/* EXIST或NOT EXIST运算符 */
+enum ExistOp
+{
+  EXISTS,
+  NOT_EXISTS
+};
+
+/* 子查询中的集合比较运算符，现在有IN和NOT IN */
+enum QuantifiedComp
+{
+  IN,
+  NOT_IN
+};
+
 /**
  * @brief 表示一个条件比较
  * @ingroup SQLParser
@@ -106,6 +120,7 @@ extern std::string agg_str_name[5];
 struct AggregateFuncSqlNode{
   AggregateOp agg_op;
   RelAttrSqlNode attr;
+  std::string name;
 };
 
 
@@ -131,6 +146,7 @@ struct SelectSqlNode
   and_conditions_type   conditions;    ///< 查询条件，使用AND串联起来多个条件
   std::vector<OrderByAttrSqlNode>  order_by_attrs;  ///< 排序字段及升降序
   std::vector<RelAttrSqlNode>     group_by_attrs;
+  and_conditions_type             having_attrs;
 };
 
 /**
@@ -152,7 +168,7 @@ struct CalcSqlNode
 struct InsertSqlNode
 {
   std::string        relation_name;  ///< Relation to insert into
-  std::vector<Value> values;         ///< 要插入的值
+  std::vector<std::vector<Value> > value_rows;         ///< 要插入的值组
 };
 
 /**
@@ -226,7 +242,7 @@ struct CreateIndexSqlNode
 {
   std::string index_name;      ///< Index name
   std::string relation_name;   ///< Relation name
-  std::string attribute_name;  ///< Attribute name
+  std::vector<std::string> attribute_names;  ///< Attribute names
 };
 
 /**

@@ -44,6 +44,9 @@ enum class LogicalOperatorType
   UPDATE,     ///< 更新
   AGGREGATE,
   DEDUPLICATE,
+  SCALAR_SUBQUERY,  ///< 标量子查询
+  EXISTENTIAL_SUBQUERY,  ///< 存在性检测子查询
+  QUANTIFIEDCOMP_SUBQUERY,  ///< 集合比较子查询
 };
 
 /**

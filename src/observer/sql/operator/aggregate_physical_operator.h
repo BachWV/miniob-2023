@@ -21,7 +21,7 @@ public:
 				cur_group_by_value_.resize(group_by_fields.size());
 			}
 		}
-	~AggregatePhysicalOperator() = default;
+	~AggregatePhysicalOperator();
 
 	PhysicalOperatorType type() const override{
 		return PhysicalOperatorType::AGGREGATE;
@@ -60,11 +60,10 @@ private:
 	std::vector<AddOneFieldTuple> aof_tuples_;// 就是curr_group_tuples_+这一轮的agg_value
 	// 只保证每个gb-key轮次的状态
 	std::vector<Value> cur_group_by_value_;
-	int curr_group_count_{0};
 	Value curr_group_agg_value_;
 
 	bool is_last_group_{false};
 
-	int all_index_{-1};
+	int all_index_;
 	std::vector<AddOneFieldTuple> all_aof_tuples_;
 };

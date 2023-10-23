@@ -177,6 +177,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
 
   // collect select_expr in `select` statement
   // std::visit只能重载()传递单参数，重载lambda对参数捕获又太麻烦，怕环境编译器不支持太高级的特性，选择直接if else
+  std::vector<std::string> agg_functions_names;
   std::vector<SelectExprField> select_expr_fields;
   std::unordered_set<FieldIdentifier, FieldIdentifierHash> common_fields_set;
   bool has_agg = false;
@@ -257,6 +258,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
 
     }else if(auto agg_sql_node = get_if<AggregateFuncSqlNode>(&select_expr_field)){
       has_agg = true;
+      agg_functions_names.push_back(agg_sql_node->name);
       Field agg_field;
       auto rc = resolve_common_field(db, table_map, tables, agg_sql_node->attr, agg_field);
       if(rc != RC::SUCCESS){
@@ -295,8 +297,36 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
   }
 
 
-  /* 开始解析where子句 */
   RC rc = RC::SUCCESS;
+  /* 开始解析HAVING子句 */
+  StmtResolveContext having_resolve_ctx;
+  /* TODO: 初始化这个ctx
+   * 把Having里可能出现的列名，调用having_resolve_ctx.add_other_column_name传入
+   */
+  for(auto& str: agg_functions_names){
+    having_resolve_ctx.add_other_column_name(str);
+  }
+
+  std::vector<std::unique_ptr<Expression>> having_exprs;
+  glob_ctx->push_stmt_ctx(&having_resolve_ctx);
+  for (auto &having_expr: select_sql.having_attrs)
+  {
+    ExprResolveResult having_resolve_result;
+    rc = having_expr->resolve(glob_ctx, &having_resolve_result);
+    if (rc != RC::SUCCESS)
+    {
+      LOG_WARN("resolve having expr failed. rc=%d", strrc(rc));
+      return rc;
+    }
+
+    assert(having_resolve_result.get_subquerys_in_expr().empty());
+    assert(having_resolve_result.get_correlate_exprs().empty());
+
+    having_exprs.emplace_back(having_resolve_result.owns_result_expr_tree());
+  }
+  glob_ctx->pop_stmt_ctx();
+
+  /* 开始解析where子句 */
   std::vector<std::unique_ptr<ApplyStmt>> apply_stmts;
   std::vector<std::unique_ptr<Expression>> where_exprs;
   glob_ctx->push_stmt_ctx(&current_where_resolve_ctx);
@@ -308,42 +338,14 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
     rc = where_expr_sql_node->resolve(glob_ctx, &where_resolve_res);
     if (rc != RC::SUCCESS)
     {
-      LOG_ERROR("resolve where expr failed. rc=%d", rc);
+      LOG_WARN("resolve where expr failed. rc=%d", strrc(rc));
       return rc;
     }
 
-    /* 对每一个where条件处理where中的子查询 */
-    std::vector<SubQueryInfo>& sub_querys = where_resolve_res.get_subquerys_in_expr();
-    for (auto& sub_query: sub_querys)
-    {
-      std::unique_ptr<ApplyStmt> sub_query_apply_stmt = sub_query.owns_apply_stmt();
-      std::unordered_map<size_t, std::vector<CorrelateExpr*>>& correlate_exprs_in_subquery = sub_query.correlate_exprs();
-
-      /* 
-       * 将子查询的correlate_exprs中，引用本查询的相关表达式放进apply_stmt中，
-       * 引用更上层的查询的相关表达式放到create的参数correlate_exprs中，视为本查询的相关表达式，继续向上传递
-       * 即，如果本查询的子查询中出现了引用更上层的相关表达式，那么本查询也是上层的相关子查询
-       */
-      for (auto &[level, exprs]: correlate_exprs_in_subquery)
-      {
-        // 如果该相关表达式引用的是本层查询，直接加到apply算子中
-        if (level == glob_ctx->current_level())
-        {
-          for (CorrelateExpr *epxr: exprs)
-            sub_query_apply_stmt->add_correlate_expr(epxr);
-        }
-
-        // 否则，引用的是上层查询
-        else
-        {
-          assert(level < glob_ctx->current_level());
-          for (CorrelateExpr *expr: exprs)
-            (*correlate_exprs)[level].push_back(expr);
-        }
-      }
-
-      apply_stmts.emplace_back(std::move(sub_query_apply_stmt));  // 记录下生成好的applyStmt，之后保存到SelectStmt中
-    }
+    /* 拿到where中的子查询 */
+    std::vector<std::unique_ptr<ApplyStmt>>& subquerys_in_where = where_resolve_res.get_subquerys_in_expr();
+    for (auto &subquery: subquerys_in_where)
+      apply_stmts.emplace_back(std::move(subquery));
 
     /* 
      * 处理where条件的相关表达式
@@ -378,6 +380,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
   select_stmt->order_fields_ = order_fields;
   select_stmt->where_exprs_.swap(where_exprs);
   select_stmt->sub_querys_in_where_.swap(apply_stmts);
+  select_stmt->having_exprs_.swap(having_exprs);
   stmt = select_stmt;
   return RC::SUCCESS;
 }

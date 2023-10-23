@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/expr/expression.h"
 #include "sql/expr/tuple.h"
+#include <regex>
 
 using namespace std;
 
@@ -370,5 +371,67 @@ RC PredNullExpr::get_value(const Tuple &tuple, Value &value) const
     return rc;
   bool bool_val = op_ == IS_NULL ? child_val.is_null_value() : !child_val.is_null_value();
   value.set_boolean(bool_val);
+  return RC::SUCCESS;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+RC LikeExpr::get_value(const Tuple &tuple, Value &value) const
+{
+  Value child_val;
+ 
+  RC rc = child_->get_value(tuple, child_val);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to get value of field. rc=%s", strrc(rc));
+    return rc;
+  }
+  bool bool_value ;
+  //if(value.type!= CHAR)
+  // return re::INVALID_ARGUMENT;
+  rc = regex_value(child_val.get_string(), like_pattern_, bool_value);
+  bool_value = is_not_like_? !bool_value:bool_value;
+  value.set_boolean(bool_value);
+
+  return rc;
+}
+
+RC LikeExpr::regex_value(const std::string &input_string, const std::string &like_pattern, bool &value) const
+{
+    std::string result_pattern;
+    std::string temp_pattern;
+    size_t startPos = 0;
+    size_t found = like_pattern.find('%');
+
+    while (found != std::string::npos) {
+        temp_pattern += like_pattern.substr(startPos, found - startPos);
+        temp_pattern += ".*";
+        startPos = found + 1;
+        found = like_pattern.find('%', startPos);
+    }
+    temp_pattern += like_pattern.substr(startPos);
+
+
+    startPos = 0;
+    found = temp_pattern.find('_');
+    while (found != std::string::npos) {
+        result_pattern += temp_pattern.substr(startPos, found - startPos);
+        result_pattern += ".";
+        startPos = found + 1;
+        found = temp_pattern.find('_', startPos);
+    }
+
+    result_pattern += temp_pattern.substr(startPos);
+    // 构建正则表达式
+    std::regex like_regex(result_pattern);
+
+    // 执行匹配
+    if (std::regex_match(input_string, like_regex)) {
+        LOG_INFO("Matched the string: %s", input_string.c_str());
+        value = true;
+    } else {
+        LOG_INFO("Not matched the string: %s", input_string.c_str());
+        value = false;
+    }
+
   return RC::SUCCESS;
 }

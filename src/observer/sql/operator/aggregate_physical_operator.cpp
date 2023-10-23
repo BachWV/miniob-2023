@@ -8,7 +8,8 @@ RC AggregatePhysicalOperator::open(Trx *trx){
     LOG_WARN("aggregate operator must has one child");
     return RC::INTERNAL;
   }
-  auto child = children_[0].get();
+  	all_index_ = -1;
+  	auto child = children_[0].get();
 	auto rc = child->open(trx);
 	HANDLE_RC(rc);
 	
@@ -53,14 +54,7 @@ Tuple* AggregatePhysicalOperator::current_tuple(){
 }
 
 RC AggregatePhysicalOperator::close(){
-	// new_meta在select logical generator的时候在堆上生成
-	// 该虚拟字段的生命周期和Agg算子绑定
-	delete new_meta_;
-
-	if( op_ == AGG_COUNT && common::str_equal("COUNT(*)", agg_field_.field_name())){
-		delete agg_field_.meta();
-	}
-
+	all_aof_tuples_.clear();
 	return children_.front()->close();
 }
 
@@ -281,5 +275,16 @@ void AggregatePhysicalOperator::do_single_aggregate(const Value& curr_value){
 			curr_group_agg_value_.set_float(v1+v2);
 			return;
 		};break;
+	}
+}
+
+AggregatePhysicalOperator::~AggregatePhysicalOperator(){
+	// new_meta在select logical generator的时候在堆上生成
+	// 该虚拟字段的生命周期和Agg算子绑定
+	delete new_meta_;
+	new_meta_ = nullptr;
+
+	if( op_ == AGG_COUNT && common::str_equal("COUNT(*)", agg_field_.field_name())){
+		delete agg_field_.meta();
 	}
 }

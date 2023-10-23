@@ -218,6 +218,7 @@ public:
     const char *table_name = spec.table_name();
     const char *field_name = spec.field_name();
 
+
     // 理论上传不到这里
     assert(table_name != nullptr);
     if (0 != strcmp(table_name, table_->name())) {
@@ -529,7 +530,7 @@ public:
     }
     
     // 虚拟字段没写表名的判断
-    if(0 == strcmp( spec.field_name(), new_field_meta_.name())){
+    if(0 == strcasecmp( spec.field_name(), new_field_meta_.name())){
       cell = new_value_;
       return RC::SUCCESS;
     }

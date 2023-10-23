@@ -69,11 +69,18 @@ public:
   std::vector<std::unique_ptr<Expression>> &fetch_where_exprs() {
     return where_exprs_;
   }
+  std::vector<std::unique_ptr<ApplyStmt>> &fetch_sub_querys_in_where() {
+    return sub_querys_in_where_;
+  }
   const std::vector<FieldWithOrder>& order_fields() const{
     return order_fields_;
   }
   const std::vector<Field> get_group_by_fields() const{
     return group_by_field_;
+  }
+
+  std::vector<std::unique_ptr<Expression>>& fetch_having_exprs(){
+    return having_exprs_;
   }
 
 private:
@@ -88,4 +95,5 @@ private:
   std::vector<SelectExprField> select_expr_fields_;
   std::vector<Field> group_by_field_;
   std::vector<Field> resolved_query_field_;
+  std::vector<std::unique_ptr<Expression>> having_exprs_;  // having后面以AND连接的表达式
 };
