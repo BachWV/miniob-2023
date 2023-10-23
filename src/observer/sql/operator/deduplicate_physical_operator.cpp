@@ -8,9 +8,13 @@ RC DeduplicateAggPhysicalOperator::open(Trx *trx){
     return RC::INTERNAL;
   }
 
-  auto child = children_[0].get();
+  	auto child = children_[0].get();
 	auto rc = child->open(trx);
-	HANDLE_RC(rc);
+	if(rc == RC::EMPTY){
+		finish_ = true;
+	}else if(rc != RC::SUCCESS){
+		return rc;
+	}
 
 	cur_group_by_value_.resize(group_by_fields_.size());
 
@@ -19,12 +23,12 @@ RC DeduplicateAggPhysicalOperator::open(Trx *trx){
 		rc = set_group_by_value(tuple, cur_group_by_value_);
 	}
 
-	return rc;
+	return RC::SUCCESS;
 }
 
 RC DeduplicateAggPhysicalOperator::next(){
-	RC rc = RC::SUCCESS;
-  PhysicalOperator *child = children_.front().get();
+  	RC rc = RC::SUCCESS;
+  	PhysicalOperator *child = children_.front().get();
 
 	// 无group by，只输出第一个的判断
 	if(finish_){
