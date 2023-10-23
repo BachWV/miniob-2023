@@ -360,3 +360,16 @@ RC QuantifiedCompSubqueryExprSqlNode::resolve(ExprResolveContext *ctx, ExprResol
 
     return RC::SUCCESS;
 }
+
+RC LikeExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *result) const
+{
+    ExprResolveResult sub_result;
+    RC rc = left_->resolve(ctx, &sub_result);
+    if (rc != RC::SUCCESS)
+        return rc;
+    auto expr_tree = std::make_unique<LikeExpr>(sub_result.owns_result_expr_tree(), pattern_, is_not_like_);
+    result->set_result_expr_tree(std::move(expr_tree));
+    result->add_correlate_exprs(sub_result.get_correlate_exprs());
+    result->add_subquerys(sub_result.get_subquerys_in_expr());
+    return RC::SUCCESS;
+}
