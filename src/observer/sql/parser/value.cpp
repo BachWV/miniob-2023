@@ -148,6 +148,9 @@ void Value::set_value(const Value &value)
     case DATES: {
       set_date(value.get_int());
     } break;
+    case NULL_TYPE: {
+      attr_type_ = NULL_TYPE;
+    } break;
   }
 }
 
@@ -227,7 +230,7 @@ int Value::compare(const Value &other) const
             other.str_value_.length());
       } break;
       case BOOLEANS: {
-        return common::compare_int((void *)&this->num_value_.bool_value_, (void *)&other.num_value_.bool_value_);
+        return this->num_value_.bool_value_ == other.num_value_.bool_value_ ? 0 : -1;
       }
       case NULL_TYPE:
         return 0;  // 这里是三路比较，但NULL值的比较不满足三路比较（无论如何都是false），因此只能在compare的调用者处再做特判了，这里随便返回。

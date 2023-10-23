@@ -62,6 +62,20 @@ enum PredNullOp
   IS_NOT_NULL
 };
 
+/* EXIST或NOT EXIST运算符 */
+enum ExistOp
+{
+  EXISTS,
+  NOT_EXISTS
+};
+
+/* 子查询中的集合比较运算符，现在有IN和NOT IN */
+enum QuantifiedComp
+{
+  IN,
+  NOT_IN
+};
+
 /**
  * @brief 表示一个条件比较
  * @ingroup SQLParser

@@ -30,6 +30,9 @@ class ExplainLogicalOperator;
 class JoinLogicalOperator;
 class CalcLogicalOperator;
 class SortLogicalOperator;
+class ScalarSubqueryLogicalOperator;
+class ExistentialSubqueryLogicalOperator;
+class QuantifiedCompSubqueryLogicalOperator;
 
 /**
  * @brief 物理计划生成器
@@ -56,4 +59,7 @@ private:
   RC create_plan(JoinLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
   RC create_plan(CalcLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
   RC create_plan(SortLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
+  RC create_plan(ScalarSubqueryLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
+  RC create_plan(ExistentialSubqueryLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
+  RC create_plan(QuantifiedCompSubqueryLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
 };

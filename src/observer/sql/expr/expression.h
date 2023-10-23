@@ -324,6 +324,8 @@ public:
   // 外层子查询在调用内层子查询之前，设置内层子查询里的相关表达式值，tuple是外层子查询的当前行。
   RC set_value_from_tuple(const Tuple &tuple);
 
+  std::string identifier_name() const { return correlate_field_.table_name() + correlate_field_.field_name(); }
+
 private:
   FieldIdentifier correlate_field_;
   Value value_;

@@ -42,6 +42,9 @@ enum class LogicalOperatorType
   EXPLAIN,    ///< 查看执行计划
   SORT,        ///< 排序
   UPDATE,     ///< 更新
+  SCALAR_SUBQUERY,  ///< 标量子查询
+  EXISTENTIAL_SUBQUERY,  ///< 存在性检测子查询
+  QUANTIFIEDCOMP_SUBQUERY,  ///< 集合比较子查询
 };
 
 /**

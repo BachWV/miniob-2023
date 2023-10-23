@@ -86,6 +86,7 @@ private:
 class FieldIdentifier 
 {
 public:
+  FieldIdentifier() = default;
   FieldIdentifier(const std::string &table_name, const std::string &field_name) 
     : table_name_(table_name), field_name_(field_name) {}
   FieldIdentifier(const std::string &colunm_name) : field_name_(colunm_name) {}
@@ -106,5 +107,4 @@ private:
 
   /* 若table_name_不为空，则identifier是表的列名。否则，field_name_表示虚拟列名(表达式/聚集/用于替代子查询表达式的名字) */
   std::string table_name_, field_name_;
-  bool is_table_field_identifier;
 };
