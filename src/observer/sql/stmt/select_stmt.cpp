@@ -27,6 +27,8 @@ See the Mulan PSL v2 for more details. */
 #include "sql/expr/expression.h"
 #include "sql/stmt/apply_stmt.h"
 #include <cstring>
+#include <functional>
+#include <unordered_set>
 
 static void wildcard_fields(Table *table, std::vector<SelectExprField>& select_expr_fields)
 {
@@ -176,6 +178,9 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
   // collect select_expr in `select` statement
   // std::visit只能重载()传递单参数，重载lambda对参数捕获又太麻烦，怕环境编译器不支持太高级的特性，选择直接if else
   std::vector<SelectExprField> select_expr_fields;
+  std::unordered_set<FieldIdentifier, FieldIdentifierHash> common_fields_set;
+  bool has_agg = false;
+
   for(const auto& select_expr_field: select_sql.select_exprs){
     if(auto relation_attr = get_if<RelAttrSqlNode>(&select_expr_field)){
 
@@ -225,7 +230,9 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
               return RC::SCHEMA_FIELD_MISSING;
             }
 
-            select_expr_fields.push_back(Field(table, field_meta));
+            auto common_field = Field(table, field_meta);
+            select_expr_fields.push_back(common_field);
+            common_fields_set.insert(FieldIdentifier(table->name(), field_meta->name()));
           }
         }
 
@@ -243,10 +250,13 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
           return RC::SCHEMA_FIELD_MISSING;
         }
 
-        select_expr_fields.push_back(Field(table, field_meta));
+        auto common_field = Field(table, field_meta);
+        select_expr_fields.push_back(common_field);
+        common_fields_set.insert(FieldIdentifier(table->name(), field_meta->name()));
       }
 
     }else if(auto agg_sql_node = get_if<AggregateFuncSqlNode>(&select_expr_field)){
+      has_agg = true;
       Field agg_field;
       auto rc = resolve_common_field(db, table_map, tables, agg_sql_node->attr, agg_field);
       if(rc != RC::SUCCESS){
@@ -268,11 +278,25 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
     }
   }
 
-  LOG_INFO("got %d tables in from stmt and %d fields in query stmt", tables.size(), select_expr_fields.size());
+  // check aggregation validate: 如果存在agg，那么非agg的字段（common_fields_set）一定在gb中出现
+  if(has_agg){
+    // 非agg的字段和group by字段数一定相等，要不都是0。
+    if(common_fields_set.size() != group_fields.size()){
+      return RC::SQL_SYNTAX;
+    }
 
-  RC rc = RC::SUCCESS;
+    // 若gf的字段在cfs中不存在，那么一定有错
+    for(auto const& field: group_fields){
+      auto fi = FieldIdentifier(field.table_name(), field.field_name());
+      if(auto it = common_fields_set.find(fi); it == common_fields_set.end()){
+        return RC::SQL_SYNTAX;
+      }
+    }
+  }
+
 
   /* 开始解析where子句 */
+  RC rc = RC::SUCCESS;
   std::vector<std::unique_ptr<ApplyStmt>> apply_stmts;
   std::vector<std::unique_ptr<Expression>> where_exprs;
   glob_ctx->push_stmt_ctx(&current_where_resolve_ctx);
