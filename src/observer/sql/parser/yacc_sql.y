@@ -119,6 +119,9 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         SUM
         GROUP_BY
         HAVING
+        SYM_LIKE
+        SYM_NOT_LIKE
+
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -130,6 +133,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   AttrInfoSqlNode *                 attr_info;
   Expression *                      expression;
   std::vector<Expression *> *       expression_list;
+  std::vector<Value> *              value_row;
+  std::vector<std::vector<Value>> *    value_rows;
   std::vector<Value> *              value_list;
   std::vector<RelAttrSqlNode> *     rel_attr_list;
   std::vector<std::string> *        relation_list;
@@ -176,6 +181,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <sql_node>            calc_stmt
 %type <sql_node>            select_stmt
 %type <sql_node>            insert_stmt
+%type <value_rows>          value_rows
+%type <value_row>           value_row
 %type <sql_node>            update_stmt
 %type <sql_node>            delete_stmt
 %type <sql_node>            create_table_stmt
@@ -219,7 +226,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %left EQ LT GT LE GE NE
 %left '+' '-'
 %left '*' '/'
-%nonassoc UMINUS
+%nonassoc UMINUS SYM_LIKE SYM_NOT_LIKE
 %%
 
 commands: command_wrapper opt_semicolon  //commands or sqls. parser starts here.
@@ -309,13 +316,17 @@ desc_table_stmt:
     ;
 
 create_index_stmt:    /*create index 语句的语法解析树*/
-    CREATE INDEX ID ON ID LBRACE ID RBRACE
+    CREATE INDEX ID ON ID LBRACE ID rel_list RBRACE
     {
       $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
       CreateIndexSqlNode &create_index = $$->create_index;
       create_index.index_name = $3;
       create_index.relation_name = $5;
-      create_index.attribute_name = $7;
+      if ($8 != nullptr) {
+        create_index.attribute_names.swap(*$8);
+        delete $8;
+      }
+      $$->create_index.attribute_names.push_back($7);
       free($3);
       free($5);
       free($7);
@@ -423,17 +434,38 @@ type:
     | DATE_T   { $$=DATES; }
     ;
 insert_stmt:        /*insert   语句的语法解析树*/
-    INSERT INTO ID VALUES LBRACE value value_list RBRACE 
+    INSERT INTO ID VALUES value_rows
     {
       $$ = new ParsedSqlNode(SCF_INSERT);
       $$->insertion.relation_name = $3;
-      if ($7 != nullptr) {
-        $$->insertion.values.swap(*$7);
-      }
-      $$->insertion.values.emplace_back(*$6);
-      std::reverse($$->insertion.values.begin(), $$->insertion.values.end());
-      delete $6;
+      $$->insertion.value_rows.swap(*$5);
       free($3);
+    }
+    ;
+
+value_rows:
+    value_row
+    {
+      $$ = new std::vector<std::vector<Value>>();
+      $$->emplace_back(*$1);
+    }
+    | value_rows COMMA value_row
+    {
+      $$ = $1;
+      $$->emplace_back(*$3);
+    }
+    ;
+
+value_row:
+    LBRACE value value_list RBRACE
+    {
+      $$ = new std::vector<Value>();
+      if($3 != nullptr){
+        $$->swap(*$3);
+        delete $3;
+      }
+      $$->emplace_back(*$2);
+      std::reverse($$->begin(), $$->end());
     }
     ;
 
@@ -828,6 +860,20 @@ expr:
       std::unique_ptr<ExprSqlNode> left($1);
       std::unique_ptr<ExprSqlNode> right($3);
       $$ = new CompareExprSqlNode(token_name(sql_string, &@$), std::move(left), std::move(right), $2);
+    }
+    | expr SYM_LIKE SSS
+    {
+      std::unique_ptr<ExprSqlNode> left($1);
+      char *tmp = common::substr($3, 1, strlen($3) - 2);
+      $$ = new LikeExprSqlNode(token_name(sql_string, &@$), std::move(left), tmp, false);
+      free(tmp);
+    }
+    | expr SYM_NOT_LIKE SSS
+    {
+      std::unique_ptr<ExprSqlNode> left($1);
+      char *tmp = common::substr($3, 1, strlen($3) - 2);
+      $$ = new LikeExprSqlNode(token_name(sql_string, &@$), std::move(left), tmp, true);
+      free(tmp);
     }
     | expr SYM_IN LBRACE sub_query RBRACE
     {

@@ -138,7 +138,8 @@ enum class ExprSqlNodeType
   ScalarSubquery,
   ExistentialSubquery,
   QuantifiedComp,
-  AggIdentifier
+  AggIdentifier,
+  Like,
 };
 
 class ExprSqlNode
@@ -296,4 +297,17 @@ public:
     : ExprSqlNode(expr_name, ExprSqlNodeType::AggIdentifier) {}
 
   RC resolve(ExprResolveContext *ctx, ExprResolveResult *result) const override;
+};
+
+class LikeExprSqlNode: public ExprSqlNode
+{
+public:
+  LikeExprSqlNode(const std::string &expr_name, std::unique_ptr<ExprSqlNode> left, std::string pattern, bool is_not_like)
+    : ExprSqlNode(expr_name, ExprSqlNodeType::Like), left_(std::move(left)), pattern_(std::move(pattern)), is_not_like_(is_not_like) {}
+  RC resolve(ExprResolveContext *ctx, ExprResolveResult *result) const override;
+
+private:
+  std::unique_ptr<ExprSqlNode> left_;
+  std::string pattern_;
+  bool is_not_like_;
 };
