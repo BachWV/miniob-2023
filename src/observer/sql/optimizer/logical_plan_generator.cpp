@@ -159,11 +159,13 @@ RC LogicalPlanGenerator::create_plan(
 
   // agg / field-cul-expr: 构建算子的同时把all_fields按序构建出来
   std::vector<Field> all_fields;
+  int agg_field_count = 0;
   bool has_agg = false;
   for(const auto &sef : select_expr_fields){
     if(auto field = std::get_if<Field>(&sef)){
       all_fields.push_back(*field);
     }else if (auto fwgb = std::get_if<FieldsWithGroupBy>(&sef)) {
+      agg_field_count++;
       // 第一个group by聚集算子，在其之前构建一个sort；非group by的聚集没必要sort
       if(!has_agg ){
         has_agg = true;
@@ -196,6 +198,9 @@ RC LogicalPlanGenerator::create_plan(
   if(has_agg){
     if(select_stmt->get_group_by_fields().empty()){
       // 无group by，只输出一条
+      if(agg_field_count != all_fields.size()){
+        return RC::SQL_SYNTAX;
+      }
       unique_ptr<LogicalOperator> deduplicate_oper = make_unique<DeduplicateLogicalOperator>(select_stmt->get_group_by_fields(), true);
       opers.push_back(std::move(deduplicate_oper));
     }else{

@@ -13,7 +13,10 @@ RC AggregatePhysicalOperator::open(Trx *trx){
 	HANDLE_RC(rc);
 	
 	rc = init_curr_group(true);
-	HANDLE_RC(rc);
+	if(rc == RC::EMPTY){
+		// 无数据
+		return RC::EMPTY;
+	}
 	// 有group by的先聚集一个gbk
 	// 无group by的直接聚集完全部
 	rc = do_group_agg();
@@ -29,7 +32,7 @@ RC AggregatePhysicalOperator::open(Trx *trx){
 		HANDLE_RC(rc);
 	}
 	
-	return rc;
+	return RC::SUCCESS;
 }
 
 // 一个next：①拿到一个group里面的所有tuple；②维护计数器，输出这个group里面还剩多少条
@@ -115,8 +118,10 @@ RC AggregatePhysicalOperator::init_curr_group(bool first){
 		// Open时的初始化，第一次open算子后，必须先next，才能拿到curr tuple
 		if(RC::SUCCESS == (rc = child->next())){
 			tuple = child->current_tuple();
+		}else{
+			return RC::EMPTY;
 		}
-		HANDLE_RC(rc);
+		
 	}else{
 		// 正常状态下的init，直接设置当前curr tuple就可以，
 		// 使用next会忽略掉当前gbk的第一个值（因为上一轮末尾已经将其设置到了curr tuple）
