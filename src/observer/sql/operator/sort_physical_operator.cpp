@@ -108,4 +108,5 @@ SortPhysicalOperator::~SortPhysicalOperator(){
       delete tuple;
     }
   }
+  tuples_.clear();
 }

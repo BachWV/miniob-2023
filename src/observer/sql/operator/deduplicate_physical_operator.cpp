@@ -8,6 +8,8 @@ RC DeduplicateAggPhysicalOperator::open(Trx *trx){
     return RC::INTERNAL;
   }
 
+	finish_ = false;
+
   	auto child = children_[0].get();
 	auto rc = child->open(trx);
 	if(rc == RC::EMPTY){

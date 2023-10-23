@@ -2,6 +2,9 @@
 #include "sql/expr/expression.h"
 #include "sql/stmt/apply_stmt.h"
 #include "storage/table/table.h"
+#include "storage/db/db.h"
+#include "session/session.h"
+#include "common/log/log.h"
 
 RC StmtResolveContext::resolve_table_field_identifier(const std::string &table_name, const std::string &field_name,
     std::optional<FieldIdentifier> &result) const
@@ -51,13 +54,6 @@ RC StmtResolveContext::resolve_table_field_identifier(const std::string &table_n
 
 ///////////////////////////////////////////////////////////////////////////////
 
-std::unique_ptr<ApplyStmt> SubQueryInfo::owns_apply_stmt()
-{
-    return std::move(apply_stmt_);
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
 void ExprResolveResult::set_result_expr_tree(std::unique_ptr<Expression> result_expr_tree)
 {
     result_expr_tree_ = std::move(result_expr_tree);
@@ -74,7 +70,12 @@ void ExprResolveResult::add_correlate_exprs(std::unordered_map<size_t, std::vect
         correlate_exprs_[level].insert(correlate_exprs_[level].end(), expr_vec.begin(), expr_vec.end());
 }
 
-void ExprResolveResult::add_subquerys(std::vector<SubQueryInfo> &subquerys)
+void ExprResolveResult::add_subquery(std::unique_ptr<ApplyStmt> subquery)
+{
+    subquerys_.emplace_back(std::move(subquery));
+}
+
+void ExprResolveResult::add_subquerys(std::vector<std::unique_ptr<ApplyStmt>> &subquerys)
 {
     for (auto &subquery: subquerys)
         subquerys_.emplace_back(std::move(subquery));
@@ -228,8 +229,134 @@ RC PredNullExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *resu
     return RC::SUCCESS;
 }
 
-RC SubQueryExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *result) const
+RC ScalarSubqueryExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *result) const
 {
-    /* TODO */
+    SelectSqlNode &select_sql = sql_->selection;
+    auto apply_stmt = std::make_unique<ScalarSubqueryApplyStmt>();
+    Stmt *select_stmt = nullptr;
+    std::unordered_map<size_t, std::vector<CorrelateExpr*>> correlate_exprs_in_subquery;
+
+    /* 递归解析子查询 */
+    // 注：current_session会在communicator中使用default_session新建，传入SessionEvent，在session_stage保存到本线程的current_session中
+    RC rc = SelectStmt::create(Session::current_session()->get_current_db(), ctx, select_sql, select_stmt, 
+        &correlate_exprs_in_subquery);
+    if (rc != RC::SUCCESS)
+    {
+        LOG_WARN("resolve subquery failed. rc=%d", strrc(rc));
+        return rc;
+    }
+
+    /* 将子查询中，引用本层作用域的相关表达式放到ApplyStmt中 */
+    if (correlate_exprs_in_subquery.count(ctx->current_level()))
+    {
+        apply_stmt->add_correlate_exprs(correlate_exprs_in_subquery[ctx->current_level()]);
+        correlate_exprs_in_subquery.erase(ctx->current_level());
+    }
+    result->add_correlate_exprs(correlate_exprs_in_subquery); // 将子查询中，引用上层作用域的相关表达式放到ExprResolveResult中
+
+    /* 将标量子查询转换为一个Identifier表达式 */
+    FieldIdentifier id = ctx->get_subquery_identifier_generator().generate_identifier();
+    result->set_result_expr_tree(std::make_unique<IdentifierExpr>(id));
+
+    /* 构造apply_stmt的其它基础信息 */
+    apply_stmt->set_sub_query_stmt(std::unique_ptr<SelectStmt>(dynamic_cast<SelectStmt*>(select_stmt)));
+    apply_stmt->set_field_identifier_in_expr(id);
+    result->add_subquery(std::move(apply_stmt));  // 将代表子查询的apply_stmt加入result结果
+
+    return RC::SUCCESS;
+}
+
+RC ExistentialSubqueryExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *result) const
+{
+    SelectSqlNode &select_sql = sql_->selection;
+    auto apply_stmt = std::make_unique<ExistentialSubqueryApplyStmt>(op_);
+    Stmt *select_stmt = nullptr;
+    std::unordered_map<size_t, std::vector<CorrelateExpr*>> correlate_exprs_in_subquery;
+
+    /* 递归解析子查询 */
+    RC rc = SelectStmt::create(Session::current_session()->get_current_db(), ctx, select_sql, select_stmt, 
+        &correlate_exprs_in_subquery);
+    if (rc != RC::SUCCESS)
+    {
+        LOG_WARN("resolve subquery failed. rc=%d", strrc(rc));
+        return rc;
+    }
+
+    /* 将子查询中，引用本层作用域的相关表达式放到ApplyStmt中 */
+    if (correlate_exprs_in_subquery.count(ctx->current_level()))
+    {
+        apply_stmt->add_correlate_exprs(correlate_exprs_in_subquery[ctx->current_level()]);
+        correlate_exprs_in_subquery.erase(ctx->current_level());
+    }
+    result->add_correlate_exprs(correlate_exprs_in_subquery); // 将子查询中，引用上层作用域的相关表达式放到ExprResolveResult中
+
+    /* 将存在性检测子查询转换为一个identifier = True的比较表达式 */
+    FieldIdentifier id = ctx->get_subquery_identifier_generator().generate_identifier();
+    auto identifier_expr = std::make_unique<IdentifierExpr>(id);
+    auto value_expr = std::make_unique<ValueExpr>(Value(true));
+    auto compare_expr = std::make_unique<ComparisonExpr>(CompOp::EQUAL_TO, std::move(identifier_expr), 
+        std::move(value_expr));
+
+    result->set_result_expr_tree(std::move(compare_expr));
+
+    /* 构造apply_stmt的其它基础信息 */
+    apply_stmt->set_sub_query_stmt(std::unique_ptr<SelectStmt>(dynamic_cast<SelectStmt*>(select_stmt)));
+    apply_stmt->set_field_identifier_in_expr(id);
+    result->add_subquery(std::move(apply_stmt));  // 将代表子查询的apply_stmt加入result结果
+
+    return RC::SUCCESS;
+}
+
+RC QuantifiedCompSubqueryExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *result) const
+{
+    /* Expr IN/NOT IN (sub_query)，解析Expr */
+    ExprResolveResult child_result;
+    RC rc = child_->resolve(ctx, &child_result);
+    if (rc != RC::SUCCESS)
+    {
+        LOG_WARN("resolve child expr in quantified compare subquery failed. rc=%d", strrc(rc));
+        return rc;
+    }
+    result->add_correlate_exprs(child_result.get_correlate_exprs());
+
+    /* Expr中的子查询要先于右边的(sub_query)执行，所以要先把它们添加进结果 */
+    result->add_subquerys(child_result.get_subquerys_in_expr());
+
+    /* Expr IN/NOT IN (sub_query)，解析右边的子查询 */
+    SelectSqlNode &select_sql = sql_->selection;
+    auto apply_stmt = std::make_unique<QuantifiedCompSubqueryApplyStmt>(child_result.owns_result_expr_tree(), op_);
+    Stmt *select_stmt = nullptr;
+    std::unordered_map<size_t, std::vector<CorrelateExpr*>> correlate_exprs_in_subquery;
+
+    rc = SelectStmt::create(Session::current_session()->get_current_db(), ctx, select_sql, select_stmt, 
+        &correlate_exprs_in_subquery);
+    if (rc != RC::SUCCESS)
+    {
+        LOG_WARN("resolve subquery failed. rc=%d", strrc(rc));
+        return rc;
+    }
+
+    /* 将子查询中，引用本层作用域的相关表达式放到ApplyStmt中 */
+    if (correlate_exprs_in_subquery.count(ctx->current_level()))
+    {
+        apply_stmt->add_correlate_exprs(correlate_exprs_in_subquery[ctx->current_level()]);
+        correlate_exprs_in_subquery.erase(ctx->current_level());
+    }
+    result->add_correlate_exprs(correlate_exprs_in_subquery); // 将子查询中，引用上层作用域的相关表达式放到ExprResolveResult中
+
+    /* 将集合比较子查询转换为一个identifier = True的比较表达式 */
+    FieldIdentifier id = ctx->get_subquery_identifier_generator().generate_identifier();
+    auto identifier_expr = std::make_unique<IdentifierExpr>(id);
+    auto value_expr = std::make_unique<ValueExpr>(Value(true));
+    auto compare_expr = std::make_unique<ComparisonExpr>(CompOp::EQUAL_TO, std::move(identifier_expr), 
+        std::move(value_expr));
+
+    result->set_result_expr_tree(std::move(compare_expr));
+
+    /* 构造apply_stmt的其它基础信息 */
+    apply_stmt->set_sub_query_stmt(std::unique_ptr<SelectStmt>(dynamic_cast<SelectStmt*>(select_stmt)));
+    apply_stmt->set_field_identifier_in_expr(id);
+    result->add_subquery(std::move(apply_stmt));  // 代表集合比较子查询的Apply最后加入结果
+
     return RC::SUCCESS;
 }

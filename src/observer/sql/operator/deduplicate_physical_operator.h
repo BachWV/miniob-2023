@@ -30,7 +30,7 @@ private:
 	// std::unordered_map<std::vector<Field>, bool> unique_map;
   bool only_put_one_;   // 应该写两个算子，但是我懒, 这个看gbf的empty就能看出来吧，算了，显式写出来好理解
 
-  bool finish_{false};
+  bool finish_;
 
 	std::vector<Field> group_by_fields_;	// 这个就是schema
   std::vector<Value> cur_group_by_value_;

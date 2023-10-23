@@ -59,6 +59,7 @@ See the Mulan PSL v2 for more details. */
   DEFINE_RC(IOERR_SEEK)                     \
   DEFINE_RC(IOERR_TOO_LONG)                 \
   DEFINE_RC(IOERR_SYNC)                     \
+  DEFINE_RC(IOERR_REMOVE)                   \
   DEFINE_RC(LOCKED_UNLOCK)                  \
   DEFINE_RC(LOCKED_NEED_WAIT)               \
   DEFINE_RC(LOCKED_CONCURRENCY_CONFLICT)    \
@@ -76,7 +77,9 @@ See the Mulan PSL v2 for more details. */
   DEFINE_RC(FILE_WRITE)                     \
   DEFINE_RC(VARIABLE_NOT_EXISTS)            \
   DEFINE_RC(VARIABLE_NOT_VALID)             \
-  DEFINE_RC(LOGBUF_FULL)
+  DEFINE_RC(LOGBUF_FULL)                    \
+  DEFINE_RC(SUBQUERY_NOT_SCALAR)            \
+  DEFINE_RC(SUBQUERY_GET_VALUE_FAILED)
 
 enum class RC
 {

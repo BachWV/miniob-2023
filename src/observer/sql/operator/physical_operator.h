@@ -52,6 +52,7 @@ enum class PhysicalOperatorType
   UPDATE,
   AGGREGATE,
   DEDUPLICATE_AGG,
+  APPLY
 };
 
 /**

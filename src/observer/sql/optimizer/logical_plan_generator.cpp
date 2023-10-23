@@ -149,6 +149,18 @@ RC LogicalPlanGenerator::create_plan(
   }
   opers.push_back(std::move(table_oper));
 
+  // subquerys in where clause
+  std::vector<std::unique_ptr<ApplyStmt>> &apply_stmts = select_stmt->fetch_sub_querys_in_where();
+  for (std::unique_ptr<ApplyStmt> &apply_stmt : apply_stmts) {
+    unique_ptr<LogicalOperator> apply_oper;
+    RC rc = apply_stmt->create_logic_plan(apply_oper);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to create apply logical plan. rc=%s", strrc(rc));
+      return rc;
+    }
+    opers.push_back(std::move(apply_oper));
+  }
+
   unique_ptr<LogicalOperator> predicate_oper;
   RC rc = create_plan(select_stmt->fetch_where_exprs(), predicate_oper);
   if (rc != RC::SUCCESS) {

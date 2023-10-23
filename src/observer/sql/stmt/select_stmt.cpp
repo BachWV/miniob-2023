@@ -284,42 +284,14 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
     rc = where_expr_sql_node->resolve(glob_ctx, &where_resolve_res);
     if (rc != RC::SUCCESS)
     {
-      LOG_ERROR("resolve where expr failed. rc=%d", rc);
+      LOG_WARN("resolve where expr failed. rc=%d", strrc(rc));
       return rc;
     }
 
-    /* 对每一个where条件处理where中的子查询 */
-    std::vector<SubQueryInfo>& sub_querys = where_resolve_res.get_subquerys_in_expr();
-    for (auto& sub_query: sub_querys)
-    {
-      std::unique_ptr<ApplyStmt> sub_query_apply_stmt = sub_query.owns_apply_stmt();
-      std::unordered_map<size_t, std::vector<CorrelateExpr*>>& correlate_exprs_in_subquery = sub_query.correlate_exprs();
-
-      /* 
-       * 将子查询的correlate_exprs中，引用本查询的相关表达式放进apply_stmt中，
-       * 引用更上层的查询的相关表达式放到create的参数correlate_exprs中，视为本查询的相关表达式，继续向上传递
-       * 即，如果本查询的子查询中出现了引用更上层的相关表达式，那么本查询也是上层的相关子查询
-       */
-      for (auto &[level, exprs]: correlate_exprs_in_subquery)
-      {
-        // 如果该相关表达式引用的是本层查询，直接加到apply算子中
-        if (level == glob_ctx->current_level())
-        {
-          for (CorrelateExpr *epxr: exprs)
-            sub_query_apply_stmt->add_correlate_expr(epxr);
-        }
-
-        // 否则，引用的是上层查询
-        else
-        {
-          assert(level < glob_ctx->current_level());
-          for (CorrelateExpr *expr: exprs)
-            (*correlate_exprs)[level].push_back(expr);
-        }
-      }
-
-      apply_stmts.emplace_back(std::move(sub_query_apply_stmt));  // 记录下生成好的applyStmt，之后保存到SelectStmt中
-    }
+    /* 拿到where中的子查询 */
+    std::vector<std::unique_ptr<ApplyStmt>>& subquerys_in_where = where_resolve_res.get_subquerys_in_expr();
+    for (auto &subquery: subquerys_in_where)
+      apply_stmts.emplace_back(std::move(subquery));
 
     /* 
      * 处理where条件的相关表达式

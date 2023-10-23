@@ -94,7 +94,7 @@ RC Table::create(int32_t table_id,
 
   // 创建文件
   if ((rc = table_meta_.init(table_id, name, attribute_count, attributes)) != RC::SUCCESS) {
-    LOG_ERROR("Failed to init table meta. name:%s, ret:%d", name, rc);
+    LOG_ERROR("Failed to init table meta. name:%s, ret:%d", name, strrc(rc));
     return rc;  // delete table file
   }
 

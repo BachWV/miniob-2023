@@ -69,6 +69,9 @@ public:
   std::vector<std::unique_ptr<Expression>> &fetch_where_exprs() {
     return where_exprs_;
   }
+  std::vector<std::unique_ptr<ApplyStmt>> &fetch_sub_querys_in_where() {
+    return sub_querys_in_where_;
+  }
   const std::vector<FieldWithOrder>& order_fields() const{
     return order_fields_;
   }

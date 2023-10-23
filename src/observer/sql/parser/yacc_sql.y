@@ -210,8 +210,9 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <rel_attr_list>       group_by_list
 
 
-%type <expr_node>           expr identifier sub_query
+%type <expr_node>           expr identifier
 %type <expr_node_list>      expr_list
+%type <sql_node>            sub_query
 
 %nonassoc SYM_IS_NULL SYM_IS_NOT_NULL SYM_IN SYM_NOT_IN
 %left EQ LT GT LE GE NE
@@ -820,11 +821,13 @@ expr:
     }
     | expr SYM_IN LBRACE sub_query RBRACE
     {
-      /* TODO */ 
+      std::unique_ptr<ExprSqlNode> child($1);
+      $$ = new QuantifiedCompSubqueryExprSqlNode(token_name(sql_string, &@$), std::move(child), $4, IN);
     }
     | expr SYM_NOT_IN LBRACE sub_query RBRACE
     {
-      /* TODO */
+      std::unique_ptr<ExprSqlNode> child($1);
+      $$ = new QuantifiedCompSubqueryExprSqlNode(token_name(sql_string, &@$), std::move(child), $4, NOT_IN);
     }
     | expr SYM_IS_NULL
     {
@@ -842,15 +845,15 @@ expr:
     }
     | LBRACE sub_query RBRACE
     {
-      $$ = $2;
+      $$ = new ScalarSubqueryExprSqlNode(token_name(sql_string, &@$), $2);
     }
     | SYM_EXISTS LBRACE sub_query RBRACE
     {
-      /* TODO */
+      $$ = new ExistentialSubqueryExprSqlNode(token_name(sql_string, &@$), $3, EXISTS);
     }
     | SYM_NOT_EXISTS LBRACE sub_query RBRACE
     {
-      /* TODO */
+      $$ = new ExistentialSubqueryExprSqlNode(token_name(sql_string, &@$), $3, NOT_EXISTS);
     }
     ;
 
@@ -871,7 +874,7 @@ identifier:
 sub_query:
     select_stmt
     {
-      /* TODO */
+      $$ = $1;
     }
     ;
 
