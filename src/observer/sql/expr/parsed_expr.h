@@ -147,6 +147,7 @@ public:
   explicit ExprSqlNode(const std::string &expr_name, ExprSqlNodeType type) : expr_name_(expr_name), type_(type) {}
   virtual ~ExprSqlNode() = default;
 
+  // name
   const std::string &expr_name() const { return expr_name_; }
 
   ExprSqlNodeType get_type() const { return type_; }

@@ -98,8 +98,9 @@ enum AggregateOp{
   AGG_MIN,
   AGG_COUNT,
   AGG_AVG,
+  AGG_SUM,
 };
-extern std::string agg_str_name[4];
+extern std::string agg_str_name[5];
 
 //对于group by 的处理延缓到resolver中
 struct AggregateFuncSqlNode{

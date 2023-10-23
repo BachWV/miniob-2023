@@ -116,6 +116,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         MAX
         AVG
         COUNT
+        SUM
         GROUP_BY
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
@@ -862,6 +863,9 @@ identifier:
     {
       $$ = new IdentifierExprSqlNode(token_name(sql_string, &@$), $1, $3);
     }
+    | agg_func {
+      
+    }
     ;
 
 sub_query:
@@ -969,7 +973,13 @@ agg_func:
     /* {
       $$ = nullptr;
     } */
-    MAX LBRACE rel_attr RBRACE{
+    SUM LBRACE rel_attr RBRACE{
+      $$ = new AggregateFuncSqlNode();
+      $$->agg_op = AggregateOp::AGG_SUM;
+      $$->attr = *$3;
+      delete $3;
+    }
+    | MAX LBRACE rel_attr RBRACE{
       $$ = new AggregateFuncSqlNode();
       $$->agg_op = AggregateOp::AGG_MAX;
       $$->attr = *$3;

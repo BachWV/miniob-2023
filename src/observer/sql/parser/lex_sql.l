@@ -121,6 +121,7 @@ MIN                                     RETURN_TOKEN(MIN);
 MAX                                     RETURN_TOKEN(MAX);
 AVG                                     RETURN_TOKEN(AVG);
 COUNT                                   RETURN_TOKEN(COUNT);
+SUM                                     RETURN_TOKEN(SUM);
 "GROUP BY"                              RETURN_TOKEN(GROUP_BY);
 ASC                                     RETURN_TOKEN(ASC);
 "not null"                              RETURN_TOKEN(SYM_NOT_NULL);

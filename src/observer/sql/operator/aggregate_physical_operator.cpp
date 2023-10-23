@@ -251,5 +251,30 @@ void AggregatePhysicalOperator::do_single_aggregate(const Value& curr_value){
 			curr_group_agg_value_.set_float(v1+v2);
 			return;
 		};break;
+	case AGG_SUM:{
+			assert(curr_value.attr_type() != BOOLEANS);
+			assert(curr_value.attr_type() != DATES);
+			assert(curr_value.attr_type() != CHARS);
+	
+			if(aof_tuples_.empty()){	// 第一次进入本轮GroupBy，设置初始值
+				curr_group_agg_value_ = curr_value;	// 如果本列全是null的话（第一个是NULL），最终结果也是null
+				return;
+			}
+
+			if(curr_value.is_null_value()){	// NULL忽略
+				return;
+			}
+
+			if(curr_group_agg_value_.is_null_value()){	// cgav可能是NULL
+				curr_group_agg_value_ = curr_value;
+				return;
+			}
+
+			// avg的value type一定是Float
+			auto v1 = curr_value.get_float();
+			auto v2 = curr_group_agg_value_.get_float();
+			curr_group_agg_value_.set_float(v1+v2);
+			return;
+		};break;
 	}
 }
