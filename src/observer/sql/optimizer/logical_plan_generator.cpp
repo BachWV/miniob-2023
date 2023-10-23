@@ -206,6 +206,12 @@ RC LogicalPlanGenerator::create_plan(
     }
   }
 
+  // having
+  unique_ptr<LogicalOperator> having_pred_oper;
+  rc = create_plan(select_stmt->fetch_having_exprs(), having_pred_oper);
+  HANDLE_RC(rc);
+  opers.push_back(std::move(having_pred_oper));
+
   // deduplicate
   if(has_agg){
     if(select_stmt->get_group_by_fields().empty()){

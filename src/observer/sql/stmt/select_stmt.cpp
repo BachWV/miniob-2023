@@ -175,6 +175,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
 
   // collect select_expr in `select` statement
   // std::visit只能重载()传递单参数，重载lambda对参数捕获又太麻烦，怕环境编译器不支持太高级的特性，选择直接if else
+  std::vector<std::string> agg_functions_names;
   std::vector<SelectExprField> select_expr_fields;
   for(const auto& select_expr_field: select_sql.select_exprs){
     if(auto relation_attr = get_if<RelAttrSqlNode>(&select_expr_field)){
@@ -247,6 +248,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
       }
 
     }else if(auto agg_sql_node = get_if<AggregateFuncSqlNode>(&select_expr_field)){
+      agg_functions_names.push_back(agg_sql_node->name);
       Field agg_field;
       auto rc = resolve_common_field(db, table_map, tables, agg_sql_node->attr, agg_field);
       if(rc != RC::SUCCESS){
@@ -271,6 +273,34 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
   LOG_INFO("got %d tables in from stmt and %d fields in query stmt", tables.size(), select_expr_fields.size());
 
   RC rc = RC::SUCCESS;
+
+  /* 开始解析HAVING子句 */
+  StmtResolveContext having_resolve_ctx;
+  /* TODO: 初始化这个ctx
+   * 把Having里可能出现的列名，调用having_resolve_ctx.add_other_column_name传入
+   */
+  for(auto& str: agg_functions_names){
+    having_resolve_ctx.add_other_column_name(str);
+  }
+
+  std::vector<std::unique_ptr<Expression>> having_exprs;
+  glob_ctx->push_stmt_ctx(&having_resolve_ctx);
+  for (auto &having_expr: select_sql.having_attrs)
+  {
+    ExprResolveResult having_resolve_result;
+    rc = having_expr->resolve(glob_ctx, &having_resolve_result);
+    if (rc != RC::SUCCESS)
+    {
+      LOG_WARN("resolve having expr failed. rc=%d", strrc(rc));
+      return rc;
+    }
+
+    assert(having_resolve_result.get_subquerys_in_expr().empty());
+    assert(having_resolve_result.get_correlate_exprs().empty());
+
+    having_exprs.emplace_back(having_resolve_result.owns_result_expr_tree());
+  }
+  glob_ctx->pop_stmt_ctx();
 
   /* 开始解析where子句 */
   std::vector<std::unique_ptr<ApplyStmt>> apply_stmts;
@@ -326,6 +356,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
   select_stmt->order_fields_ = order_fields;
   select_stmt->where_exprs_.swap(where_exprs);
   select_stmt->sub_querys_in_where_.swap(apply_stmts);
+  select_stmt->having_exprs_.swap(having_exprs);
   stmt = select_stmt;
   return RC::SUCCESS;
 }

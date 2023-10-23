@@ -120,6 +120,7 @@ extern std::string agg_str_name[5];
 struct AggregateFuncSqlNode{
   AggregateOp agg_op;
   RelAttrSqlNode attr;
+  std::string name;
 };
 
 
@@ -145,6 +146,7 @@ struct SelectSqlNode
   and_conditions_type   conditions;    ///< 查询条件，使用AND串联起来多个条件
   std::vector<OrderByAttrSqlNode>  order_by_attrs;  ///< 排序字段及升降序
   std::vector<RelAttrSqlNode>     group_by_attrs;
+  and_conditions_type             having_attrs;
 };
 
 /**

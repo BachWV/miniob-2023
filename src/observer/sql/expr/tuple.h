@@ -530,7 +530,7 @@ public:
     }
     
     // 虚拟字段没写表名的判断
-    if(0 == strcmp( spec.field_name(), new_field_meta_.name())){
+    if(0 == strcasecmp( spec.field_name(), new_field_meta_.name())){
       cell = new_value_;
       return RC::SUCCESS;
     }

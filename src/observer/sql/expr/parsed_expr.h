@@ -46,6 +46,9 @@ public:
   /* 解析引用表中某一列的名字。解析成功（找不到也算成功，都返回RC::SUCCESS）。解析中出现错误（如出现歧义），返回其错误码 */
   RC resolve_table_field_identifier(const std::string &table_name, const std::string &field_name,
     std::optional<FieldIdentifier> &result) const;
+  
+  /* 解析聚集函数等虚拟字段的名字 */
+  RC resolve_other_column_name(const std::string &col_name) const;
 
 private:
   /*
@@ -134,7 +137,8 @@ enum class ExprSqlNodeType
   PredNull,
   ScalarSubquery,
   ExistentialSubquery,
-  QuantifiedComp
+  QuantifiedComp,
+  AggIdentifier
 };
 
 class ExprSqlNode
@@ -282,4 +286,14 @@ private:
   std::unique_ptr<ExprSqlNode> child_;
   std::unique_ptr<ParsedSqlNode> sql_;
   QuantifiedComp op_;
+};
+
+/* 表示一个聚集函数名 */
+class AggIdentifierExprSqlNode: public ExprSqlNode
+{
+public:
+  AggIdentifierExprSqlNode(const std::string &expr_name)
+    : ExprSqlNode(expr_name, ExprSqlNodeType::AggIdentifier) {}
+
+  RC resolve(ExprResolveContext *ctx, ExprResolveResult *result) const override;
 };
