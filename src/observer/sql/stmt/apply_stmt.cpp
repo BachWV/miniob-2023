@@ -25,7 +25,7 @@ RC ScalarSubqueryApplyStmt::create_logic_plan(std::unique_ptr<LogicalOperator> &
     RC rc = LogicalPlanGenerator().create(sub_query_.get(), subquery_logic_plan);
     if (rc != RC::SUCCESS)
     {
-        LOG_ERROR("failed to create subquery logic plan. rc=%s", strrc(rc));
+        LOG_WARN("failed to create subquery logic plan. rc=%s", strrc(rc));
         return rc;
     }
     logic_oper = std::make_unique<ScalarSubqueryLogicalOperator>(field_identifier_in_expr_, 
@@ -39,7 +39,7 @@ RC ExistentialSubqueryApplyStmt::create_logic_plan(std::unique_ptr<LogicalOperat
     RC rc = LogicalPlanGenerator().create(sub_query_.get(), subquery_logic_plan);
     if (rc != RC::SUCCESS)
     {
-        LOG_ERROR("failed to create subquery logic plan. rc=%s", strrc(rc));
+        LOG_WARN("failed to create subquery logic plan. rc=%s", strrc(rc));
         return rc;
     }
     logic_oper = std::make_unique<ExistentialSubqueryLogicalOperator>(field_identifier_in_expr_, 
@@ -53,7 +53,7 @@ RC QuantifiedCompSubqueryApplyStmt::create_logic_plan(std::unique_ptr<LogicalOpe
     RC rc = LogicalPlanGenerator().create(sub_query_.get(), subquery_logic_plan);
     if (rc != RC::SUCCESS)
     {
-        LOG_ERROR("failed to create subquery logic plan. rc=%s", strrc(rc));
+        LOG_WARN("failed to create subquery logic plan. rc=%s", strrc(rc));
         return rc;
     }
     logic_oper = std::make_unique<QuantifiedCompSubqueryLogicalOperator>(field_identifier_in_expr_, 

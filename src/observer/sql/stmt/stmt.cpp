@@ -57,7 +57,7 @@ RC Stmt::create_stmt(Db *db, ParsedSqlNode &sql_node, Stmt *&stmt)
         return rc;
       }
       if (!correlate_exprs.empty()) {
-        LOG_ERROR("correlate expressions are not null after resolve top level select stmt.");
+        LOG_WARN("correlate expressions are not null after resolve top level select stmt.");
         return RC::INTERNAL;
       }
       return RC::SUCCESS;

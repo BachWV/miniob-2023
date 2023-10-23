@@ -366,7 +366,7 @@ RC PhysicalPlanGenerator::create_plan(ScalarSubqueryLogicalOperator &logical_ope
   RC rc = create(*sub_query_logic_plan, sub_query_phy_plan);
   if (rc != RC::SUCCESS)
   {
-    LOG_ERROR("failed to create subquery physical oper. rc=%s", strrc(rc));
+    LOG_WARN("failed to create subquery physical oper. rc=%s", strrc(rc));
     return rc;
   }
   
@@ -374,14 +374,14 @@ RC PhysicalPlanGenerator::create_plan(ScalarSubqueryLogicalOperator &logical_ope
   auto &child_opers = logical_oper.children();
   if (child_opers.size() != 1)
   {
-    LOG_ERROR("Apply should only have one child operator.");
+    LOG_WARN("Apply should only have one child operator.");
     return RC::INTERNAL;
   }
   std::unique_ptr<PhysicalOperator> child_phy_plan;
   rc = create(*child_opers.front(), child_phy_plan);
   if (rc != RC::SUCCESS)
   {
-    LOG_ERROR("failed to create physical child oper. rc=%s", strrc(rc));
+    LOG_WARN("failed to create physical child oper. rc=%s", strrc(rc));
     return rc;
   }
 
@@ -402,7 +402,7 @@ RC PhysicalPlanGenerator::create_plan(ExistentialSubqueryLogicalOperator &logica
   RC rc = create(*sub_query_logic_plan, sub_query_phy_plan);
   if (rc != RC::SUCCESS)
   {
-    LOG_ERROR("failed to create subquery physical oper. rc=%s", strrc(rc));
+    LOG_WARN("failed to create subquery physical oper. rc=%s", strrc(rc));
     return rc;
   }
   
@@ -410,14 +410,14 @@ RC PhysicalPlanGenerator::create_plan(ExistentialSubqueryLogicalOperator &logica
   auto &child_opers = logical_oper.children();
   if (child_opers.size() != 1)
   {
-    LOG_ERROR("Apply should only have one child operator.");
+    LOG_WARN("Apply should only have one child operator.");
     return RC::INTERNAL;
   }
   std::unique_ptr<PhysicalOperator> child_phy_plan;
   rc = create(*child_opers.front(), child_phy_plan);
   if (rc != RC::SUCCESS)
   {
-    LOG_ERROR("failed to create physical child oper. rc=%s", strrc(rc));
+    LOG_WARN("failed to create physical child oper. rc=%s", strrc(rc));
     return rc;
   }
 
@@ -439,7 +439,7 @@ RC PhysicalPlanGenerator::create_plan(QuantifiedCompSubqueryLogicalOperator &log
   RC rc = create(*sub_query_logic_plan, sub_query_phy_plan);
   if (rc != RC::SUCCESS)
   {
-    LOG_ERROR("failed to create subquery physical oper. rc=%s", strrc(rc));
+    LOG_WARN("failed to create subquery physical oper. rc=%s", strrc(rc));
     return rc;
   }
   
@@ -447,14 +447,14 @@ RC PhysicalPlanGenerator::create_plan(QuantifiedCompSubqueryLogicalOperator &log
   auto &child_opers = logical_oper.children();
   if (child_opers.size() != 1)
   {
-    LOG_ERROR("Apply should only have one child operator.");
+    LOG_WARN("Apply should only have one child operator.");
     return RC::INTERNAL;
   }
   std::unique_ptr<PhysicalOperator> child_phy_plan;
   rc = create(*child_opers.front(), child_phy_plan);
   if (rc != RC::SUCCESS)
   {
-    LOG_ERROR("failed to create physical child oper. rc=%s", strrc(rc));
+    LOG_WARN("failed to create physical child oper. rc=%s", strrc(rc));
     return rc;
   }
 

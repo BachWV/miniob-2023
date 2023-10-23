@@ -197,7 +197,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
     rc = where_expr_sql_node->resolve(glob_ctx, &where_resolve_res);
     if (rc != RC::SUCCESS)
     {
-      LOG_ERROR("resolve where expr failed. rc=%d", strrc(rc));
+      LOG_WARN("resolve where expr failed. rc=%d", strrc(rc));
       return rc;
     }
 

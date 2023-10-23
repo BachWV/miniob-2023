@@ -242,7 +242,7 @@ RC ScalarSubqueryExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult
         &correlate_exprs_in_subquery);
     if (rc != RC::SUCCESS)
     {
-        LOG_ERROR("resolve subquery failed. rc=%d", strrc(rc));
+        LOG_WARN("resolve subquery failed. rc=%d", strrc(rc));
         return rc;
     }
 
@@ -278,7 +278,7 @@ RC ExistentialSubqueryExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveR
         &correlate_exprs_in_subquery);
     if (rc != RC::SUCCESS)
     {
-        LOG_ERROR("resolve subquery failed. rc=%d", strrc(rc));
+        LOG_WARN("resolve subquery failed. rc=%d", strrc(rc));
         return rc;
     }
 
@@ -314,7 +314,7 @@ RC QuantifiedCompSubqueryExprSqlNode::resolve(ExprResolveContext *ctx, ExprResol
     RC rc = child_->resolve(ctx, &child_result);
     if (rc != RC::SUCCESS)
     {
-        LOG_ERROR("resolve child expr in quantified compare subquery failed. rc=%d", strrc(rc));
+        LOG_WARN("resolve child expr in quantified compare subquery failed. rc=%d", strrc(rc));
         return rc;
     }
     result->add_correlate_exprs(child_result.get_correlate_exprs());
@@ -332,7 +332,7 @@ RC QuantifiedCompSubqueryExprSqlNode::resolve(ExprResolveContext *ctx, ExprResol
         &correlate_exprs_in_subquery);
     if (rc != RC::SUCCESS)
     {
-        LOG_ERROR("resolve subquery failed. rc=%d", strrc(rc));
+        LOG_WARN("resolve subquery failed. rc=%d", strrc(rc));
         return rc;
     }
 

@@ -17,7 +17,7 @@ RC ApplyPhysicalOperator::open(Trx *trx)
 {
     if (children_.size() != 2)
     {
-        LOG_ERROR("apply operator must have two children");
+        LOG_WARN("apply operator must have two children");
         return RC::INTERNAL;
     }
     trx_ = trx;
@@ -47,7 +47,7 @@ RC ApplyPhysicalOperator::next()
     Tuple *child_tuple = children_[child_op_idx]->current_tuple();
     if (child_tuple == nullptr)
     {
-        LOG_ERROR("child operator returned null tuple while still has next.");
+        LOG_WARN("child operator returned null tuple while still has next.");
         return RC::INTERNAL;
     }
 
@@ -57,7 +57,7 @@ RC ApplyPhysicalOperator::next()
         rc = execute_subquery(*child_tuple);
         if (rc != RC::SUCCESS)
         {
-            LOG_ERROR("failed to execute subquery, rc=%s.", strrc(rc));
+            LOG_WARN("failed to execute subquery, rc=%s.", strrc(rc));
             return rc;
         }
     }
@@ -67,7 +67,7 @@ RC ApplyPhysicalOperator::next()
     rc = subquery_expr_evaluator_->evaluate(child_tuple, subquery_result_, value);
     if (rc != RC::SUCCESS)
     {
-        LOG_ERROR("failed to evaluate subquery expr, rc=%s.", strrc(rc));
+        LOG_WARN("failed to evaluate subquery expr, rc=%s.", strrc(rc));
         return rc;
     }
 
@@ -93,7 +93,7 @@ RC ApplyPhysicalOperator::execute_subquery(const Tuple &current_outer_tuple)
         rc = expr->set_value_from_tuple(current_outer_tuple);
         if (rc != RC::SUCCESS)
         {
-            LOG_ERROR("failed to set value for correlate expr(identifier=%s), rc=%s", expr->identifier_name().c_str(), 
+            LOG_WARN("failed to set value for correlate expr(identifier=%s), rc=%s", expr->identifier_name().c_str(), 
                 strrc(rc));
             return rc;
         }
@@ -109,7 +109,7 @@ RC ApplyPhysicalOperator::execute_subquery_inner()
     RC rc = children_[sub_query_idx]->open(trx_);
     if (rc != RC::SUCCESS)
     {
-        LOG_ERROR("open sub query physical operator failed, rc=%s", strrc(rc));
+        LOG_WARN("open sub query physical operator failed, rc=%s", strrc(rc));
         return rc;
     }
 
@@ -127,7 +127,7 @@ RC ApplyPhysicalOperator::execute_subquery_inner()
         }
         else
         {
-            LOG_ERROR("next sub query physical operator failed, rc=%s", strrc(rc));
+            LOG_WARN("next sub query physical operator failed, rc=%s", strrc(rc));
             return rc;
         }
     }
@@ -148,14 +148,14 @@ RC ScalarSubqueryEvaluator::evaluate(Tuple *current_outer_tuple, const std::vect
     /* 如果子查询不是标量子查询，那么返回错误 */
     if (subquery_tuples.size() > 1 || subquery_tuples[0]->cell_num() != 1)
     {
-        LOG_ERROR("subquery is not a scalar subquery");
+        LOG_WARN("subquery is not a scalar subquery");
         return RC::SUBQUERY_NOT_SCALAR;
     }
 
     RC rc = subquery_tuples[0]->cell_at(0, value);
     if (rc != RC::SUCCESS)
     {
-        LOG_ERROR("failed to get value from subquery");
+        LOG_WARN("failed to get value from subquery");
         return RC::SUBQUERY_GET_VALUE_FAILED;
     }
 
@@ -177,7 +177,7 @@ RC QuantifiedCompSubqueryEvaluator::evaluate(Tuple *current_outer_tuple, const s
     RC rc = expr_->get_value(*current_outer_tuple, expr_value);
     if (rc != RC::SUCCESS)
     {
-        LOG_ERROR("failed to get expr value in quatified compare subquery, rc=%s", strrc(rc));
+        LOG_WARN("failed to get expr value in quatified compare subquery, rc=%s", strrc(rc));
         return rc;
     }
 
@@ -187,7 +187,7 @@ RC QuantifiedCompSubqueryEvaluator::evaluate(Tuple *current_outer_tuple, const s
         /* 如果subquery返回的tuple有多列，则错误 */
         if (tuple->cell_num() > 1)
         {
-            LOG_ERROR("subquery returns multi columns in quantified compare subquery.");
+            LOG_WARN("subquery returns multi columns in quantified compare subquery.");
             return RC::SUBQUERY_NOT_SCALAR;
         }
 
@@ -195,7 +195,7 @@ RC QuantifiedCompSubqueryEvaluator::evaluate(Tuple *current_outer_tuple, const s
         rc = tuple->cell_at(0, tuple_value);
         if (rc != RC::SUCCESS)
         {
-            LOG_ERROR("failed to get value from subquery");
+            LOG_WARN("failed to get value from subquery");
             return RC::SUBQUERY_GET_VALUE_FAILED;
         }
 
