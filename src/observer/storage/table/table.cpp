@@ -326,23 +326,7 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   const int normal_field_start_index = table_meta_.sys_field_num();
   // 重复，stmt明明已经检查了字段的合法性
   // note: 现在make_record来检查空值的合法性，因为不止一处调用make_record，在此处检查，减少重复工作
-  for (int i = 0; i < value_num; i++) {
-    const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
-    const Value &value = values[i];
-    if(field->type() == TEXTS && value.attr_type() == CHARS) {
-      continue;
-    }
-    if (field->type() != value.attr_type() && value.attr_type() != NULL_TYPE) {
-      LOG_ERROR("Invalid value type. table name =%s, field name=%s, type=%d, but given=%d",
-                table_meta_.name(), field->name(), field->type(), value.attr_type());
-      return RC::SCHEMA_FIELD_TYPE_MISMATCH;
-    }
-    if (value.is_null_value() && !field->nullable()) {
-      LOG_WARN("value can't be null. table name =%s, field name =%s, type=%d.", 
-        table_meta_.name(), field->name(), field->type());
-      return RC::SCHEMA_FIELD_FORBIDDEN_NULL;
-    }
-  }
+  // 最新:  make_record里不做合法性检查，类型检查/转换在insert_stmt和update_stmt里做，包括检查空值合法性 by ljl
 
   // 复制所有字段的值
   int record_size = table_meta_.record_size();
@@ -380,17 +364,16 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
       std::string file_path = base_dir_ + common::FILE_PATH_SPLIT_STR  + md5 ;
       int fd = ::open(file_path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);  
 
+      std::fstream fs;
       if (fd<0) {  // 如果文件无法打开
         if (EEXIST == errno) {
           LOG_ERROR("Failed to create file, it has been created. %s, EEXIST, %s", file_path.c_str(), strerror(errno));
-          return RC::FILE_EXIST;
+          goto finish_text_file;
         }
         LOG_ERROR("Create file failed. filename=%s, errmsg=%d:%s", file_path.c_str(), errno, strerror(errno));
         return RC::IOERR_OPEN;
       }
       close(fd);
-      std::fstream fs;
-    
       fs.open(file_path, std::ios_base::out | std::ios_base::binary);
       if (!fs.is_open()) {
         LOG_ERROR("Failed to open file for write. file name=%s, errmsg=%s", file_path.c_str(), strerror(errno));
@@ -398,7 +381,7 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
       }
       fs<<value.get_text_string();
       fs.close();
-
+finish_text_file:
       
       copy_len = md5.length()+1 ;
       memcpy(record_data + field->offset(), md5.c_str(), copy_len);

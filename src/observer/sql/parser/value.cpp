@@ -192,12 +192,12 @@ void Value::cast_to(AttrType type)
     case DATES: {
       set_date(get_int());
     } break;
-    case TEXTS: {
-      set_text_string(get_string().c_str());
-    } break;
-    case NULL_TYPE:{
-      attr_type_ = NULL_TYPE;
-    } break;
+    // case TEXTS: {
+    //   set_text_string(get_string().c_str());
+    // } break;
+    // case NULL_TYPE:{
+    //   attr_type_ = NULL_TYPE;
+    // } break;
   }
 }
 

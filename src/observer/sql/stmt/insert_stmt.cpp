@@ -65,6 +65,11 @@ RC InsertStmt::create(Db *db, InsertSqlNode &inserts, Stmt *&stmt)
         
         //return RC::SCHEMA_FIELD_TYPE_MISMATCH;
       }
+      if (values[i].is_null_value() && !field_meta->nullable()) {
+        LOG_WARN("value can't be null. table name =%s, field name =%s, type=%d.", 
+        table_name, field_meta->name(), field_type);
+       return RC::SCHEMA_FIELD_FORBIDDEN_NULL;
+      }
     }
   }
 

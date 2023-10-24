@@ -62,8 +62,11 @@ RC UpdateStmt::create(Db *db,UpdateSqlNode &update_sql, Stmt *&stmt)
     const FieldMeta &field_meta = table_meta.field_metas()->at(index);
     const AttrType &field_type = field_meta.type();
     const AttrType &value_type = set_value.value.attr_type();
-     if (field_type == TEXTS && value_type == CHARS)
-        continue;
+     if (field_type == TEXTS && value_type == CHARS){
+      value_list.insert(std::pair<int, Value>(index,set_value.value));
+      continue;
+     }
+        
      if (field_type != value_type && value_type != NULL_TYPE) { 
         set_value.value.cast_to(field_type);
         LOG_WARN("table=%s, field=%s, field type mismatch.Use auto cast to field type=%d, value_type=%d",
@@ -71,7 +74,12 @@ RC UpdateStmt::create(Db *db,UpdateSqlNode &update_sql, Stmt *&stmt)
         
         //return RC::SCHEMA_FIELD_TYPE_MISMATCH;
       }
-    value_list.insert(std::pair<int, Value>(index,set_value.value));
+      if (set_value.value.is_null_value() && !field_meta.nullable()) {
+        LOG_WARN("value can't be null. table name =%s, field name =%s, type=%d.", 
+          table_name, field_meta.name(), field_type);
+        return RC::SCHEMA_FIELD_FORBIDDEN_NULL;
+      }
+      value_list.insert(std::pair<int, Value>(index,set_value.value));
 
   }
 
