@@ -52,6 +52,14 @@ RC StmtResolveContext::resolve_table_field_identifier(const std::string &table_n
     }
 }
 
+RC StmtResolveContext::resolve_other_column_name(const std::string &col_name) const
+{
+    if (other_column_names_.count(col_name))
+        return RC::SUCCESS;
+    else
+        return RC::SCHEMA_FIELD_MISSING;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
 void ExprResolveResult::set_result_expr_tree(std::unique_ptr<Expression> result_expr_tree)
@@ -358,6 +366,17 @@ RC QuantifiedCompSubqueryExprSqlNode::resolve(ExprResolveContext *ctx, ExprResol
     apply_stmt->set_field_identifier_in_expr(id);
     result->add_subquery(std::move(apply_stmt));  // 代表集合比较子查询的Apply最后加入结果
 
+    return RC::SUCCESS;
+}
+
+RC AggIdentifierExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *result) const
+{
+    const StmtResolveContext& stmt_ctx = ctx->get_ith_level_stmt_ctx(ctx->current_level());
+    RC rc = stmt_ctx.resolve_other_column_name(expr_name_);
+    HANDLE_RC(rc);
+
+    auto expr = std::make_unique<IdentifierExpr>(FieldIdentifier(expr_name_));
+    result->set_result_expr_tree(std::move(expr));
     return RC::SUCCESS;
 }
 

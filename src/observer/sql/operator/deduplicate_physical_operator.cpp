@@ -23,6 +23,8 @@ RC DeduplicateAggPhysicalOperator::open(Trx *trx){
 	if(RC::SUCCESS == (rc = child->next())){
 		auto tuple = child->current_tuple();
 		rc = set_group_by_value(tuple, cur_group_by_value_);
+	}else{
+		finish_ = true;
 	}
 
 	return RC::SUCCESS;

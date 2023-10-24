@@ -118,6 +118,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         COUNT
         SUM
         GROUP_BY
+        HAVING
         SYM_LIKE
         SYM_NOT_LIKE
 
@@ -214,11 +215,11 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <agg_func>            agg_func
 // group by
 %type <rel_attr_list>       group_by
-%type <rel_attr_list>       group_by_list
+%type <rel_attr_list>       group_by_list 
 
 
 %type <expr_node>           expr identifier
-%type <expr_node_list>      expr_list
+%type <expr_node_list>      expr_list having having_list
 %type <sql_node>            sub_query
 
 %nonassoc SYM_IS_NULL SYM_IS_NOT_NULL SYM_IN SYM_NOT_IN
@@ -593,7 +594,7 @@ set_value:
 
 
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT select_expr_list FROM ID rel_list where group_by order_by
+    SELECT select_expr_list FROM ID rel_list where group_by having order_by 
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
       if ($2 != nullptr) {
@@ -620,10 +621,15 @@ select_stmt:        /*  select 语句的语法解析树*/
         delete $7;
       }
 
-      if ($8 != nullptr) {
-        $$->selection.order_by_attrs.swap(*$8);
-        std::reverse($$->selection.order_by_attrs.begin(), $$->selection.order_by_attrs.end());
+      if($8 != nullptr){
+        $$->selection.having_attrs.swap(*$8);
         delete $8;
+      }
+
+      if ($9 != nullptr) {
+        $$->selection.order_by_attrs.swap(*$9);
+        std::reverse($$->selection.order_by_attrs.begin(), $$->selection.order_by_attrs.end());
+        delete $9;
       }
 
       free($4);
@@ -808,6 +814,10 @@ expr:
     {
       $$ = $1;
     }
+    | agg_func
+    {
+      $$ = new AggIdentifierExprSqlNode($1->name);
+    }
     | '+' expr %prec UMINUS
     {
       $$ = $2;
@@ -911,9 +921,6 @@ identifier:
     | ID DOT ID
     {
       $$ = new IdentifierExprSqlNode(token_name(sql_string, &@$), $1, $3);
-    }
-    | agg_func {
-      
     }
     ;
 
@@ -1026,30 +1033,35 @@ agg_func:
       $$ = new AggregateFuncSqlNode();
       $$->agg_op = AggregateOp::AGG_SUM;
       $$->attr = *$3;
+      $$->name = token_name(sql_string, &@$);
       delete $3;
     }
     | MAX LBRACE rel_attr RBRACE{
       $$ = new AggregateFuncSqlNode();
       $$->agg_op = AggregateOp::AGG_MAX;
       $$->attr = *$3;
+      $$->name = token_name(sql_string, &@$);
       delete $3;
     }
     | MIN LBRACE rel_attr RBRACE{
       $$ = new AggregateFuncSqlNode();
       $$->agg_op = AggregateOp::AGG_MIN;
       $$->attr = *$3;
+      $$->name = token_name(sql_string, &@$);
       delete $3;
     }
     | AVG LBRACE rel_attr RBRACE{
       $$ = new AggregateFuncSqlNode();
       $$->agg_op = AggregateOp::AGG_AVG;
       $$->attr = *$3;
+      $$->name = token_name(sql_string, &@$);
       delete $3;
     }
     | COUNT LBRACE rel_attr RBRACE{
       $$ = new AggregateFuncSqlNode();
       $$->agg_op = AggregateOp::AGG_COUNT;
       $$->attr = *$3;
+      $$->name = token_name(sql_string, &@$);
       delete $3;
     }
     | COUNT LBRACE '*' RBRACE{
@@ -1059,6 +1071,7 @@ agg_func:
       $$->attr = RelAttrSqlNode();
       $$->attr.relation_name  = "";
       $$->attr.attribute_name = "*";
+      $$->name = token_name(sql_string, &@$);
     }
     ;
 
@@ -1093,6 +1106,27 @@ select_expr_list:
       $$ = $3;
       $$->emplace_back(*$1);
       delete $1;
+    }
+    ;
+
+having:
+    /* empty */
+    {
+      $$ = nullptr;
+    }
+    | HAVING having_list {
+      $$ = $2;  
+    }
+    ;
+
+having_list:
+    expr {
+      $$ = new std::vector<std::unique_ptr<ExprSqlNode>>;
+      $$->emplace_back($1);
+    }
+    | having_list AND expr {
+      $$ = $1;
+      $$->emplace_back($3);
     }
     ;
 

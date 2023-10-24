@@ -123,6 +123,7 @@ AVG                                     RETURN_TOKEN(AVG);
 COUNT                                   RETURN_TOKEN(COUNT);
 SUM                                     RETURN_TOKEN(SUM);
 "GROUP BY"                              RETURN_TOKEN(GROUP_BY);
+"HAVING"                                RETURN_TOKEN(HAVING);     
 ASC                                     RETURN_TOKEN(ASC);
 "not null"                              RETURN_TOKEN(SYM_NOT_NULL);
 "is null"                               RETURN_TOKEN(SYM_IS_NULL);

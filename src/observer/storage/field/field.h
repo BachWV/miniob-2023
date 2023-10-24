@@ -108,10 +108,21 @@ public:
     return TupleCellSpec(table_name_.c_str(), field_name_.c_str());
   }
 
+  bool operator==(const FieldIdentifier& fi) const {
+    return (table_name_ == fi.table_name_) && (field_name_ == fi.field_name_);
+  }
+
 private:
 
   /* 若table_name_不为空，则identifier是表的列名。否则，field_name_表示虚拟列名(表达式/聚集/用于替代子查询表达式的名字) */
   std::string table_name_, field_name_;
+};
+
+struct FieldIdentifierHash{
+  size_t operator()(const FieldIdentifier& fi) const{
+    std::hash<std::string> hash_func;
+    return hash_func(fi.field_name()+fi.table_name());
+  }
 };
 
 // group by; 感觉groupBy不应该开一个stmt，并且resolver是在做校验，所以在这里定义了
