@@ -273,16 +273,9 @@ RC LogicalPlanGenerator::create_plan(
   return RC::SUCCESS;
 }
 
-RC LogicalPlanGenerator::create_plan(
-    std::vector<std::unique_ptr<Expression>> &cond_exprs, std::unique_ptr<LogicalOperator> &logical_operator)
+RC LogicalPlanGenerator::create_plan(std::unique_ptr<ConjunctionExpr> cond_exprs, std::unique_ptr<LogicalOperator> &logical_operator)
 {
-  unique_ptr<PredicateLogicalOperator> predicate_oper;
-  if (!cond_exprs.empty()) {
-    unique_ptr<ConjunctionExpr> conjunction_expr(new ConjunctionExpr(ConjunctionExpr::Type::AND, cond_exprs));
-    predicate_oper = unique_ptr<PredicateLogicalOperator>(new PredicateLogicalOperator(std::move(conjunction_expr)));
-  }
-
-  logical_operator = std::move(predicate_oper);
+  logical_operator = std::make_unique<PredicateLogicalOperator>(std::move(cond_exprs));
   return RC::SUCCESS;
 }
 

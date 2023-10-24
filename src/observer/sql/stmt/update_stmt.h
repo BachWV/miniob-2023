@@ -20,7 +20,7 @@ See the Mulan PSL v2 for more details. */
 
 class Table;
 class Db;
-class Expression;
+class ConjunctionExpr;
 
 /**
  * @brief 更新语句
@@ -30,12 +30,9 @@ class UpdateStmt : public Stmt
 {
 public:
   UpdateStmt() = default;
-  UpdateStmt(Table *table,std::unordered_map<int,Value> value_list, std::vector<std::unique_ptr<Expression>> &&cond_exprs);
+  UpdateStmt(Table *table,std::unordered_map<int,Value> value_list, std::unique_ptr<ConjunctionExpr> cond_exprs);
  
-  std::vector<std::unique_ptr<Expression>>& fetch_cond_exprs()
-  {
-    return cond_exprs_;
-  }
+  std::unique_ptr<ConjunctionExpr> fetch_cond_exprs();
 
   StmtType type() const override
   {
@@ -59,5 +56,5 @@ public:
 private:
   Table *table_ = nullptr;
   std::unordered_map<int, Value> value_list_;
-  std::vector<std::unique_ptr<Expression>> cond_exprs_;
+  std::unique_ptr<ConjunctionExpr> cond_exprs_;
 };

@@ -164,9 +164,10 @@ enum class ExprSqlNodeType
   PredNull,
   ScalarSubquery,
   ExistentialSubquery,
-  QuantifiedComp,
+  QuantifiedCompSubquery,
   AggIdentifier,
   Like,
+  QuantifiedCompExprSet,
 };
 
 class ExprSqlNode
@@ -306,7 +307,7 @@ class QuantifiedCompSubqueryExprSqlNode: public ExprSqlNode
 {
 public:
   QuantifiedCompSubqueryExprSqlNode(const std::string &expr_name, std::unique_ptr<ExprSqlNode> child, ParsedSqlNode *sql, QuantifiedComp op)
-    : ExprSqlNode(expr_name, ExprSqlNodeType::QuantifiedComp), child_(std::move(child)), sql_(sql), op_(op) {}
+    : ExprSqlNode(expr_name, ExprSqlNodeType::QuantifiedCompSubquery), child_(std::move(child)), sql_(sql), op_(op) {}
 
   RC resolve(ExprResolveContext *ctx, ExprResolveResult *result) const override;
 
@@ -342,4 +343,20 @@ private:
   std::unique_ptr<ExprSqlNode> left_;
   std::string pattern_;
   bool is_not_like_;
+};
+
+/* expr in/not in (expr, expr, ...) */
+class QuantifiedCmpExprSetExprSqlNode: public ExprSqlNode
+{
+public:
+  QuantifiedCmpExprSetExprSqlNode(const std::string &expr_name, std::unique_ptr<ExprSqlNode> child, QuantifiedComp op, ExprSqlSet *expr_set)
+    : ExprSqlNode(expr_name, ExprSqlNodeType::QuantifiedCompExprSet), child_(std::move(child)), op_(op), expr_set_(expr_set) {}
+
+  RC resolve(ExprResolveContext *ctx, ExprResolveResult *result) const override;
+
+private:
+  // child_ op_ (expr_set_)
+  std::unique_ptr<ExprSqlNode> child_;
+  QuantifiedComp op_;
+  std::unique_ptr<ExprSqlSet> expr_set_;
 };

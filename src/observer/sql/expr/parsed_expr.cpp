@@ -425,3 +425,30 @@ RC LikeExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *result) 
     result->add_subquerys(sub_result.get_subquerys_in_expr());
     return RC::SUCCESS;
 }
+
+RC QuantifiedCmpExprSetExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *result) const
+{
+    ExprResolveResult sub_result;
+    RC rc = child_->resolve(ctx, &sub_result);
+    if (rc != RC::SUCCESS)
+        return rc;
+    result->add_correlate_exprs(sub_result.get_correlate_exprs());
+    result->add_subquerys(sub_result.get_subquerys_in_expr());
+
+    std::vector<std::unique_ptr<Expression>> expr_for_set;
+    for (auto &expr_in_set: *expr_set_)
+    {
+        ExprResolveResult res;
+        rc = expr_in_set->resolve(ctx, &res);
+        if (rc != RC::SUCCESS)
+            return rc;
+        expr_for_set.emplace_back(res.owns_result_expr_tree());
+        result->add_correlate_exprs(sub_result.get_correlate_exprs());
+        result->add_subquerys(sub_result.get_subquerys_in_expr());
+    }
+
+    auto expr_tree = std::make_unique<QuantifiedCompExprSetExpr>(sub_result.owns_result_expr_tree(), op_, 
+        std::move(expr_for_set));
+    result->set_result_expr_tree(std::move(expr_tree));
+    return RC::SUCCESS;
+}

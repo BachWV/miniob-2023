@@ -28,6 +28,7 @@ class FilterStmt;
 class Db;
 class Table;
 class Expression;
+class ConjunctionExpr;
 class CorrelateExpr;
 class ExprResolveContext;
 class ApplyStmt;
@@ -66,9 +67,7 @@ public:
   {
     return select_expr_fields_;
   }
-  std::vector<std::unique_ptr<Expression>> &fetch_where_exprs() {
-    return where_exprs_;
-  }
+  std::unique_ptr<ConjunctionExpr> fetch_where_exprs();
   std::vector<std::unique_ptr<ApplyStmt>> &fetch_sub_querys_in_where() {
     return sub_querys_in_where_;
   }
@@ -78,10 +77,7 @@ public:
   const std::vector<Field> get_group_by_fields() const{
     return group_by_field_;
   }
-
-  std::vector<std::unique_ptr<Expression>>& fetch_having_exprs(){
-    return having_exprs_;
-  }
+  std::unique_ptr<ConjunctionExpr> fetch_having_exprs();
 
 private:
   RC resolve_select_expr_sql_node(const SelectExprSqlNode& sesn, SelectExprField& sef);
@@ -90,10 +86,10 @@ private:
   std::vector<Table *> tables_;
   std::vector<FieldWithOrder> order_fields_;
   
-  std::vector<std::unique_ptr<Expression>> where_exprs_;  // 多个以AND连接的表达式
-  std::vector<std::unique_ptr<ApplyStmt>> sub_querys_in_where_;  // where子句中的子查询
+  std::unique_ptr<ConjunctionExpr> where_exprs_;
+  std::vector<std::unique_ptr<ApplyStmt>> sub_querys_in_where_;
   std::vector<SelectExprField> select_expr_fields_;
   std::vector<Field> group_by_field_;
   std::vector<Field> resolved_query_field_;
-  std::vector<std::unique_ptr<Expression>> having_exprs_;  // having后面以AND连接的表达式
+  std::unique_ptr<ConjunctionExpr> having_exprs_;
 };

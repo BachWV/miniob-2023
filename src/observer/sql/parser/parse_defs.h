@@ -125,7 +125,18 @@ struct AggregateFuncSqlNode{
 
 
 class ExprSqlNode;
-using and_conditions_type = std::vector<std::unique_ptr<ExprSqlNode>>;
+
+struct Conditions
+{
+  enum class ConjunctionType {
+    AND, OR
+  };
+  ConjunctionType type = ConjunctionType::AND;
+  std::vector<std::unique_ptr<ExprSqlNode>> exprs;
+};
+
+// 用于where in (expr, expr...)
+using ExprSqlSet = std::vector<std::unique_ptr<ExprSqlNode>>;
 
 /**
  * @brief 描述一个select语句
@@ -143,10 +154,10 @@ struct SelectSqlNode
 {
   std::vector<SelectExprSqlNode>  select_exprs;
   std::vector<std::string>        relations;     ///< 查询的表
-  and_conditions_type   conditions;    ///< 查询条件，使用AND串联起来多个条件
+  Conditions   conditions;    ///< 查询条件，使用AND串联起来多个条件
   std::vector<OrderByAttrSqlNode>  order_by_attrs;  ///< 排序字段及升降序
   std::vector<RelAttrSqlNode>     group_by_attrs;
-  and_conditions_type             having_attrs;
+  Conditions             having_attrs;
 };
 
 /**
@@ -178,7 +189,7 @@ struct InsertSqlNode
 struct DeleteSqlNode
 {
   std::string                   relation_name;  ///< Relation to delete from
-  and_conditions_type conditions;
+  Conditions conditions;
 };
 
 struct SetValueSqlNode
@@ -194,7 +205,7 @@ struct UpdateSqlNode
 {
   std::string                   relation_name;         ///< Relation to update
   std::vector<SetValueSqlNode>  set_value_list;        ///< 更新的字段，现支持多个字段 
-  and_conditions_type conditions;
+  Conditions conditions;
 };
 
 /**

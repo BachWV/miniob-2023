@@ -18,9 +18,15 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/filter_stmt.h"
 #include "sql/expr/parsed_expr.h"
 #include "sql/stmt/apply_stmt.h"
+#include "sql/expr/expression.h"
 
-UpdateStmt::UpdateStmt(Table *table,std::unordered_map<int,Value> value_list,std::vector<std::unique_ptr<Expression>> &&cond_exprs)
+UpdateStmt::UpdateStmt(Table *table,std::unordered_map<int,Value> value_list,std::unique_ptr<ConjunctionExpr> cond_exprs)
     : table_(table),value_list_(value_list),cond_exprs_(std::move(cond_exprs)) {}
+
+std::unique_ptr<ConjunctionExpr> UpdateStmt::fetch_cond_exprs()
+{
+  return std::move(cond_exprs_);
+}
 
 RC UpdateStmt::create(Db *db, const UpdateSqlNode &update_sql, Stmt *&stmt)
 {
@@ -80,7 +86,7 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update_sql, Stmt *&stmt)
   expr_ctx.push_stmt_ctx(&update_ctx);
 
   std::vector<std::unique_ptr<Expression>> cond_exprs;
-  for (auto &cond_expr_sql_node: update_sql.conditions)
+  for (auto &cond_expr_sql_node: update_sql.conditions.exprs)
   {
     ExprResolveResult result;
     rc = cond_expr_sql_node->resolve(&expr_ctx, &result);
@@ -94,7 +100,10 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update_sql, Stmt *&stmt)
   expr_ctx.pop_stmt_ctx();
 
   //everything is ok, create the update statement
-  stmt = new UpdateStmt(table, value_list, std::move(cond_exprs));
+  auto conjunction_expr = std::make_unique<ConjunctionExpr>(
+    update_sql.conditions.type == Conditions::ConjunctionType::AND ? ConjunctionExpr::Type::AND : ConjunctionExpr::Type::OR,
+    cond_exprs);
+  stmt = new UpdateStmt(table, value_list, std::move(conjunction_expr));
   return rc;    
 
 }
