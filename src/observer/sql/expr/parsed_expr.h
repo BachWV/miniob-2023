@@ -32,6 +32,25 @@ private:
   size_t next_identifier_ = 0;
 };
 
+/* 描述HAVING表达式中的聚集函数 */
+class AggExprInfo
+{
+public:
+  AggExprInfo(AggregateOp op, const FieldIdentifier &agg_field, const std::string &full_name, bool is_in_select_column)
+    : op_(op), agg_field_(agg_field), full_name_(full_name), is_in_select_column_(is_in_select_column) {}
+  
+  AggregateOp agg_op() const { return op_; }
+  const FieldIdentifier &agg_field() const { return agg_field_; }
+  const std::string &full_name() const { return full_name_; }
+  bool is_in_select_column() const { return is_in_select_column_; }
+
+private:
+  AggregateOp op_;
+  FieldIdentifier agg_field_;  // 如果是'*'，则field_name为'*'。否则这里同时包含了表名和列名
+  std::string full_name_;  // 整个聚集函数的字符串表示
+  bool is_in_select_column_;  // 这个聚集函数是否在select的列中出现过了
+};
+
 class StmtResolveContext
 {
 public:
@@ -103,8 +122,11 @@ public:
   // 调用者在调用后，不应再使用subquerys，因为内部会进行移动
   void add_subquerys(std::vector<std::unique_ptr<ApplyStmt>> &subquerys);
 
+  void add_agg_expr_info(AggExprInfo &&info) { agg_expr_infos_.emplace_back(std::move(info)); }
+
   std::vector<std::unique_ptr<ApplyStmt>>& get_subquerys_in_expr() { return subquerys_; }
   std::unordered_map<size_t, std::vector<CorrelateExpr*>> &get_correlate_exprs();
+  std::vector<AggExprInfo>& get_agg_expr_infos() { return agg_expr_infos_; }
 
   // 调用者获取resolve后的表达式树的所有权
   std::unique_ptr<Expression> owns_result_expr_tree();
@@ -124,6 +146,11 @@ private:
    * 子查询表达式中引用本层作用域的相关表达式，在对应的resolve方法中，在ApplyStmt构造时加入到ApplyStmt中
    */
   std::unordered_map<size_t, std::vector<CorrelateExpr*>> correlate_exprs_;
+
+  /*
+   * Having表达式中使用，包含聚集函数的信息
+   */
+  std::vector<AggExprInfo> agg_expr_infos_;
 };
 
 /* **************************** */
@@ -293,10 +320,15 @@ private:
 class AggIdentifierExprSqlNode: public ExprSqlNode
 {
 public:
-  AggIdentifierExprSqlNode(const std::string &expr_name)
-    : ExprSqlNode(expr_name, ExprSqlNodeType::AggIdentifier) {}
+  AggIdentifierExprSqlNode(const AggregateFuncSqlNode &agg_func)
+    : ExprSqlNode(agg_func.name, ExprSqlNodeType::AggIdentifier), op_(agg_func.agg_op),
+    agg_field_(agg_func.attr.relation_name, agg_func.attr.attribute_name) { }
 
   RC resolve(ExprResolveContext *ctx, ExprResolveResult *result) const override;
+
+private:
+  AggregateOp op_;
+  FieldIdentifier agg_field_;
 };
 
 class LikeExprSqlNode: public ExprSqlNode

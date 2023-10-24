@@ -139,6 +139,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
   }
 
   StmtResolveContext current_where_resolve_ctx;  // 解析where子句的上下文
+  StmtResolveContext having_resolve_ctx;  // 解析having子句的上下文
 
   // collect tables in `from` statement
   std::vector<Table *> tables;
@@ -162,6 +163,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
     table_map.insert(std::pair<std::string, Table *>(table_name, table));
 
     current_where_resolve_ctx.add_table_to_namespace(table_name, table);
+    having_resolve_ctx.add_table_to_namespace(table_name, table);
   }
 
   // collect fields in `group by` statement
@@ -298,9 +300,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
 
 
   RC rc = RC::SUCCESS;
-  /* 开始解析HAVING子句 */
-  StmtResolveContext having_resolve_ctx;
-  /* TODO: 初始化这个ctx
+  /* 开始解析HAVING子句
    * 把Having里可能出现的列名，调用having_resolve_ctx.add_other_column_name传入
    */
   for(auto& str: agg_functions_names){
@@ -323,6 +323,8 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
     assert(having_resolve_result.get_correlate_exprs().empty());
 
     having_exprs.emplace_back(having_resolve_result.owns_result_expr_tree());
+
+    /* TODO: 处理HAVING子句中，不存在于select的列中的聚集函数，使用having_resolve_result.get_agg_expr_infos()接口 */
   }
   glob_ctx->pop_stmt_ctx();
 

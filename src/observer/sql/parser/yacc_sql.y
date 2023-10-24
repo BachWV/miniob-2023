@@ -173,9 +173,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <attr_info>           attr_def
 %type <value_list>          value_list
 %type <expr_node_list>      where
-%type <rel_attr_list>       select_attr
 %type <relation_list>       rel_list
-%type <rel_attr_list>       attr_list
 %type <expression>          expression
 %type <expression_list>     expression_list
 %type <sql_node>            calc_stmt
@@ -218,7 +216,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <rel_attr_list>       group_by_list 
 
 
-%type <expr_node>           expr identifier
+%type <expr_node>           expr identifier expr_has_agg
 %type <expr_node_list>      expr_list having having_list
 %type <sql_node>            sub_query
 
@@ -715,25 +713,6 @@ expression:
     }
     ;
 
-select_attr:
-    '*' {
-      $$ = new std::vector<RelAttrSqlNode>;
-      RelAttrSqlNode attr;
-      attr.relation_name  = "";
-      attr.attribute_name = "*";
-      $$->emplace_back(attr);
-    }
-    | rel_attr attr_list {
-      if ($2 != nullptr) {
-        $$ = $2;
-      } else {
-        $$ = new std::vector<RelAttrSqlNode>;
-      }
-      $$->emplace_back(*$1);
-      delete $1;
-    }
-    ;
-
 /* 属性匹配了table.field和单独的feild */
 rel_attr:
     ID {
@@ -747,23 +726,6 @@ rel_attr:
       $$->attribute_name = $3;
       free($1);
       free($3);
-    }
-    ;
-
-attr_list:
-    /* empty */
-    {
-      $$ = nullptr;
-    }
-    | COMMA rel_attr attr_list {
-      if ($3 != nullptr) {
-        $$ = $3;
-      } else {
-        $$ = new std::vector<RelAttrSqlNode>;
-      }
-
-      $$->emplace_back(*$2);
-      delete $2;
     }
     ;
 
@@ -813,10 +775,6 @@ expr:
     | identifier
     {
       $$ = $1;
-    }
-    | agg_func
-    {
-      $$ = new AggIdentifierExprSqlNode($1->name);
     }
     | '+' expr %prec UMINUS
     {
@@ -1120,13 +1078,23 @@ having:
     ;
 
 having_list:
-    expr {
+    expr_has_agg {
       $$ = new std::vector<std::unique_ptr<ExprSqlNode>>;
       $$->emplace_back($1);
     }
-    | having_list AND expr {
+    | having_list AND expr_has_agg {
       $$ = $1;
       $$->emplace_back($3);
+    }
+    ;
+
+expr_has_agg:
+    expr {
+      $$ = $1;
+    }
+    | agg_func {
+      $$ = new AggIdentifierExprSqlNode(*$1);
+      delete $1;
     }
     ;
 
