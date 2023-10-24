@@ -21,7 +21,7 @@ InsertStmt::InsertStmt(Table *table, std::vector<std::vector<Value> >value_rows)
     : table_(table), value_rows_(value_rows)
 {}
 
-RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
+RC InsertStmt::create(Db *db, InsertSqlNode &inserts, Stmt *&stmt)
 {
   const char *table_name = inserts.relation_name.c_str();
   if (nullptr == db || nullptr == table_name || inserts.value_rows.empty()) {
@@ -41,7 +41,7 @@ RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
       // 注意我们要减去sys_field
   const int field_num = table_meta.field_num() - table_meta.sys_field_num();
 
-  for(const std::vector<Value> &values : inserts.value_rows) {
+  for(std::vector<Value> &values : inserts.value_rows) {
     // check the fields number
     const int value_num  = static_cast<int>(values.size());
     if (field_num != value_num) {
@@ -59,9 +59,11 @@ RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
       if (field_type == TEXTS && value_type == CHARS)
         continue;
       if (field_type != value_type && value_type != NULL_TYPE) {  // TODO try to convert the value type to field type
-        LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
+        values[i].cast_to(field_type);
+        LOG_WARN("table=%s, field=%s, field type mismatch.Use auto cast to field type=%d, value_type=%d",
           table_name, field_meta->name(), field_type, value_type);
-        return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+        
+        //return RC::SCHEMA_FIELD_TYPE_MISMATCH;
       }
     }
   }

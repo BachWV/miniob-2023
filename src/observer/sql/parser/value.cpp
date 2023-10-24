@@ -171,6 +171,36 @@ void Value::set_value(const Value &value)
 }
 }
 
+void Value::cast_to(AttrType type)
+{
+  switch (type) {
+    case INTS: {
+      set_int(get_int());
+    } break;
+    case FLOATS: {
+      set_float(get_float());
+    } break;
+    case CHARS: {
+      set_string(get_string().c_str());
+    } break;
+    case BOOLEANS: {
+      set_boolean(get_boolean());
+    } break;
+    case UNDEFINED: {
+      ASSERT(false, "got an invalid value type");
+    } break;
+    case DATES: {
+      set_date(get_int());
+    } break;
+    case TEXTS: {
+      set_text_string(get_string().c_str());
+    } break;
+    case NULL_TYPE:{
+      attr_type_ = NULL_TYPE;
+    } break;
+  }
+}
+
 const char *Value::data() const
 {
   switch (attr_type_) {

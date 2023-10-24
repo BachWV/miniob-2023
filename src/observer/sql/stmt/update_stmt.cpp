@@ -22,7 +22,7 @@ See the Mulan PSL v2 for more details. */
 UpdateStmt::UpdateStmt(Table *table,std::unordered_map<int,Value> value_list,std::vector<std::unique_ptr<Expression>> &&cond_exprs)
     : table_(table),value_list_(value_list),cond_exprs_(std::move(cond_exprs)) {}
 
-RC UpdateStmt::create(Db *db, const UpdateSqlNode &update_sql, Stmt *&stmt)
+RC UpdateStmt::create(Db *db,UpdateSqlNode &update_sql, Stmt *&stmt)
 {
   // TODO
   //stmt = nullptr;
@@ -54,7 +54,7 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update_sql, Stmt *&stmt)
         break;
       }
     }
-    value_list.insert(std::pair<int, Value>(index,set_value.value));
+    
     if(!field_exist){
       LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), set_value.attr_name.c_str());
       return RC::SCHEMA_FIELD_MISSING;
@@ -62,11 +62,16 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update_sql, Stmt *&stmt)
     const FieldMeta &field_meta = table_meta.field_metas()->at(index);
     const AttrType &field_type = field_meta.type();
     const AttrType &value_type = set_value.value.attr_type();
-    if(!(field_type==TEXTS && value_type==CHARS) && field_type!=value_type){
-      LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
-               table->name(), field_meta.name(), field_type, value_type);
-      return RC::SCHEMA_FIELD_TYPE_MISMATCH;
-    }
+     if (field_type == TEXTS && value_type == CHARS)
+        continue;
+     if (field_type != value_type && value_type != NULL_TYPE) { 
+        set_value.value.cast_to(field_type);
+        LOG_WARN("table=%s, field=%s, field type mismatch.Use auto cast to field type=%d, value_type=%d",
+          table_name, field_meta.name(), field_type, value_type);
+        
+        //return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+      }
+    value_list.insert(std::pair<int, Value>(index,set_value.value));
 
   }
 
