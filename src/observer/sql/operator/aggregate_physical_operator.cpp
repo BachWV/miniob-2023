@@ -234,6 +234,9 @@ void AggregatePhysicalOperator::do_single_aggregate(const Value& curr_value){
 		
 			if(aof_tuples_.empty()){	// 第一次进入本轮GroupBy，设置初始值
 				curr_group_agg_value_ = curr_value;	// 如果本列全是null的话（第一个是NULL），最终结果也是null
+        if(!curr_value.is_null_value()){  // NULL忽略
+          avg_not_null_count_++;
+        }
 				return;
 			}
 
