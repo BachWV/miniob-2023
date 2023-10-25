@@ -83,8 +83,7 @@ RC UpdatePhysicalOperator::next()
         return rc;
       }
 
-      if (!expr_value.is_null_value())
-        values_new.at(value.first) = expr_value;
+      values_new.at(value.first) = expr_value;
     }
     
 
