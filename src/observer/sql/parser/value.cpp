@@ -351,7 +351,7 @@ int Value::get_int() const
   switch (attr_type_) {
     case CHARS: {
       try {
-        return (int)(std::stol(str_value_));
+        return (int)(std::stof(str_value_) + 0.5);
       } catch (std::exception const &ex) {
         LOG_TRACE("failed to convert string to number. s=%s, ex=%s", str_value_.c_str(), ex.what());
         return 0;
