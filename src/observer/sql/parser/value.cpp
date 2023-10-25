@@ -164,11 +164,11 @@ void Value::set_value(const Value &value)
     } break;
     case TEXTS: {
       set_text_string(value.get_string().c_str());
+    } break;
     case NULL_TYPE:{
       attr_type_ = NULL_TYPE;
     } break;
   }
-}
 }
 
 const char *Value::data() const
@@ -285,17 +285,33 @@ int Value::compare(const Value &other) const
         LOG_WARN("unsupported type: %d", this->attr_type_);
       }
     }
-  } else if (this->attr_type_ == INTS && other.attr_type_ == FLOATS) {
-    float this_data = this->num_value_.int_value_;
-    return common::compare_float((void *)&this_data, (void *)&other.num_value_.float_value_);
-  } else if (this->attr_type_ == FLOATS && other.attr_type_ == INTS) {
-    float other_data = other.num_value_.int_value_;
-    return common::compare_float((void *)&this->num_value_.float_value_, (void *)&other_data);
+  // else if (this->attr_type_ == INTS && other.attr_type_ == FLOATS) {
+  //   float this_data = this->num_value_.int_value_;
+  //   return common::compare_float((void *)&this_data, (void *)&other.num_value_.float_value_);
+  // } else if (this->attr_type_ == FLOATS && other.attr_type_ == INTS) {
+  //   float other_data = other.num_value_.int_value_;
+  //   return common::compare_float((void *)&this->num_value_.float_value_, (void *)&other_data);
+  // } 
+
   } else if (this->attr_type_ == NULL_TYPE) {
     return -1;
   } else if (other.attr_type_ == NULL_TYPE) {
     return 1;
   }
+  else if(this->attr_type_ == FLOATS || other.attr_type_ == FLOATS){
+    float this_data = this->get_float();
+    float other_data = other.get_float();
+    return common::compare_float((void *)&this_data, (void *)&other_data);
+  }
+  else if(this->attr_type_ == CHARS && other.attr_type_ == INTS){
+    int this_data = this->get_int();
+    return common::compare_int((void *)&this_data, (void *)&other.num_value_.int_value_);
+  }
+  else if(this->attr_type_ == INTS && other.attr_type_ == CHARS){
+    int other_data = other.get_int();
+    return common::compare_int((void *)&this->num_value_.int_value_, (void *)&other_data);
+  }
+
   LOG_WARN("not supported");
   return -1;  // TODO return rc?
 }
