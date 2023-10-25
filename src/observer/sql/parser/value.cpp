@@ -362,7 +362,8 @@ int Value::get_int() const
       return num_value_.int_value_;
     }
     case FLOATS: {
-      return (int)(num_value_.float_value_);
+      // 此处需要对num_value_.float_value_四舍五入
+      return (int)(num_value_.float_value_ + 0.5);
     }
     case BOOLEANS: {
       return (int)(num_value_.bool_value_);
