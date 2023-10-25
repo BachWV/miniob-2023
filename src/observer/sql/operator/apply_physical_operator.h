@@ -59,6 +59,8 @@ public:
 
     Tuple *current_tuple() override;
 
+    void set_child_op(std::unique_ptr<PhysicalOperator> child_op) { children_[child_op_idx] = std::move(child_op); }
+
 protected:
     bool is_correlated_subquery() const { return correlate_exprs_in_subquery_.size() != 0; }
     RC execute_subquery() { return execute_subquery_inner(); }  // 执行无关子查询

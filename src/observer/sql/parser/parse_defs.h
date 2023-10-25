@@ -195,7 +195,7 @@ struct DeleteSqlNode
 struct SetValueSqlNode
 {
   std::string attr_name;
-  Value value;
+  std::unique_ptr<ExprSqlNode> rhs_expr;  // set id = expr
 };
 /**
  * @brief 描述一个update语句

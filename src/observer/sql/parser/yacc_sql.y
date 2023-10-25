@@ -573,25 +573,24 @@ update_stmt:      /*  update 语句的语法解析树*/
 set_value_list:
   set_value {
     $$ = new std::vector<SetValueSqlNode>;
-    $$->emplace_back(*$1);
+    $$->emplace_back(std::move(*$1));
     delete $1;
   }
   | set_value COMMA set_value_list
   {
     $$ = $3;
-    $$->emplace_back(*$1);
+    $$->emplace_back(std::move(*$1));
     delete $1;
   }
   ;
 
 set_value:
-    ID EQ value
+    ID EQ expr
     {
       $$ = new SetValueSqlNode;
       $$->attr_name = $1;
-      $$->value = *$3;
+      $$->rhs_expr.reset($3);
       delete $1;
-      delete $3;
     }
     ;
 

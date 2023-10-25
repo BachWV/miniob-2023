@@ -344,8 +344,23 @@ RC LogicalPlanGenerator::create_plan(
   if (rc != RC::SUCCESS) {
     return rc;
   }
-  std::unordered_map<int,Value> value_list=update_stmt->value_list();
-  unique_ptr<LogicalOperator> update_oper(new UpdateLogicalOperator(table,value_list));
+
+  std::vector<std::unique_ptr<LogicalOperator>> apply_in_set_stmts;
+  std::vector<std::unique_ptr<ApplyStmt>> &subquerys_in_set_stmts = update_stmt->fetch_subquerys_in_set_stmts();
+  for (auto &subquery: subquerys_in_set_stmts)
+  {
+    std::unique_ptr<LogicalOperator> apply_op;
+    rc = subquery->create_logic_plan(apply_op);
+    if (rc != RC::SUCCESS)
+    {
+      LOG_WARN("create logical plan for subquerys in set stmts failed, rc=%s.", strrc(rc));
+      return rc;
+    }
+    apply_in_set_stmts.emplace_back(std::move(apply_op));
+  }
+
+  std::unordered_map<int, std::unique_ptr<Expression>> &value_list = update_stmt->fetch_value_list();
+  unique_ptr<LogicalOperator> update_oper(new UpdateLogicalOperator(table, std::move(value_list), std::move(apply_in_set_stmts)));
 
   if (predicate_oper) {
     predicate_oper->add_child(std::move(table_get_oper));

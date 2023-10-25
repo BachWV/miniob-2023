@@ -52,7 +52,8 @@ enum class PhysicalOperatorType
   UPDATE,
   AGGREGATE,
   DEDUPLICATE_AGG,
-  APPLY
+  APPLY,
+  ADAPTOR_FOR_EXPR_IN_UPDATE_SET
 };
 
 /**

@@ -345,8 +345,36 @@ RC PhysicalPlanGenerator::create_plan(UpdateLogicalOperator &update_oper, unique
       return rc;
     }
   }
-  std::unordered_map<int,Value> values=update_oper.value_list();
-  oper = unique_ptr<PhysicalOperator>(new UpdatePhysicalOperator(update_oper.table(), values));
+
+  // 表达式适配算子是一定要有的
+  auto adaptor = std::make_unique<AdaptorPhysicalOperatorForExprInSetStmt>();
+  AdaptorPhysicalOperatorForExprInSetStmt *p_adaptor = adaptor.get();
+  std::unique_ptr<PhysicalOperator> adaptor_top(std::move(adaptor));  // 构建适配算子树时的顶层算子，从adaptor开始
+
+  // 如果set语句中有子查询，则为所有Apply算子生成物理计划
+  std::vector<std::unique_ptr<LogicalOperator>> &subquerys = update_oper.subquerys_in_set_stmts();
+  if (!subquerys.empty())
+  {
+    for (auto &subquery: subquerys)
+    {
+      std::unique_ptr<PhysicalOperator> apply_phy_plan_base;
+      rc = this->create(*subquery, apply_phy_plan_base);
+      if (rc != RC::SUCCESS)
+      {
+        LOG_WARN("failed to create apply physical plan for subquerys in set stmt. rc=%s", strrc(rc));
+        return rc;
+      }
+
+      std::unique_ptr<ApplyPhysicalOperator> apply_phy_plan(
+        dynamic_cast<ApplyPhysicalOperator*>(apply_phy_plan_base.release()));
+      apply_phy_plan->set_child_op(std::move(adaptor_top));
+      adaptor_top = std::move(apply_phy_plan);
+    }
+  }
+
+  // 保证p_adaptor指向有效的对象，因为它一定在adaptor_top树中
+  oper = std::make_unique<UpdatePhysicalOperator>(update_oper.table(), std::move(update_oper.value_list()),
+    std::move(adaptor_top), p_adaptor);
 
   if (child_physical_oper) {
     oper->add_child(std::move(child_physical_oper));
@@ -423,17 +451,15 @@ RC PhysicalPlanGenerator::create_plan(ScalarSubqueryLogicalOperator &logical_ope
   
   /* 生成子算子的物理计划 */
   auto &child_opers = logical_oper.children();
-  if (child_opers.size() != 1)
-  {
-    LOG_WARN("Apply should only have one child operator.");
-    return RC::INTERNAL;
-  }
   std::unique_ptr<PhysicalOperator> child_phy_plan;
-  rc = create(*child_opers.front(), child_phy_plan);
-  if (rc != RC::SUCCESS)
+  if (child_opers.size() == 1)  // 允许在某些情况下，调用者在生成计划后手动添加子算子
   {
-    LOG_WARN("failed to create physical child oper. rc=%s", strrc(rc));
-    return rc;
+    rc = create(*child_opers.front(), child_phy_plan);
+    if (rc != RC::SUCCESS)
+    {
+      LOG_WARN("failed to create physical child oper. rc=%s", strrc(rc));
+      return rc;
+    }
   }
 
   oper = std::make_unique<ApplyPhysicalOperator>(logical_oper.get_field_identifier(), 
@@ -459,17 +485,15 @@ RC PhysicalPlanGenerator::create_plan(ExistentialSubqueryLogicalOperator &logica
   
   /* 生成子算子的物理计划 */
   auto &child_opers = logical_oper.children();
-  if (child_opers.size() != 1)
-  {
-    LOG_WARN("Apply should only have one child operator.");
-    return RC::INTERNAL;
-  }
   std::unique_ptr<PhysicalOperator> child_phy_plan;
-  rc = create(*child_opers.front(), child_phy_plan);
-  if (rc != RC::SUCCESS)
+  if (child_opers.size() == 1)  // 允许在某些情况下，调用者在生成计划后手动添加子算子
   {
-    LOG_WARN("failed to create physical child oper. rc=%s", strrc(rc));
-    return rc;
+    rc = create(*child_opers.front(), child_phy_plan);
+    if (rc != RC::SUCCESS)
+    {
+      LOG_WARN("failed to create physical child oper. rc=%s", strrc(rc));
+      return rc;
+    }
   }
 
   auto evaluator = std::make_unique<ExistentialSubqueryEvaluator>(logical_oper.get_exist_op());
@@ -496,17 +520,15 @@ RC PhysicalPlanGenerator::create_plan(QuantifiedCompSubqueryLogicalOperator &log
   
   /* 生成子算子的物理计划 */
   auto &child_opers = logical_oper.children();
-  if (child_opers.size() != 1)
-  {
-    LOG_WARN("Apply should only have one child operator.");
-    return RC::INTERNAL;
-  }
   std::unique_ptr<PhysicalOperator> child_phy_plan;
-  rc = create(*child_opers.front(), child_phy_plan);
-  if (rc != RC::SUCCESS)
+  if (child_opers.size() == 1)  // 允许在某些情况下，调用者在生成计划后手动添加子算子
   {
-    LOG_WARN("failed to create physical child oper. rc=%s", strrc(rc));
-    return rc;
+    rc = create(*child_opers.front(), child_phy_plan);
+    if (rc != RC::SUCCESS)
+    {
+      LOG_WARN("failed to create physical child oper. rc=%s", strrc(rc));
+      return rc;
+    }
   }
 
   auto evaluator = std::make_unique<QuantifiedCompSubqueryEvaluator>(logical_oper.owns_expr(), 
