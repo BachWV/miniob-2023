@@ -121,7 +121,9 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         HAVING
         SYM_LIKE
         SYM_NOT_LIKE
-
+        ROUND
+        LENGTH
+        DATE_FORMAT
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -152,6 +154,10 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   AggregateFuncSqlNode*             agg_func;
   std::vector<SelectExprSqlNode>*    select_expr_list;
   SelectExprSqlNode*                 select_expr;
+
+  // Function
+  FunctionSqlNode*                  function_node;
+  std::vector<FunctionSqlNode>*     function_node_const_list;
 }
 
 /* %token <number> DATE */
@@ -216,11 +222,16 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 // group by
 %type <rel_attr_list>       group_by
 %type <rel_attr_list>       group_by_list 
-
-
+// expr
 %type <expr_node>           expr identifier
 %type <expr_node_list>      expr_list having having_list
 %type <sql_node>            sub_query
+// function
+%type <function_node>       function_node_const
+%type <function_node>       function_node_field
+%type <function_node>       function_node_all
+%type <function_node_const_list>       function_node_const_list
+
 
 %nonassoc SYM_IS_NULL SYM_IS_NOT_NULL SYM_IN SYM_NOT_IN
 %left EQ LT GT LE GE NE
@@ -633,6 +644,19 @@ select_stmt:        /*  select 语句的语法解析树*/
       }
 
       free($4);
+    }
+    | SELECT function_node_const_list{
+      $$ = new ParsedSqlNode(SCF_SELECT);
+      if ($2 != nullptr) {
+        std::reverse($2->begin(), $2->end());
+        for(auto &node: *$2){
+          node.function_kernel->set_has_table(false);
+          // 有unique ptr
+          SelectExprSqlNode sesn = std::move(node);
+          $$->selection.select_exprs.emplace_back(std::move(sesn));
+        }
+        delete $2;
+      }
     }
     ;
 
@@ -1094,17 +1118,22 @@ select_expr:
       *$$ = *$1;
       delete $1;
     }
+    | function_node_all{
+      $$ = new SelectExprSqlNode();
+      *$$ = std::move(*$1);
+      delete $1;
+    }
     ;
 
 select_expr_list:
     select_expr{
       $$ = new std::vector<SelectExprSqlNode>;
-      $$->emplace_back(*$1);
+      $$->emplace_back(std::move(*$1));
       delete $1;
     }
     | select_expr COMMA select_expr_list{
       $$ = $3;
-      $$->emplace_back(*$1);
+      $$->emplace_back(std::move(*$1));
       delete $1;
     }
     ;
@@ -1129,6 +1158,101 @@ having_list:
       $$->emplace_back($3);
     }
     ;
+
+function_node_const:
+    ROUND LBRACE FLOAT RBRACE{
+      // round(3.1415)
+      $$ = new FunctionSqlNode();
+      $$->function_kernel = make_unique<RoundFunctionKernel>(true, true, 0, $3);
+      $$->is_const = true;
+      $$->virtual_field_name = token_name(sql_string, &@$);
+    }
+    | ROUND LBRACE FLOAT COMMA NUMBER RBRACE{
+      // round(3.1415, 2)
+      $$ = new FunctionSqlNode();
+      $$->function_kernel = make_unique<RoundFunctionKernel>(true, false, $5, $3);
+      $$->is_const = true;
+      $$->virtual_field_name = token_name(sql_string, &@$);
+    }
+    | LENGTH LBRACE SSS RBRACE{
+      // length('str')
+      $$ = new FunctionSqlNode();
+      std::string s = std::string($3).substr(1, strlen($3) - 2);
+      $$->function_kernel = make_unique<LengthFunctionKernel>(true, s);
+      $$->is_const = true;
+      $$->virtual_field_name = token_name(sql_string, &@$);
+    }
+    | DATE_FORMAT LBRACE SSS COMMA SSS RBRACE{
+      // date_format("2017-06-15", "%y")
+      $$ = new FunctionSqlNode();
+      std::string s = std::string($3).substr(1, strlen($3) - 2);
+      std::string format_without_quotation = std::string($5).substr(1, strlen($5) - 2);
+      $$->function_kernel = make_unique<FormatFunctionKernel>(true, format_without_quotation, s);
+      $$->is_const = true;
+      $$->virtual_field_name = token_name(sql_string, &@$);
+    }
+    ;
+
+function_node_field:
+    ROUND LBRACE rel_attr RBRACE{
+      // round(score)
+      $$ = new FunctionSqlNode();
+      $$->function_kernel = make_unique<RoundFunctionKernel>(false, true, 0, 0);
+      $$->is_const = false;
+      $$->virtual_field_name = token_name(sql_string, &@$);
+      $$->rel_attr = *$3;
+      delete $3;
+    }
+    | ROUND LBRACE rel_attr COMMA NUMBER RBRACE{
+      // round(score, 2)
+      $$ = new FunctionSqlNode();
+      $$->function_kernel = make_unique<RoundFunctionKernel>(false, false, $5, 0);
+      $$->is_const = false;
+      $$->virtual_field_name = token_name(sql_string, &@$);
+      $$->rel_attr = *$3;
+      delete $3;
+    }
+    | LENGTH LBRACE rel_attr RBRACE{
+      // length('str')
+      $$ = new FunctionSqlNode();
+      $$->function_kernel = make_unique<LengthFunctionKernel>(false, "");
+      $$->is_const = false;
+      $$->virtual_field_name = token_name(sql_string, &@$);
+      $$->rel_attr = *$3;
+      delete $3;
+    }
+    | DATE_FORMAT LBRACE rel_attr COMMA SSS RBRACE{
+      // date_format(date_field, "%y")
+      $$ = new FunctionSqlNode();
+      std::string format_without_quotation = std::string($5).substr(1, strlen($5) - 2);
+      $$->function_kernel = make_unique<FormatFunctionKernel>(false, format_without_quotation, "");
+      $$->is_const = false;
+      $$->virtual_field_name = token_name(sql_string, &@$);
+      $$->rel_attr = *$3;
+      delete $3;
+    }
+    ;
+
+function_node_all:
+    function_node_const{
+      $$ = $1;
+    }
+    | function_node_field{
+      $$ = $1;
+    }
+    ;
+
+function_node_const_list:
+    function_node_const{
+      $$ = new std::vector<FunctionSqlNode>;
+      $$->emplace_back(std::move(*$1));
+      delete $1;
+    }
+    | function_node_const COMMA function_node_const_list{
+      $$ = $3;
+      $$->emplace_back(std::move(*$1));
+      delete $1;
+    }
 
 opt_semicolon: /*empty*/
     | SEMICOLON

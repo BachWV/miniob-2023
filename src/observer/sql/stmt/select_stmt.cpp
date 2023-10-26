@@ -85,7 +85,7 @@ RC check_order_by_field(Db *db, const std::unordered_map<std::string, Table *>& 
   return RC::SUCCESS;
 }
 
-// 只检查具名的字段(如id，name等)，带有"*"不会通过check
+// 只检查具名的字段(如id，name等)，带有"*"不会通过check。RelAttrNode -> Field
 // 成功返回RC::success，并返回构建好的field；失败返回RC::SCHEMA_FIELD_MISSING
 RC resolve_common_field(Db *db, const std::unordered_map<std::string, Table *>& table_map, const std::vector<Table *>& tables,
   const RelAttrSqlNode& relation_attr, Field& field){
@@ -130,7 +130,7 @@ RC resolve_common_field(Db *db, const std::unordered_map<std::string, Table *>& 
   return RC::SCHEMA_FIELD_MISSING;
 }
 
-RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode &select_sql, Stmt *&stmt, 
+RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &select_sql, Stmt *&stmt, 
     std::unordered_map<size_t, std::vector<CorrelateExpr*>> *correlate_exprs)
 {
   if (nullptr == db) {
@@ -182,7 +182,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
   std::unordered_set<FieldIdentifier, FieldIdentifierHash> common_fields_set;
   bool has_agg = false;
 
-  for(const auto& select_expr_field: select_sql.select_exprs){
+  for(auto& select_expr_field: select_sql.select_exprs){
     if(auto relation_attr = get_if<RelAttrSqlNode>(&select_expr_field)){
 
       // 这里的代码Copy之前的验证Field字段的代码
@@ -273,6 +273,15 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
       }
       bool with_table_name = tables.size() > 1;
       select_expr_fields.push_back(FieldsWithGroupBy(agg_field, group_fields, agg_sql_node->agg_op, with_table_name));
+    }else if(auto func_sql_node = get_if<FunctionSqlNode>(&select_expr_field)){
+      if(func_sql_node->is_const){
+        select_expr_fields.push_back(FieldWithFunction(func_sql_node->virtual_field_name, Field(), std::move(func_sql_node->function_kernel)));
+      }else{
+        Field func_field;
+        auto rc = resolve_common_field(db, table_map, tables, func_sql_node->rel_attr, func_field);
+        HANDLE_RC(rc);
+        select_expr_fields.push_back(FieldWithFunction(func_sql_node->virtual_field_name, func_field, std::move(func_sql_node->function_kernel)));
+      }
     }else{
       // 出问题了，debug模式下直接kill
       assert(0);

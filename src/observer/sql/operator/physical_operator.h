@@ -52,7 +52,9 @@ enum class PhysicalOperatorType
   UPDATE,
   AGGREGATE,
   DEDUPLICATE_AGG,
-  APPLY
+  APPLY,
+  FUNCTION,
+  FIELD_CUL,
 };
 
 /**

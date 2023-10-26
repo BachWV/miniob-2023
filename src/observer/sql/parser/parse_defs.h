@@ -21,6 +21,7 @@ See the Mulan PSL v2 for more details. */
 #include <string>
 
 #include "sql/parser/value.h"
+#include "sql/function_kernel/function_kernel.h"
 
 class Expression;
 
@@ -39,6 +40,22 @@ struct RelAttrSqlNode
 {
   std::string relation_name;   ///< relation name (may be NULL) 表名
   std::string attribute_name;  ///< attribute name              属性名
+};
+
+struct FunctionSqlNode{
+  // 没有has table的const
+  bool has_table; // 算子生成的逻辑
+  bool is_const;  // 废弃
+  RelAttrSqlNode rel_attr;
+  std::unique_ptr<FunctionKernel> function_kernel;
+  std::string virtual_field_name;
+
+  // FunctionSqlNode(FunctionSqlNode&& node){
+  //   this->is_const = node.is_const;
+  //   this->rel_attr = node.rel_attr;
+  //   this->virtual_field_name = node.virtual_field_name;
+  //   this->function_kernel = std::move(node.function_kernel);
+  // }
 };
 
 /**
@@ -138,7 +155,7 @@ using and_conditions_type = std::vector<std::unique_ptr<ExprSqlNode>>;
  * 甚至可以包含复杂的表达式。
  */
 
-using SelectExprSqlNode = std::variant<RelAttrSqlNode, AggregateFuncSqlNode>;
+using SelectExprSqlNode = std::variant<RelAttrSqlNode, AggregateFuncSqlNode, FunctionSqlNode>;
 struct SelectSqlNode
 {
   std::vector<SelectExprSqlNode>  select_exprs;

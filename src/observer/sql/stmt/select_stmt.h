@@ -22,6 +22,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/parser/parse_defs.h"
 #include "sql/stmt/stmt.h"
 #include "storage/field/field.h"
+#include "sql/stmt/field_with_function.h"
 
 class FieldMeta;
 class FilterStmt;
@@ -34,7 +35,7 @@ class ApplyStmt;
 
 // 这里不应该叫“field”，应该是xx_stmt。但是我看按照他的方式，开stmt也不太合适，
 // 我们只是需要个中间态的数据结构暂时保存下数据，索性就把数据放在Field这个文件里了
-using SelectExprField = std::variant<Field, FieldsWithGroupBy>;
+using SelectExprField = std::variant<Field, FieldsWithGroupBy, FieldWithFunction>;
 
 /**
  * @brief 表示select语句
@@ -54,7 +55,7 @@ public:
 public:
   // glob_ctx: 用于解析表达式的全局环境
   // correlate_exprs：create中，需要构造本查询里引用外层查询的相关表达式，把层数和表达式包装为map
-  static RC create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode &select_sql, Stmt *&stmt, 
+  static RC create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &select_sql, Stmt *&stmt, 
     std::unordered_map<size_t, std::vector<CorrelateExpr*>> *correlate_exprs);
 
 public:
@@ -62,7 +63,7 @@ public:
   {
     return tables_;
   }
-  const std::vector<SelectExprField> &select_expr_fields() const
+  std::vector<SelectExprField> &select_expr_fields()
   {
     return select_expr_fields_;
   }

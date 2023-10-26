@@ -311,3 +311,10 @@ private:
   std::string pattern_;
   bool is_not_like_;
 };
+
+class FunctionExprSqlNode: public ExprSqlNode{
+public:
+
+private:
+  
+};

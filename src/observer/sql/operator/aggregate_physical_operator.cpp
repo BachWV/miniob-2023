@@ -1,6 +1,7 @@
 #include "aggregate_physical_operator.h"
 #include "common/lang/string.h"
 #include "common/rc.h"
+#include "event/sql_debug.h"
 #include "sql/expr/tuple_cell.h"
 
 RC AggregatePhysicalOperator::open(Trx *trx){
@@ -9,6 +10,7 @@ RC AggregatePhysicalOperator::open(Trx *trx){
     return RC::INTERNAL;
   }
   	all_index_ = -1;
+		avg_not_null_count_ = 0;
   	auto child = children_[0].get();
 	auto rc = child->open(trx);
 	HANDLE_RC(rc);
@@ -165,7 +167,9 @@ RC AggregatePhysicalOperator::do_group_agg(){
 			// empty
 		}else{
 			auto v = curr_group_agg_value_.get_float();
-			curr_group_agg_value_.set_float(v / aof_tuples_.size());
+			assert(avg_not_null_count_ != 0);
+			sql_debug("avg_not_null_count_ = %d", avg_not_null_count_);
+			curr_group_agg_value_.set_float(v / avg_not_null_count_);
 		}
 	}
 
@@ -232,6 +236,9 @@ void AggregatePhysicalOperator::do_single_aggregate(const Value& curr_value){
 		
 			if(aof_tuples_.empty()){	// 第一次进入本轮GroupBy，设置初始值
 				curr_group_agg_value_ = curr_value;	// 如果本列全是null的话（第一个是NULL），最终结果也是null
+				if(!curr_value.is_null_value()){
+					avg_not_null_count_++;
+				}
 				return;
 			}
 
@@ -241,6 +248,7 @@ void AggregatePhysicalOperator::do_single_aggregate(const Value& curr_value){
 
 			if(curr_group_agg_value_.is_null_value()){	// cgav可能是NULL
 				curr_group_agg_value_ = curr_value;
+				avg_not_null_count_++;
 				return;
 			}
 
@@ -248,6 +256,7 @@ void AggregatePhysicalOperator::do_single_aggregate(const Value& curr_value){
 			auto v1 = curr_value.get_float();
 			auto v2 = curr_group_agg_value_.get_float();
 			curr_group_agg_value_.set_float(v1+v2);
+			avg_not_null_count_++;
 			return;
 		};break;
 	case AGG_SUM:{

@@ -509,31 +509,50 @@ public:
   }
 
   virtual int cell_num() const override{
-    return original_->cell_num() +1;
+    if(original_){
+      return original_->cell_num() +1;
+    }else{
+      // function最底层tuple
+      return 1;
+    }
   }
 
   virtual RC cell_at(int index, Value &cell) const override{
-    const int original_num = original_->cell_num();
-    if(index >= 0 && index < original_num){
-      return original_->cell_at(index, cell);
-    }else if( index == original_num){
+
+    if(original_){
+      const int original_num = original_->cell_num();
+      if(index >= 0 && index < original_num){
+        return original_->cell_at(index, cell);
+      }else if( index == original_num){
+        cell = new_value_;
+        return RC::SUCCESS;
+      }
+      return RC::NOTFOUND;
+    }else{
+      // Function里面无table的最底层aof field,cell at不能先判断original的数目
+      // aof_tuple1: null       + value1  // target
+      // aof_tuple2: aof_tuple1 + value2
+      // aof_tuple3: aof_tuple2 + value3
+      assert(index == 0);
       cell = new_value_;
       return RC::SUCCESS;
     }
-    return RC::NOTFOUND;
   }
 
   virtual RC find_cell(const TupleCellSpec &spec, Value &cell) const override{
-    RC rc = original_->find_cell(spec, cell);
-    if (rc == RC::SUCCESS || rc != RC::NOTFOUND) {
-      return rc;
-    }
-    
     // 虚拟字段没写表名的判断
     if(0 == strcasecmp( spec.field_name(), new_field_meta_.name())){
       cell = new_value_;
       return RC::SUCCESS;
     }
+
+    // 如果find的不是虚拟字段，那么original必须有tuple，就算是function最底层aoftuple也应该接住字段的查找
+    assert(original_);
+    RC rc = original_->find_cell(spec, cell);
+    if (rc == RC::SUCCESS || rc != RC::NOTFOUND) {
+      return rc;
+    }
+    
     return RC::NOTFOUND;
   }
 
@@ -569,7 +588,7 @@ public:
   }
 
 private:
-  Tuple *original_;
+  Tuple *original_{nullptr};
   FieldMeta new_field_meta_;
   Value new_value_;
 };

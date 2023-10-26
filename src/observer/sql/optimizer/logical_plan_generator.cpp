@@ -29,6 +29,8 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/project_logical_operator.h"
 #include "sql/operator/explain_logical_operator.h"
 #include "sql/operator/sort_logical_operator.h"
+#include "sql/operator/function_logical_operator.h"
+#include "sql/stmt/field_with_function.h"
 
 #include "sql/stmt/stmt.h"
 #include "sql/stmt/calc_stmt.h"
@@ -123,7 +125,7 @@ RC LogicalPlanGenerator::create_plan(
   std::vector<std::unique_ptr<LogicalOperator>> opers;
 
   const std::vector<Table *> &tables = select_stmt->tables();
-  const std::vector<SelectExprField>& select_expr_fields = select_stmt->select_expr_fields();
+  std::vector<SelectExprField>& select_expr_fields = select_stmt->select_expr_fields();
 
   // table-get / join
   for (Table *table : tables) {
@@ -161,7 +163,7 @@ RC LogicalPlanGenerator::create_plan(
     opers.push_back(std::move(apply_oper));
   }
 
-  unique_ptr<LogicalOperator> predicate_oper;
+  unique_ptr<LogicalOperator> predicate_oper(nullptr);
   RC rc = create_plan(select_stmt->fetch_where_exprs(), predicate_oper);
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
@@ -172,12 +174,12 @@ RC LogicalPlanGenerator::create_plan(
   // agg / field-cul-expr: 构建算子的同时把all_fields按序构建出来
   std::vector<Field> all_fields;
   bool has_agg = false;
-  for(const auto &sef : select_expr_fields){
+  for(auto &sef : select_expr_fields){
     if(auto field = std::get_if<Field>(&sef)){
       all_fields.push_back(*field);
     }else if (auto fwgb = std::get_if<FieldsWithGroupBy>(&sef)) {
       // 第一个group by聚集算子，在其之前构建一个sort；非group by的聚集没必要sort
-      if(!has_agg ){
+      if(!has_agg){
         has_agg = true;
         
         vector<FieldWithOrder> fwo;
@@ -199,13 +201,26 @@ RC LogicalPlanGenerator::create_plan(
 
       opers.push_back(std::move(agg_oper));
       all_fields.push_back(tmp_field);
+    }else if(auto fwf = std::get_if<FieldWithFunction>(&sef)){
+      // 如果后面没跟表，那么opers的第一个和第二个算子都是nullptr
+      // if(fwf->function_kernal_.)
+      Field tmp_field = fwf->get_tmp_field();
+      unique_ptr<LogicalOperator> function_oper(nullptr);
+      if(fwf->function_kernal_->get_is_const()){
+        function_oper = std::make_unique<FunctionLogicalOperator>(std::move(fwf->function_kernal_), Field(), const_cast<FieldMeta*>(tmp_field.meta()));
+      }else{
+        function_oper = std::make_unique<FunctionLogicalOperator>(std::move(fwf->function_kernal_), fwf->be_functioned_field_, const_cast<FieldMeta*>(tmp_field.meta()));
+      }
+
+      opers.push_back(std::move(function_oper));
+      all_fields.push_back(tmp_field);
     }else{
       assert(0);
     }
   }
 
   // having
-  unique_ptr<LogicalOperator> having_pred_oper;
+  unique_ptr<LogicalOperator> having_pred_oper(nullptr);
   rc = create_plan(select_stmt->fetch_having_exprs(), having_pred_oper);
   HANDLE_RC(rc);
   opers.push_back(std::move(having_pred_oper));
