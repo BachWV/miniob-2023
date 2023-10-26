@@ -760,6 +760,9 @@ where:
     | WHERE expr_list {
       $$ = $2;
     }
+    | ON expr_list {
+      $$ = $2;
+    }
     ;
 
 expr_list:
