@@ -40,11 +40,11 @@ RC DeduplicateAggPhysicalOperator::next(){
 	}
 	if(only_put_one_){
 		finish_ = true;
-		rc = child->next();
-		HANDLE_RC(rc);
+		// rc = child->next();
+		// HANDLE_RC(rc);
 
 		curr_tuple_ = child->current_tuple();
-		return rc;
+		return RC::SUCCESS;
 	}
 
 	auto tuple = child->current_tuple();

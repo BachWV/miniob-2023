@@ -106,6 +106,7 @@ RC AggregatePhysicalOperator::get_value(Tuple* tuple, Value& v){
 RC AggregatePhysicalOperator::init_curr_group(bool first){
 	PhysicalOperator *child = children_.front().get();
 	aof_tuples_.clear();
+	avg_not_null_count_ = 0;
 
 	RC rc;
 	Tuple* tuple = nullptr;
@@ -138,6 +139,7 @@ RC AggregatePhysicalOperator::init_curr_group(bool first){
 RC AggregatePhysicalOperator::do_group_agg(){
 	RC rc;
 	PhysicalOperator *child = children_.front().get();
+	// avg_not_null_count_ = 0;
 
 	// 用do while其实更好
 	while(RC::SUCCESS == (rc = child->next())){
