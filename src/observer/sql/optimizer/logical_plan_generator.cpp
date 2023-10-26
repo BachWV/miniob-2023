@@ -122,6 +122,8 @@ std::unique_ptr<LogicalOperator> LogicalPlanGenerator::create_select_oper_tree(s
 RC LogicalPlanGenerator::create_plan(
     SelectStmt *select_stmt, unique_ptr<LogicalOperator> &logical_operator)
 {
+  RC rc = RC::SUCCESS;
+
   unique_ptr<LogicalOperator> table_oper(nullptr);
   std::vector<std::unique_ptr<LogicalOperator>> opers;
 
@@ -133,9 +135,9 @@ RC LogicalPlanGenerator::create_plan(
     std::vector<Field> fields;
     // 同一个Table中的Field拿出来
     for (const auto &sef : select_expr_fields) {
-      if(auto field = std::get_if<Field>(&sef)){
-        if (common::str_equal(field->table_name(), table->name())) {
-          fields.push_back(*field);
+      if(auto fwa = std::get_if<FieldWithAlias>(&sef)){
+        if (common::str_equal(fwa->field_.table_name(), table->name())) {
+          fields.push_back(fwa->field_);
         }
       }
     }
@@ -164,13 +166,15 @@ RC LogicalPlanGenerator::create_plan(
     opers.push_back(std::move(apply_oper));
   }
 
-  unique_ptr<LogicalOperator> predicate_oper(nullptr);
-  RC rc = create_plan(select_stmt->fetch_where_exprs(), predicate_oper);
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
-    return rc;
+  if (select_stmt->has_where_clause()) {
+    unique_ptr<LogicalOperator> predicate_oper(nullptr);
+    RC rc = create_plan(select_stmt->fetch_where_exprs(), predicate_oper);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
+      return rc;
+    }
+    opers.push_back(std::move(predicate_oper));
   }
-  opers.push_back(std::move(predicate_oper));
 
   // agg / field-cul-expr: 构建算子的同时把all_fields按序构建出来
   std::vector<FieldIdentifier> all_field_identifiers;
@@ -230,10 +234,12 @@ RC LogicalPlanGenerator::create_plan(
   }
 
   // having
-  unique_ptr<LogicalOperator> having_pred_oper(nullptr);
-  rc = create_plan(select_stmt->fetch_having_exprs(), having_pred_oper);
-  HANDLE_RC(rc);
-  opers.push_back(std::move(having_pred_oper));
+  if (select_stmt->has_having_clause()) {
+    unique_ptr<LogicalOperator> having_pred_oper(nullptr);
+    rc = create_plan(select_stmt->fetch_having_exprs(), having_pred_oper);
+    HANDLE_RC(rc);
+    opers.push_back(std::move(having_pred_oper));
+  }
 
   // deduplicate
   if(has_agg){

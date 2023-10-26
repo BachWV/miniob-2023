@@ -38,7 +38,7 @@ class ApplyStmt;
 
 // 这里不应该叫“field”，应该是xx_stmt。但是我看按照他的方式，开stmt也不太合适，
 // 我们只是需要个中间态的数据结构暂时保存下数据，索性就把数据放在Field这个文件里了
-using SelectExprField = std::variant<Field, FieldsWithGroupBy, FieldWithFunction, FieldWithCul, FieldWithAlias>;
+using SelectExprField = std::variant<FieldsWithGroupBy, FieldWithFunction, FieldWithCul, FieldWithAlias>;
 
 /**
  * @brief 表示select语句
@@ -70,6 +70,7 @@ public:
   {
     return select_expr_fields_;
   }
+  bool has_where_clause() const { return has_where_; }
   std::unique_ptr<ConjunctionExpr> fetch_where_exprs();
   std::vector<std::unique_ptr<ApplyStmt>> &fetch_sub_querys_in_where() {
     return sub_querys_in_where_;
@@ -80,6 +81,7 @@ public:
   const std::vector<Field> get_group_by_fields() const{
     return group_by_field_;
   }
+  bool has_having_clause() const { return has_having_; }
   std::unique_ptr<ConjunctionExpr> fetch_having_exprs();
 
 private:
@@ -89,10 +91,14 @@ private:
   std::vector<Table *> tables_;
   std::vector<FieldWithOrder> order_fields_;
   
+  bool has_where_ = false;
   std::unique_ptr<ConjunctionExpr> where_exprs_;
   std::vector<std::unique_ptr<ApplyStmt>> sub_querys_in_where_;
+
   std::vector<SelectExprField> select_expr_fields_;
   std::vector<Field> group_by_field_;
   std::vector<Field> resolved_query_field_;
+
+  bool has_having_ = false;
   std::unique_ptr<ConjunctionExpr> having_exprs_;
 };

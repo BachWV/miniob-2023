@@ -299,7 +299,9 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
       select_expr_fields.push_back(std::move(fwgb));
     }else if(auto func_sql_node = get_if<FunctionSqlNode>(&select_expr_field)){
       if(func_sql_node->is_const){
-        select_expr_fields.push_back(FieldWithFunction(func_sql_node->virtual_field_name, Field(), std::move(func_sql_node->function_kernel)));
+        auto fwf = FieldWithFunction(func_sql_node->virtual_field_name, Field(), std::move(func_sql_node->function_kernel));
+        fwf.alias_ = func_sql_node->alias_;        
+        select_expr_fields.push_back(std::move(fwf));
       }else{
         Field func_field;
         auto rc = resolve_common_field(db, table_map, tables, func_sql_node->rel_attr, func_field);
@@ -310,9 +312,11 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
       }
     }else if(auto field_cul_sql_node = get_if<FieldCulSqlNode>(&select_expr_field)){
       // TODO：expr怎么校验
-      auto fwc = FieldWithCul(field_cul_sql_node->virtual_field_name_, std::move(field_cul_sql_node->cul_expr_));
-      fwc.alias_ = field_cul_sql_node->alias_;
-      select_expr_fields.push_back(std::move(fwc));
+
+      // success
+      // auto fwc = FieldWithCul(field_cul_sql_node->virtual_field_name_, std::move(field_cul_sql_node->cul_expr_));
+      // fwc.alias_ = field_cul_sql_node->alias_;
+      // select_expr_fields.push_back(std::move(fwc));
     }else{
       // 出问题了，debug模式下直接kill
       assert(0);
@@ -347,6 +351,11 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
 
   std::vector<std::unique_ptr<Expression>> having_exprs;
   glob_ctx->push_stmt_ctx(&having_resolve_ctx);
+
+  bool has_having = false;
+  if (select_sql.having_attrs.exprs.size() > 0)
+    has_having = true;
+
   for (auto &having_expr: select_sql.having_attrs.exprs)
   {
     ExprResolveResult having_resolve_result;
@@ -392,6 +401,10 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
   glob_ctx->push_stmt_ctx(&current_where_resolve_ctx);
 
   // 解析每一个where条件(目前所有条件用AND连接)
+  bool has_where = false;
+  if (select_sql.conditions.exprs.size() > 0)
+    has_where = true;
+
   for (auto &where_expr_sql_node: select_sql.conditions.exprs)
   {
     ExprResolveResult where_resolve_res;
@@ -438,11 +451,13 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
   select_stmt->select_expr_fields_.swap(select_expr_fields);
   select_stmt->group_by_field_.swap(group_fields);
   select_stmt->order_fields_ = order_fields;
+  select_stmt->has_where_ = has_where;
   select_stmt->where_exprs_ = std::make_unique<ConjunctionExpr>(convert_to_conjunction_type(select_sql.conditions.type), 
     where_exprs);
   select_stmt->sub_querys_in_where_.swap(apply_stmts);
   select_stmt->having_exprs_ = std::make_unique<ConjunctionExpr>(convert_to_conjunction_type(select_sql.having_attrs.type), 
     having_exprs);
+  select_stmt->has_having_ = has_having;
   stmt = select_stmt;
   return RC::SUCCESS;
 }

@@ -46,16 +46,10 @@ struct RelAttrSqlNode
 struct FunctionSqlNode{
   // 没有has table的const
   bool has_table; // 算子生成的逻辑
-  bool is_const;  // 废弃
+  bool is_const;  // 
   RelAttrSqlNode rel_attr;
   std::unique_ptr<FunctionKernel> function_kernel;
   std::string virtual_field_name;
-  std::string alias_;
-};
-
-struct FieldCulSqlNode{
-  std::unique_ptr<Expression> cul_expr_;
-  std::string                 virtual_field_name_;
   std::string alias_;
 };
 
@@ -156,6 +150,12 @@ struct Conditions
 
 // 用于where in (expr, expr...)
 using ExprSqlSet = std::vector<std::unique_ptr<ExprSqlNode>>;
+
+struct FieldCulSqlNode{
+  std::unique_ptr<ExprSqlNode> cul_expr_;
+  std::string                 virtual_field_name_;
+  std::string alias_;
+};
 
 /**
  * @brief 描述一个select语句

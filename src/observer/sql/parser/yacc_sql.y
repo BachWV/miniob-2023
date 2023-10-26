@@ -160,7 +160,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 
   // Function
   FunctionSqlNode*                  function_node;
-  std::vector<FunctionSqlNode>*     function_node_const_list;
+  std::vector<FunctionSqlNode>*     function_node_list;
   std::string*                       std_string;
 }
 
@@ -225,16 +225,14 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <rel_attr_list>       group_by
 %type <rel_attr_list>       group_by_list 
 // function
-%type <function_node>       function_node_const
-%type <function_node>       function_node_field
-%type <function_node>       function_node_all
-%type <function_node_const_list>       function_node_const_list
+%type <function_node>       function_node
+%type <function_node_list>       function_node_list
 %type <std_string>          alias
 
 
 // expr
-%type <expr_node>           expr identifier expr_has_agg
-%type <expr_node_list>      expr_list having having_list
+%type <expr_node>           expr identifier
+%type <expr_node_list>      expr_list having
 %type <sql_node>            sub_query
 %type <expr_sql_set>        expr_set
 
@@ -653,16 +651,23 @@ select_stmt:        /*  select 语句的语法解析树*/
 
       free($4);
     }
-    | SELECT function_node_const_list{
+    | SELECT select_expr_list{
       $$ = new ParsedSqlNode(SCF_SELECT);
       if ($2 != nullptr) {
         std::reverse($2->begin(), $2->end());
-        for(auto &node: *$2){
-          node.function_kernel->set_has_table(false);
-          // 有unique ptr
-          SelectExprSqlNode sesn = std::move(node);
-          $$->selection.select_exprs.emplace_back(std::move(sesn));
-        }
+        for(auto& select_expr_sql_node: *$2){
+          if(auto func_sql_node = get_if<FunctionSqlNode>(&select_expr_sql_node)){
+            if(!func_sql_node->is_const){
+              std::unique_ptr<ParsedSqlNode> error_sql_node = std::make_unique<ParsedSqlNode>(SCF_ERROR);
+              sql_result->add_sql_node(std::move(error_sql_node));
+            }
+          }else{
+            std::unique_ptr<ParsedSqlNode> error_sql_node = std::make_unique<ParsedSqlNode>(SCF_ERROR);
+            sql_result->add_sql_node(std::move(error_sql_node));
+          }
+        } 
+
+        $$->selection.select_exprs.swap(*$2);
         delete $2;
       }
     }
@@ -815,6 +820,16 @@ expr:
     | identifier
     {
       $$ = $1;
+    }
+    | agg_func 
+    {
+      $$ = new AggIdentifierExprSqlNode(*$1);
+      delete $1;
+    }
+    | function_node
+    {
+      $$ = new FunctionExprSqlNode(token_name(sql_string, &@$), std::move(*$1));
+      delete $1;
     }
     | '+' expr %prec UMINUS
     {
@@ -1108,29 +1123,58 @@ select_expr:
       attr_node.attribute_name = "*";
       *$$ = attr_node;
     }
-    | agg_func alias{
-      if($2 != nullptr)
-        $1->alias_ = *$2;
+    | expr alias {
       $$ = new SelectExprSqlNode();
-      *$$ = *$1;
-      delete $1;
-      delete $2;
-    }
-    | rel_attr alias{
-      if($2 != nullptr)
-        $1->alias_ = *$2;
-      $$ = new SelectExprSqlNode();
-      *$$ = *$1;
-      delete $1;
-      delete $2;
-    }
-    | function_node_all alias{
-      if($2 != nullptr)
-        $1->alias_ = *$2;
-      $$ = new SelectExprSqlNode();
-      *$$ = std::move(*$1);
-      delete $1;
-      delete $2;
+      switch ($1->get_type()) {
+        case ExprSqlNodeType::Identifier: {
+          IdentifierExprSqlNode *identifier = dynamic_cast<IdentifierExprSqlNode *>($1);
+          RelAttrSqlNode attr_node;
+          attr_node.relation_name = identifier->get_table_name();
+          attr_node.attribute_name = identifier->get_field_name();
+
+          if($2 != nullptr)
+            attr_node.alias_ = *$2;
+
+          *$$ = attr_node;
+        } break;
+
+        case ExprSqlNodeType::AggIdentifier: {
+          AggIdentifierExprSqlNode *agg_identifier = dynamic_cast<AggIdentifierExprSqlNode *>($1);
+          FieldIdentifier agg_field = agg_identifier->agg_field();
+
+          AggregateFuncSqlNode agg_node;
+          agg_node.agg_op = agg_identifier->agg_op();
+          agg_node.attr.relation_name = agg_field.table_name();
+          agg_node.attr.attribute_name = agg_field.field_name();
+          agg_node.name = agg_identifier->expr_name();
+
+          if($2 != nullptr)
+            agg_node.alias_ = *$2;
+          
+          *$$ = agg_node;
+        } break;
+
+        case ExprSqlNodeType::Function: {
+          FunctionExprSqlNode *func_expr = dynamic_cast<FunctionExprSqlNode *>($1);
+          auto &func_node = func_expr->fetch_func_sql_node();
+
+          if ($2 != nullptr)
+            func_node.alias_ = *$2;
+          
+          *$$ = std::move(func_node);
+        } break;
+
+        default: {
+          FieldCulSqlNode field_cul_node;
+          field_cul_node.cul_expr_.reset($1);
+          field_cul_node.virtual_field_name_ = field_cul_node.cul_expr_->expr_name();
+
+          if ($2 != nullptr)
+            field_cul_node.alias_ = *$2;
+          
+          *$$ = std::move(field_cul_node);
+        } break;
+      }
     }
     ;
 
@@ -1152,39 +1196,12 @@ having:
     {
       $$ = nullptr;
     }
-    | HAVING having_list {
+    | HAVING expr_list {
       $$ = $2;  
     }
     ;
 
-having_list:
-    expr_has_agg {
-      $$ = new Conditions;
-      $$->exprs.emplace_back($1);
-    }
-    | having_list AND expr_has_agg {
-      $$ = $1;
-      $$->exprs.emplace_back($3);
-      $$->type = Conditions::ConjunctionType::AND;
-    }
-    | having_list OR expr_has_agg {
-      $$ = $1;
-      $$->exprs.emplace_back($3);
-      $$->type = Conditions::ConjunctionType::OR;
-    }
-    ;
-
-expr_has_agg:
-    expr {
-      $$ = $1;
-    }
-    | agg_func {
-      $$ = new AggIdentifierExprSqlNode(*$1);
-      delete $1;
-    }
-    ;
-
-function_node_const:
+function_node:
     ROUND LBRACE FLOAT RBRACE{
       // round(3.1415)
       $$ = new FunctionSqlNode();
@@ -1216,10 +1233,7 @@ function_node_const:
       $$->is_const = true;
       $$->virtual_field_name = token_name(sql_string, &@$);
     }
-    ;
-
-function_node_field:
-    ROUND LBRACE rel_attr RBRACE{
+    | ROUND LBRACE rel_attr RBRACE{
       // round(score)
       $$ = new FunctionSqlNode();
       $$->function_kernel = make_unique<RoundFunctionKernel>(false, true, 0, 0);
@@ -1258,22 +1272,13 @@ function_node_field:
     }
     ;
 
-function_node_all:
-    function_node_const{
-      $$ = $1;
-    }
-    | function_node_field{
-      $$ = $1;
-    }
-    ;
-
-function_node_const_list:
-    function_node_const{
+function_node_list:
+    function_node{
       $$ = new std::vector<FunctionSqlNode>;
       $$->emplace_back(std::move(*$1));
       delete $1;
     }
-    | function_node_const_list COMMA function_node_const{
+    | function_node_list COMMA function_node{
       $$ = $1;
       $$->emplace_back(std::move(*$3));
       delete $3;

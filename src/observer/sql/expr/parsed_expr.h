@@ -168,6 +168,7 @@ enum class ExprSqlNodeType
   AggIdentifier,
   Like,
   QuantifiedCompExprSet,
+  Function
 };
 
 class ExprSqlNode
@@ -209,6 +210,9 @@ public:
   virtual ~IdentifierExprSqlNode() = default;
 
   RC resolve(ExprResolveContext *ctx, ExprResolveResult *result) const override;
+
+  const std::string& get_table_name() const { return table_name; }
+  const std::string& get_field_name() const { return field_name; } 
 
 protected:
   std::string table_name;
@@ -327,6 +331,9 @@ public:
 
   RC resolve(ExprResolveContext *ctx, ExprResolveResult *result) const override;
 
+  AggregateOp agg_op() const { return op_; }
+  FieldIdentifier agg_field() const { return agg_field_; }
+
 private:
   AggregateOp op_;
   FieldIdentifier agg_field_;
@@ -347,9 +354,17 @@ private:
 
 class FunctionExprSqlNode: public ExprSqlNode{
 public:
+  FunctionExprSqlNode(const std::string &expr_name, FunctionSqlNode &&func_sql)
+    : ExprSqlNode(expr_name, ExprSqlNodeType::Function), func_sql_(std::move(func_sql)) {}
+
+  RC resolve(ExprResolveContext *ctx, ExprResolveResult *result) const override {
+    return RC::SUCCESS;  // TODO 
+  }
+
+  FunctionSqlNode &fetch_func_sql_node() { return func_sql_; }
 
 private:
-  
+  FunctionSqlNode func_sql_;
 };
 
 /* expr in/not in (expr, expr, ...) */

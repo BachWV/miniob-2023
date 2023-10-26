@@ -1,8 +1,8 @@
 #include "sql/operator/sort_physical_operator.h"
 #include "sql/expr/tuple_cell.h"
 #include <algorithm>
-#include <execution>
-#include <pstl/glue_execution_defs.h>
+// #include <execution>
+// #include <pstl/glue_execution_defs.h>
 
 RC SortPhysicalOperator::open(Trx *trx)
 {
@@ -19,7 +19,8 @@ RC SortPhysicalOperator::open(Trx *trx)
   generate_cmp_functions();
   // 为啥(const Tuple *&l_tuple, const Tuple *&r_tuple)加了引用就不行
   auto cmp_func = std::bind(&SortPhysicalOperator::cmp_function, this, std::placeholders::_1, std::placeholders::_2);
-  std::sort(std::execution::par_unseq, tuples_.begin(), tuples_.end(), cmp_func);
+  // std::sort(std::execution::par_unseq, tuples_.begin(), tuples_.end(), cmp_func);
+  std::sort(tuples_.begin(), tuples_.end(), cmp_func);
   it = --tuples_.begin();  // 未定义行为！
   return RC::SUCCESS;
 }
