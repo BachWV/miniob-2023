@@ -164,11 +164,41 @@ void Value::set_value(const Value &value)
     } break;
     case TEXTS: {
       set_text_string(value.get_string().c_str());
+    } break;
     case NULL_TYPE:{
       attr_type_ = NULL_TYPE;
     } break;
   }
 }
+
+void Value::cast_to(AttrType attrtype)
+{
+  switch (attrtype) {
+    case INTS: {
+      set_int(get_int());
+    } break;
+    case FLOATS: {
+      set_float(get_float());
+    } break;
+    case CHARS: {
+      set_string(get_string().c_str());
+    } break;
+    case BOOLEANS: {
+      set_boolean(get_boolean());
+    } break;
+    case UNDEFINED: {
+      ASSERT(false, "got an invalid value type");
+    } break;
+    case DATES: {
+      set_date(get_int());
+    } break;
+    case TEXTS: {
+      set_text_string(get_string().c_str());
+    } break;
+    case NULL_TYPE:{
+      attr_type_ = NULL_TYPE;
+    } break;
+  }
 }
 
 const char *Value::data() const
@@ -285,17 +315,33 @@ int Value::compare(const Value &other) const
         LOG_WARN("unsupported type: %d", this->attr_type_);
       }
     }
-  } else if (this->attr_type_ == INTS && other.attr_type_ == FLOATS) {
-    float this_data = this->num_value_.int_value_;
-    return common::compare_float((void *)&this_data, (void *)&other.num_value_.float_value_);
-  } else if (this->attr_type_ == FLOATS && other.attr_type_ == INTS) {
-    float other_data = other.num_value_.int_value_;
-    return common::compare_float((void *)&this->num_value_.float_value_, (void *)&other_data);
+  // else if (this->attr_type_ == INTS && other.attr_type_ == FLOATS) {
+  //   float this_data = this->num_value_.int_value_;
+  //   return common::compare_float((void *)&this_data, (void *)&other.num_value_.float_value_);
+  // } else if (this->attr_type_ == FLOATS && other.attr_type_ == INTS) {
+  //   float other_data = other.num_value_.int_value_;
+  //   return common::compare_float((void *)&this->num_value_.float_value_, (void *)&other_data);
+  // } 
+
   } else if (this->attr_type_ == NULL_TYPE) {
     return -1;
   } else if (other.attr_type_ == NULL_TYPE) {
     return 1;
   }
+  else if(this->attr_type_ == FLOATS || other.attr_type_ == FLOATS){
+    float this_data = this->get_float();
+    float other_data = other.get_float();
+    return common::compare_float((void *)&this_data, (void *)&other_data);
+  }
+  else if(this->attr_type_ == CHARS && other.attr_type_ == INTS){
+    int this_data = this->get_int();
+    return common::compare_int((void *)&this_data, (void *)&other.num_value_.int_value_);
+  }
+  else if(this->attr_type_ == INTS && other.attr_type_ == CHARS){
+    int other_data = other.get_int();
+    return common::compare_int((void *)&this->num_value_.int_value_, (void *)&other_data);
+  }
+
   LOG_WARN("not supported");
   return -1;  // TODO return rc?
 }
@@ -305,7 +351,7 @@ int Value::get_int() const
   switch (attr_type_) {
     case CHARS: {
       try {
-        return (int)(std::stol(str_value_));
+        return (int)(std::stof(str_value_) + 0.5);
       } catch (std::exception const &ex) {
         LOG_TRACE("failed to convert string to number. s=%s, ex=%s", str_value_.c_str(), ex.what());
         return 0;
@@ -316,7 +362,8 @@ int Value::get_int() const
       return num_value_.int_value_;
     }
     case FLOATS: {
-      return (int)(num_value_.float_value_);
+      // 此处需要对num_value_.float_value_四舍五入
+      return (int)(num_value_.float_value_ + 0.5);
     }
     case BOOLEANS: {
       return (int)(num_value_.bool_value_);

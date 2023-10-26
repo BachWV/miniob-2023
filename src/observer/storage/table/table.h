@@ -75,7 +75,7 @@ public:
    * @param values    每个字段的值
    * @param record    生成的记录数据
    */
-  RC make_record(int value_num, const Value *values, Record &record);
+  RC make_record(int value_num, Value *values, Record &record);
 
   /**
    * @brief 在当前的表中插入一条记录

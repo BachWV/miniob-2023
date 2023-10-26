@@ -18,6 +18,12 @@ RC UpdatePhysicalOperator::open(Trx *trx)
     return rc;
   }
 
+  rc = tuple_calculator_for_expr_in_set_->open(trx);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to open tuple_calculator_for_expr_in_set_: %s", strrc(rc));
+    return rc;
+  }
+
   trx_ = trx;
 
   return RC::SUCCESS;
@@ -56,8 +62,28 @@ RC UpdatePhysicalOperator::next()
       row_tuple->cell_at(i,value);
       values_new.at(i)=value;
     }
-    for(auto &value:value_list_){
-      values_new.at(value.first)=value.second;
+    for(auto &value:value_list_)
+    {
+      // 计算set中的表达式值
+      adaptor_for_tuple_calculator_->owns_new_tuple(tuple->get_replica());
+      rc = tuple_calculator_for_expr_in_set_->next();
+      if (rc != RC::SUCCESS)
+      {
+        LOG_WARN("failed to calculate expr in set stmt, rc=%s", strrc(rc));
+        return rc;
+      }
+      Tuple *expr_tuple = tuple_calculator_for_expr_in_set_->current_tuple();
+
+      auto &expr = value.second;
+      Value expr_value;
+      rc = expr->get_value(*expr_tuple, expr_value);
+      if (rc != RC::SUCCESS)
+      {
+        LOG_WARN("failed to calculate expr in set stmt, rc=%s", strrc(rc));
+        return rc;
+      }
+
+      values_new.at(value.first) = expr_value;
     }
     
 
@@ -86,5 +112,6 @@ RC UpdatePhysicalOperator::close()
   if (!children_.empty()) {
     children_[0]->close();
   }
+  tuple_calculator_for_expr_in_set_->close();
   return RC::SUCCESS;
 }

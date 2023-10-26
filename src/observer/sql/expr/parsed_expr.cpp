@@ -371,10 +371,43 @@ RC QuantifiedCompSubqueryExprSqlNode::resolve(ExprResolveContext *ctx, ExprResol
 
 RC AggIdentifierExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *result) const
 {
-    const StmtResolveContext& stmt_ctx = ctx->get_ith_level_stmt_ctx(ctx->current_level());
-    RC rc = stmt_ctx.resolve_other_column_name(expr_name_);
-    HANDLE_RC(rc);
+    RC rc = RC::SUCCESS;
+    bool is_in_select_column = false;
+    std::optional<FieldIdentifier> resolved_identifier;
 
+    const StmtResolveContext& stmt_ctx = ctx->get_ith_level_stmt_ctx(ctx->current_level());
+    
+    /* 解析聚集函数中的agg_field是否合法，当前只在所属作用域内解析，不考虑引用外层查询的情况 */
+    // 如果是count(*)，就不走stmt_ctx的解析，直接是合法的
+    if (agg_field_.field_name() == "*")
+    {
+        if (op_ != AggregateOp::AGG_COUNT)
+        {
+            LOG_WARN("only count(*) is supported.");
+            return RC::SCHEMA_FIELD_MISSING;
+        }
+        else
+            resolved_identifier = agg_field_;
+    }
+    else
+    {
+        rc = stmt_ctx.resolve_table_field_identifier(agg_field_.table_name(), agg_field_.field_name(), resolved_identifier);
+        if (rc != RC::SUCCESS || !resolved_identifier.has_value())
+        {
+            LOG_WARN("resolve agg field failed.");
+            return RC::SCHEMA_FIELD_MISSING;
+        }
+    }
+
+    /* 如果聚集函数名在列中，做个标记，外部就不需要再生成一个agg算子了 */
+    rc = stmt_ctx.resolve_other_column_name(expr_name_);
+    if (rc == RC::SUCCESS)
+        is_in_select_column = true;
+    
+    /* 把这个聚集函数表达式加入结果中 */
+    result->add_agg_expr_info(AggExprInfo(op_, resolved_identifier.value(), expr_name_, is_in_select_column));
+
+    /* 生成一个以聚集函数全名为Identifer的表达式，用于从tuple中取出聚集函数结果 */
     auto expr = std::make_unique<IdentifierExpr>(FieldIdentifier(expr_name_));
     result->set_result_expr_tree(std::move(expr));
     return RC::SUCCESS;
@@ -390,5 +423,32 @@ RC LikeExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *result) 
     result->set_result_expr_tree(std::move(expr_tree));
     result->add_correlate_exprs(sub_result.get_correlate_exprs());
     result->add_subquerys(sub_result.get_subquerys_in_expr());
+    return RC::SUCCESS;
+}
+
+RC QuantifiedCmpExprSetExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *result) const
+{
+    ExprResolveResult sub_result;
+    RC rc = child_->resolve(ctx, &sub_result);
+    if (rc != RC::SUCCESS)
+        return rc;
+    result->add_correlate_exprs(sub_result.get_correlate_exprs());
+    result->add_subquerys(sub_result.get_subquerys_in_expr());
+
+    std::vector<std::unique_ptr<Expression>> expr_for_set;
+    for (auto &expr_in_set: *expr_set_)
+    {
+        ExprResolveResult res;
+        rc = expr_in_set->resolve(ctx, &res);
+        if (rc != RC::SUCCESS)
+            return rc;
+        expr_for_set.emplace_back(res.owns_result_expr_tree());
+        result->add_correlate_exprs(sub_result.get_correlate_exprs());
+        result->add_subquerys(sub_result.get_subquerys_in_expr());
+    }
+
+    auto expr_tree = std::make_unique<QuantifiedCompExprSetExpr>(sub_result.owns_result_expr_tree(), op_, 
+        std::move(expr_for_set));
+    result->set_result_expr_tree(std::move(expr_tree));
     return RC::SUCCESS;
 }

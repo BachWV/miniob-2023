@@ -50,6 +50,7 @@ enum class ExprType
   SELECTEXPR,
   COMPNULL,
   LIKE,         // like谓词
+  QUANTIFIED_COMP_EXPR_SET  // 集合比较: expr in/not in/all/any... (expr, expr, ...)
 };
 
 /**
@@ -387,4 +388,22 @@ private:
   std::unique_ptr<Expression> child_;
   std::string like_pattern_;
   bool is_not_like_;
+};
+
+class QuantifiedCompExprSetExpr: public Expression
+{
+public:
+  QuantifiedCompExprSetExpr(std::unique_ptr<Expression> child, QuantifiedComp op, std::vector<std::unique_ptr<Expression>> &&set)
+    : child_(std::move(child)), op_(op), set_(std::move(set)) {};
+
+  RC get_value(const Tuple &tuple, Value &value) const override;
+
+  ExprType type() const override { return ExprType::QUANTIFIED_COMP_EXPR_SET; }
+
+  AttrType value_type() const override { return BOOLEANS; }
+
+private:
+  std::unique_ptr<Expression> child_;
+  QuantifiedComp op_;
+  std::vector<std::unique_ptr<Expression>> set_;
 };

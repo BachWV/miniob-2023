@@ -30,6 +30,16 @@ See the Mulan PSL v2 for more details. */
 #include <functional>
 #include <unordered_set>
 
+std::unique_ptr<ConjunctionExpr> SelectStmt::fetch_where_exprs()
+{
+  return std::move(where_exprs_);
+}
+
+std::unique_ptr<ConjunctionExpr> SelectStmt::fetch_having_exprs()
+{
+  return std::move(having_exprs_);
+}
+
 static void wildcard_fields(Table *table, std::vector<SelectExprField>& select_expr_fields)
 {
   const TableMeta &table_meta = table->table_meta();
@@ -133,12 +143,17 @@ RC resolve_common_field(Db *db, const std::unordered_map<std::string, Table *>& 
 RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &select_sql, Stmt *&stmt, 
     std::unordered_map<size_t, std::vector<CorrelateExpr*>> *correlate_exprs)
 {
+  auto convert_to_conjunction_type = [](Conditions::ConjunctionType type) {
+    return type == Conditions::ConjunctionType::AND ? ConjunctionExpr::Type::AND : ConjunctionExpr::Type::OR;
+  };
+
   if (nullptr == db) {
     LOG_WARN("invalid argument. db is null");
     return RC::INVALID_ARGUMENT;
   }
 
   StmtResolveContext current_where_resolve_ctx;  // 解析where子句的上下文
+  StmtResolveContext having_resolve_ctx;  // 解析having子句的上下文
 
   // collect tables in `from` statement
   std::vector<Table *> tables;
@@ -162,6 +177,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
     table_map.insert(std::pair<std::string, Table *>(table_name, table));
 
     current_where_resolve_ctx.add_table_to_namespace(table_name, table);
+    having_resolve_ctx.add_table_to_namespace(table_name, table);
   }
 
   // collect fields in `group by` statement
@@ -307,9 +323,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
 
 
   RC rc = RC::SUCCESS;
-  /* 开始解析HAVING子句 */
-  StmtResolveContext having_resolve_ctx;
-  /* TODO: 初始化这个ctx
+  /* 开始解析HAVING子句
    * 把Having里可能出现的列名，调用having_resolve_ctx.add_other_column_name传入
    */
   for(auto& str: agg_functions_names){
@@ -318,7 +332,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
 
   std::vector<std::unique_ptr<Expression>> having_exprs;
   glob_ctx->push_stmt_ctx(&having_resolve_ctx);
-  for (auto &having_expr: select_sql.having_attrs)
+  for (auto &having_expr: select_sql.having_attrs.exprs)
   {
     ExprResolveResult having_resolve_result;
     rc = having_expr->resolve(glob_ctx, &having_resolve_result);
@@ -332,6 +346,8 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
     assert(having_resolve_result.get_correlate_exprs().empty());
 
     having_exprs.emplace_back(having_resolve_result.owns_result_expr_tree());
+
+    /* TODO: 处理HAVING子句中，不存在于select的列中的聚集函数，使用having_resolve_result.get_agg_expr_infos()接口 */
   }
   glob_ctx->pop_stmt_ctx();
 
@@ -341,7 +357,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
   glob_ctx->push_stmt_ctx(&current_where_resolve_ctx);
 
   // 解析每一个where条件(目前所有条件用AND连接)
-  for (auto &where_expr_sql_node: select_sql.conditions)
+  for (auto &where_expr_sql_node: select_sql.conditions.exprs)
   {
     ExprResolveResult where_resolve_res;
     rc = where_expr_sql_node->resolve(glob_ctx, &where_resolve_res);
@@ -387,9 +403,11 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
   select_stmt->select_expr_fields_.swap(select_expr_fields);
   select_stmt->group_by_field_.swap(group_fields);
   select_stmt->order_fields_ = order_fields;
-  select_stmt->where_exprs_.swap(where_exprs);
+  select_stmt->where_exprs_ = std::make_unique<ConjunctionExpr>(convert_to_conjunction_type(select_sql.conditions.type), 
+    where_exprs);
   select_stmt->sub_querys_in_where_.swap(apply_stmts);
-  select_stmt->having_exprs_.swap(having_exprs);
+  select_stmt->having_exprs_ = std::make_unique<ConjunctionExpr>(convert_to_conjunction_type(select_sql.having_attrs.type), 
+    having_exprs);
   stmt = select_stmt;
   return RC::SUCCESS;
 }

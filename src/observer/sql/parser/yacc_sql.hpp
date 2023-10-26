@@ -1,4 +1,4 @@
-/* A Bison parser, made by GNU Bison 3.8.2.  */
+/* A Bison parser, made by GNU Bison 3.8.  */
 
 /* Bison interface for Yacc-like parsers in C
 
@@ -85,48 +85,46 @@ extern int yydebug;
     FROM = 286,                    /* FROM  */
     WHERE = 287,                   /* WHERE  */
     AND = 288,                     /* AND  */
-    SET = 289,                     /* SET  */
-    ON = 290,                      /* ON  */
-    LOAD = 291,                    /* LOAD  */
-    DATA = 292,                    /* DATA  */
-    INFILE = 293,                  /* INFILE  */
-    EXPLAIN = 294,                 /* EXPLAIN  */
-    EQ = 295,                      /* EQ  */
-    LT = 296,                      /* LT  */
-    GT = 297,                      /* GT  */
-    LE = 298,                      /* LE  */
-    GE = 299,                      /* GE  */
-    NE = 300,                      /* NE  */
-    DATE_T = 301,                  /* DATE_T  */
-    TEXT_T = 302,                  /* TEXT_T  */
-    ORDER_BY = 303,                /* ORDER_BY  */
-    ASC = 304,                     /* ASC  */
-    SYM_NOT_NULL = 305,            /* SYM_NOT_NULL  */
-    SYM_NULL = 306,                /* SYM_NULL  */
-    SYM_IS_NULL = 307,             /* SYM_IS_NULL  */
-    SYM_IS_NOT_NULL = 308,         /* SYM_IS_NOT_NULL  */
-    SYM_IN = 309,                  /* SYM_IN  */
-    SYM_NOT_IN = 310,              /* SYM_NOT_IN  */
-    SYM_EXISTS = 311,              /* SYM_EXISTS  */
-    SYM_NOT_EXISTS = 312,          /* SYM_NOT_EXISTS  */
-    MIN = 313,                     /* MIN  */
-    MAX = 314,                     /* MAX  */
-    AVG = 315,                     /* AVG  */
-    COUNT = 316,                   /* COUNT  */
-    SUM = 317,                     /* SUM  */
-    GROUP_BY = 318,                /* GROUP_BY  */
-    HAVING = 319,                  /* HAVING  */
-    SYM_LIKE = 320,                /* SYM_LIKE  */
-    SYM_NOT_LIKE = 321,            /* SYM_NOT_LIKE  */
-    ROUND = 322,                   /* ROUND  */
-    LENGTH = 323,                  /* LENGTH  */
-    DATE_FORMAT = 324,             /* DATE_FORMAT  */
-    DATE_STR = 325,                /* DATE_STR  */
-    NUMBER = 326,                  /* NUMBER  */
-    FLOAT = 327,                   /* FLOAT  */
-    ID = 328,                      /* ID  */
-    SSS = 329,                     /* SSS  */
-    UMINUS = 330                   /* UMINUS  */
+    OR = 289,                      /* OR  */
+    SET = 290,                     /* SET  */
+    ON = 291,                      /* ON  */
+    LOAD = 292,                    /* LOAD  */
+    DATA = 293,                    /* DATA  */
+    INFILE = 294,                  /* INFILE  */
+    EXPLAIN = 295,                 /* EXPLAIN  */
+    EQ = 296,                      /* EQ  */
+    LT = 297,                      /* LT  */
+    GT = 298,                      /* GT  */
+    LE = 299,                      /* LE  */
+    GE = 300,                      /* GE  */
+    NE = 301,                      /* NE  */
+    DATE_T = 302,                  /* DATE_T  */
+    TEXT_T = 303,                  /* TEXT_T  */
+    ORDER_BY = 304,                /* ORDER_BY  */
+    ASC = 305,                     /* ASC  */
+    SYM_NOT_NULL = 306,            /* SYM_NOT_NULL  */
+    SYM_NULL = 307,                /* SYM_NULL  */
+    SYM_IS_NULL = 308,             /* SYM_IS_NULL  */
+    SYM_IS_NOT_NULL = 309,         /* SYM_IS_NOT_NULL  */
+    SYM_IN = 310,                  /* SYM_IN  */
+    SYM_NOT_IN = 311,              /* SYM_NOT_IN  */
+    SYM_EXISTS = 312,              /* SYM_EXISTS  */
+    SYM_NOT_EXISTS = 313,          /* SYM_NOT_EXISTS  */
+    MIN = 314,                     /* MIN  */
+    MAX = 315,                     /* MAX  */
+    AVG = 316,                     /* AVG  */
+    COUNT = 317,                   /* COUNT  */
+    SUM = 318,                     /* SUM  */
+    GROUP_BY = 319,                /* GROUP_BY  */
+    HAVING = 320,                  /* HAVING  */
+    SYM_LIKE = 321,                /* SYM_LIKE  */
+    SYM_NOT_LIKE = 322,            /* SYM_NOT_LIKE  */
+    DATE_STR = 323,                /* DATE_STR  */
+    NUMBER = 324,                  /* NUMBER  */
+    FLOAT = 325,                   /* FLOAT  */
+    ID = 326,                      /* ID  */
+    SSS = 327,                     /* SSS  */
+    UMINUS = 328                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -135,7 +133,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 129 "yacc_sql.y"
+#line 128 "yacc_sql.y"
 
   ParsedSqlNode *                   sql_node;
   Value *                           value;
@@ -160,16 +158,13 @@ union YYSTYPE
 
   // 重构后，表达式的语法解析树节点
   ExprSqlNode *                     expr_node;
-  and_conditions_type* expr_node_list;
+  Conditions*                       expr_node_list;
+  ExprSqlSet *                      expr_sql_set;
   AggregateFuncSqlNode*             agg_func;
   std::vector<SelectExprSqlNode>*    select_expr_list;
   SelectExprSqlNode*                 select_expr;
 
-  // Function
-  FunctionSqlNode*                  function_node;
-  std::vector<FunctionSqlNode>*     function_node_const_list;
-
-#line 173 "yacc_sql.hpp"
+#line 168 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

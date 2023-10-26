@@ -435,3 +435,30 @@ RC LikeExpr::regex_value(const std::string &input_string, const std::string &lik
 
   return RC::SUCCESS;
 }
+
+////////////////////////////////////////////////////////////////////////////////
+
+RC QuantifiedCompExprSetExpr::get_value(const Tuple &tuple, Value &value) const 
+{
+  Value child_value;
+  RC rc = child_->get_value(tuple, child_value);
+  HANDLE_RC(rc);
+
+  bool is_in = false;
+  for (const unique_ptr<Expression> &expr : set_) 
+  {
+    Value tmp_value;
+    rc = expr->get_value(tuple, tmp_value);
+    HANDLE_RC(rc);
+
+    int cmp_result = child_value.compare(tmp_value);
+    if (cmp_result == 0) 
+    {
+      is_in = true;
+      break;
+    }
+  }
+
+  value.set_boolean(op_ == QuantifiedComp::IN ? is_in : !is_in);
+  return RC::SUCCESS;
+}

@@ -315,7 +315,7 @@ const TableMeta &Table::table_meta() const
 // 构造出来的record是自己管理内存
 // 奇怪
 //构造record，将values中的数据复制到record_data中
-RC Table::make_record(int value_num, const Value *values, Record &record)
+RC Table::make_record(int value_num, Value *values, Record &record)
 {
   // 检查字段类型是否一致
   if (value_num + table_meta_.sys_field_num() != table_meta_.field_num()) {
@@ -328,14 +328,13 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   // note: 现在make_record来检查空值的合法性，因为不止一处调用make_record，在此处检查，减少重复工作
   for (int i = 0; i < value_num; i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
-    const Value &value = values[i];
+    Value &value = values[i];
     if(field->type() == TEXTS && value.attr_type() == CHARS) {
       continue;
     }
     if (field->type() != value.attr_type() && value.attr_type() != NULL_TYPE) {
-      LOG_ERROR("Invalid value type. table name =%s, field name=%s, type=%d, but given=%d",
-                table_meta_.name(), field->name(), field->type(), value.attr_type());
-      return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+      // 做隐式类型转换，不再failure
+      value.cast_to(field->type());
     }
     if (value.is_null_value() && !field->nullable()) {
       LOG_WARN("value can't be null. table name =%s, field name =%s, type=%d.", 

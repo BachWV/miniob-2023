@@ -97,6 +97,8 @@ public:
     return attr_type_ == NULL_TYPE;
   }
 
+  void cast_to(AttrType attrtype);
+
 public:
   /**
    * 获取对应的值

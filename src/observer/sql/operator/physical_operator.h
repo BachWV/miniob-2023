@@ -55,6 +55,7 @@ enum class PhysicalOperatorType
   APPLY,
   FUNCTION,
   FIELD_CUL,
+  ADAPTOR_FOR_EXPR_IN_UPDATE_SET,
 };
 
 /**

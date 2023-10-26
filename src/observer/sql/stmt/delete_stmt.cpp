@@ -20,9 +20,14 @@ See the Mulan PSL v2 for more details. */
 #include "sql/expr/parsed_expr.h"
 #include "sql/stmt/apply_stmt.h"
 
-DeleteStmt::DeleteStmt(Table *table, std::vector<std::unique_ptr<Expression>> &&cond_exprs) 
+DeleteStmt::DeleteStmt(Table *table, std::unique_ptr<ConjunctionExpr> cond_exprs) 
   : table_(table), cond_exprs_(std::move(cond_exprs))
 {}
+
+std::unique_ptr<ConjunctionExpr> DeleteStmt::fetch_cond_exprs()
+{
+  return std::move(cond_exprs_);
+}
 
 RC DeleteStmt::create(Db *db, const DeleteSqlNode &delete_sql, Stmt *&stmt)
 {
@@ -48,7 +53,7 @@ RC DeleteStmt::create(Db *db, const DeleteSqlNode &delete_sql, Stmt *&stmt)
   expr_ctx.push_stmt_ctx(&delete_ctx);
 
   std::vector<std::unique_ptr<Expression>> cond_exprs;
-  for (auto &cond_expr_sql_node: delete_sql.conditions)
+  for (auto &cond_expr_sql_node: delete_sql.conditions.exprs)
   {
     ExprResolveResult result;
     rc = cond_expr_sql_node->resolve(&expr_ctx, &result);
@@ -61,6 +66,9 @@ RC DeleteStmt::create(Db *db, const DeleteSqlNode &delete_sql, Stmt *&stmt)
 
   expr_ctx.pop_stmt_ctx();
 
-  stmt = new DeleteStmt(table, std::move(cond_exprs));
+  auto conjunction_expr = std::make_unique<ConjunctionExpr>(
+    delete_sql.conditions.type == Conditions::ConjunctionType::AND ? ConjunctionExpr::Type::AND : ConjunctionExpr::Type::OR,
+    cond_exprs);
+  stmt = new DeleteStmt(table, std::move(conjunction_expr));
   return rc;
 }

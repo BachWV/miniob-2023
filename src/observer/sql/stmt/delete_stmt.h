@@ -22,7 +22,7 @@ See the Mulan PSL v2 for more details. */
 
 class Table;
 class FilterStmt;
-class Expression;
+class ConjunctionExpr;
 
 /**
  * @brief Delete 语句
@@ -31,16 +31,14 @@ class Expression;
 class DeleteStmt : public Stmt 
 {
 public:
-  DeleteStmt(Table *table, std::vector<std::unique_ptr<Expression>> &&cond_exprs);
+  DeleteStmt(Table *table, std::unique_ptr<ConjunctionExpr> cond_exprs);
 
   Table *table() const
   {
     return table_;
   }
   
-  std::vector<std::unique_ptr<Expression>>& fetch_cond_exprs() {
-    return cond_exprs_;
-  }
+  std::unique_ptr<ConjunctionExpr> fetch_cond_exprs();
 
   StmtType type() const override
   {
@@ -52,5 +50,5 @@ public:
 
 private:
   Table *table_ = nullptr;
-  std::vector<std::unique_ptr<Expression>> cond_exprs_;
+  std::unique_ptr<ConjunctionExpr> cond_exprs_;
 };

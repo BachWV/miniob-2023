@@ -88,6 +88,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         FROM
         WHERE
         AND
+        OR
         SET
         ON
         LOAD
@@ -150,7 +151,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 
   // 重构后，表达式的语法解析树节点
   ExprSqlNode *                     expr_node;
-  and_conditions_type* expr_node_list;
+  Conditions*                       expr_node_list;
+  ExprSqlSet *                      expr_sql_set;
   AggregateFuncSqlNode*             agg_func;
   std::vector<SelectExprSqlNode>*    select_expr_list;
   SelectExprSqlNode*                 select_expr;
@@ -179,9 +181,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <attr_info>           attr_def
 %type <value_list>          value_list
 %type <expr_node_list>      where
-%type <rel_attr_list>       select_attr
 %type <relation_list>       rel_list
-%type <rel_attr_list>       attr_list
 %type <expression>          expression
 %type <expression_list>     expression_list
 %type <sql_node>            calc_stmt
@@ -222,16 +222,18 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 // group by
 %type <rel_attr_list>       group_by
 %type <rel_attr_list>       group_by_list 
-// expr
-%type <expr_node>           expr identifier
-%type <expr_node_list>      expr_list having having_list
-%type <sql_node>            sub_query
 // function
 %type <function_node>       function_node_const
 %type <function_node>       function_node_field
 %type <function_node>       function_node_all
 %type <function_node_const_list>       function_node_const_list
 
+
+// expr
+%type <expr_node>           expr identifier expr_has_agg
+%type <expr_node_list>      expr_list having having_list
+%type <sql_node>            sub_query
+%type <expr_sql_set>        expr_set
 
 %nonassoc SYM_IS_NULL SYM_IS_NOT_NULL SYM_IN SYM_NOT_IN
 %left EQ LT GT LE GE NE
@@ -555,7 +557,8 @@ delete_stmt:    /*  delete 语句的语法解析树*/
       $$ = new ParsedSqlNode(SCF_DELETE);
       $$->deletion.relation_name = $3;
       if ($4 != nullptr) {
-        $$->deletion.conditions.swap(*$4);
+        $$->deletion.conditions.type = $4->type;
+        $$->deletion.conditions.exprs.swap($4->exprs);
         delete $4;
       }
       free($3);
@@ -571,7 +574,8 @@ update_stmt:      /*  update 语句的语法解析树*/
         delete $4;
       }
       if ($5 != nullptr){
-        $$->update.conditions.swap(*$5);
+        $$->update.conditions.type = $5->type;
+        $$->update.conditions.exprs.swap($5->exprs);
         delete $5;
       }
       delete $2;
@@ -581,25 +585,24 @@ update_stmt:      /*  update 语句的语法解析树*/
 set_value_list:
   set_value {
     $$ = new std::vector<SetValueSqlNode>;
-    $$->emplace_back(*$1);
+    $$->emplace_back(std::move(*$1));
     delete $1;
   }
   | set_value COMMA set_value_list
   {
     $$ = $3;
-    $$->emplace_back(*$1);
+    $$->emplace_back(std::move(*$1));
     delete $1;
   }
   ;
 
 set_value:
-    ID EQ value
+    ID EQ expr
     {
       $$ = new SetValueSqlNode;
       $$->attr_name = $1;
-      $$->value = *$3;
+      $$->rhs_expr.reset($3);
       delete $1;
-      delete $3;
     }
     ;
 
@@ -622,7 +625,8 @@ select_stmt:        /*  select 语句的语法解析树*/
       std::reverse($$->selection.relations.begin(), $$->selection.relations.end());
 
       if ($6 != nullptr) {
-        $$->selection.conditions.swap(*$6);
+        $$->selection.conditions.type = $6->type;
+        $$->selection.conditions.exprs.swap($6->exprs);
         delete $6;
       }
 
@@ -633,7 +637,8 @@ select_stmt:        /*  select 语句的语法解析树*/
       }
 
       if($8 != nullptr){
-        $$->selection.having_attrs.swap(*$8);
+        $$->selection.having_attrs.type = $8->type;
+        $$->selection.having_attrs.exprs.swap($8->exprs);
         delete $8;
       }
 
@@ -739,25 +744,6 @@ expression:
     }
     ;
 
-select_attr:
-    '*' {
-      $$ = new std::vector<RelAttrSqlNode>;
-      RelAttrSqlNode attr;
-      attr.relation_name  = "";
-      attr.attribute_name = "*";
-      $$->emplace_back(attr);
-    }
-    | rel_attr attr_list {
-      if ($2 != nullptr) {
-        $$ = $2;
-      } else {
-        $$ = new std::vector<RelAttrSqlNode>;
-      }
-      $$->emplace_back(*$1);
-      delete $1;
-    }
-    ;
-
 /* 属性匹配了table.field和单独的feild */
 rel_attr:
     ID {
@@ -771,23 +757,6 @@ rel_attr:
       $$->attribute_name = $3;
       free($1);
       free($3);
-    }
-    ;
-
-attr_list:
-    /* empty */
-    {
-      $$ = nullptr;
-    }
-    | COMMA rel_attr attr_list {
-      if ($3 != nullptr) {
-        $$ = $3;
-      } else {
-        $$ = new std::vector<RelAttrSqlNode>;
-      }
-
-      $$->emplace_back(*$2);
-      delete $2;
     }
     ;
 
@@ -820,12 +789,18 @@ where:
 
 expr_list:
     expr {
-      $$ = new std::vector<std::unique_ptr<ExprSqlNode>>;
-      $$->emplace_back($1);
+      $$ = new Conditions;
+      $$->exprs.emplace_back($1);
     }
     | expr_list AND expr {
       $$ = $1;
-      $$->emplace_back($3);
+      $$->exprs.emplace_back($3);
+      $$->type = Conditions::ConjunctionType::AND;
+    }
+    | expr_list OR expr {
+      $$ = $1;
+      $$->exprs.emplace_back($3);
+      $$->type = Conditions::ConjunctionType::OR;
     }
     ;
 
@@ -837,10 +812,6 @@ expr:
     | identifier
     {
       $$ = $1;
-    }
-    | agg_func
-    {
-      $$ = new AggIdentifierExprSqlNode($1->name);
     }
     | '+' expr %prec UMINUS
     {
@@ -904,10 +875,20 @@ expr:
       std::unique_ptr<ExprSqlNode> child($1);
       $$ = new QuantifiedCompSubqueryExprSqlNode(token_name(sql_string, &@$), std::move(child), $4, IN);
     }
+    | expr SYM_IN LBRACE expr_set RBRACE
+    {
+      std::unique_ptr<ExprSqlNode> child($1);
+      $$ = new QuantifiedCmpExprSetExprSqlNode(token_name(sql_string, &@$), std::move(child), IN, $4);
+    }
     | expr SYM_NOT_IN LBRACE sub_query RBRACE
     {
       std::unique_ptr<ExprSqlNode> child($1);
       $$ = new QuantifiedCompSubqueryExprSqlNode(token_name(sql_string, &@$), std::move(child), $4, NOT_IN);
+    }
+    | expr SYM_NOT_IN LBRACE expr_set RBRACE
+    {
+      std::unique_ptr<ExprSqlNode> child($1);
+      $$ = new QuantifiedCmpExprSetExprSqlNode(token_name(sql_string, &@$), std::move(child), NOT_IN, $4);
     }
     | expr SYM_IS_NULL
     {
@@ -954,6 +935,22 @@ sub_query:
       $$ = $1;
     }
     ;
+
+expr_set:
+  /* empty */
+  {
+    $$ = nullptr;
+  }
+  | expr
+  {
+    $$ = new ExprSqlSet;
+    $$->emplace_back($1);
+  }
+  | expr_set COMMA expr
+  {
+    $$ = $1;
+    $$->emplace_back($3);
+  }
 
 // order by
 // 之所以这么写的原因是 "field1, field2, firld3" 中逗号要匹配
@@ -1149,13 +1146,29 @@ having:
     ;
 
 having_list:
-    expr {
-      $$ = new std::vector<std::unique_ptr<ExprSqlNode>>;
-      $$->emplace_back($1);
+    expr_has_agg {
+      $$ = new Conditions;
+      $$->exprs.emplace_back($1);
     }
-    | having_list AND expr {
+    | having_list AND expr_has_agg {
       $$ = $1;
-      $$->emplace_back($3);
+      $$->exprs.emplace_back($3);
+      $$->type = Conditions::ConjunctionType::AND;
+    }
+    | having_list OR expr_has_agg {
+      $$ = $1;
+      $$->exprs.emplace_back($3);
+      $$->type = Conditions::ConjunctionType::OR;
+    }
+    ;
+
+expr_has_agg:
+    expr {
+      $$ = $1;
+    }
+    | agg_func {
+      $$ = new AggIdentifierExprSqlNode(*$1);
+      delete $1;
     }
     ;
 

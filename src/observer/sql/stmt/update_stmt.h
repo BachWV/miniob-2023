@@ -20,7 +20,9 @@ See the Mulan PSL v2 for more details. */
 
 class Table;
 class Db;
+class ConjunctionExpr;
 class Expression;
+class ApplyStmt;
 
 /**
  * @brief 更新语句
@@ -30,12 +32,12 @@ class UpdateStmt : public Stmt
 {
 public:
   UpdateStmt() = default;
-  UpdateStmt(Table *table,std::unordered_map<int,Value> value_list, std::vector<std::unique_ptr<Expression>> &&cond_exprs);
+  UpdateStmt(Table *table, std::unordered_map<int, std::unique_ptr<Expression>> &&value_list, 
+    std::vector<std::unique_ptr<ApplyStmt>> &&subquerys_in_set_stmts,
+    std::unique_ptr<ConjunctionExpr> cond_exprs);
  
-  std::vector<std::unique_ptr<Expression>>& fetch_cond_exprs()
-  {
-    return cond_exprs_;
-  }
+  std::unique_ptr<ConjunctionExpr> fetch_cond_exprs();
+  std::vector<std::unique_ptr<ApplyStmt>> &fetch_subquerys_in_set_stmts() { return subquerys_in_set_stmts_; }
 
   StmtType type() const override
   {
@@ -51,13 +53,13 @@ public:
   {
     return table_;
   }
-  const std::unordered_map<int, Value> &value_list() const
-  {
-    return value_list_;
-  }
+  std::unordered_map<int, std::unique_ptr<Expression>> &fetch_value_list();
 
 private:
   Table *table_ = nullptr;
-  std::unordered_map<int, Value> value_list_;
-  std::vector<std::unique_ptr<Expression>> cond_exprs_;
+
+  // key: 待修改的列在RowTuple中的下标，value: 表达式的值为修改的新值
+  std::unordered_map<int, std::unique_ptr<Expression>> value_list_;
+  std::vector<std::unique_ptr<ApplyStmt>> subquerys_in_set_stmts_;  // set表达式中的子查询
+  std::unique_ptr<ConjunctionExpr> cond_exprs_;
 };
