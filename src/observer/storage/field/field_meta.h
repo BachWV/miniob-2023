@@ -37,6 +37,7 @@ public:
   RC init(const char *name, AttrType attr_type, int attr_offset, int attr_len, bool visible, bool nullable = false);
 
 public:
+  
   const char *name() const;
   AttrType type() const;
   int offset() const;

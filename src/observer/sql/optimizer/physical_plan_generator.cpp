@@ -45,6 +45,8 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/apply_physical_operator.h"
 #include "sql/operator/function_physical_operator.h"
 #include "sql/operator/function_logical_operator.h"
+#include "sql/operator/field_cul_physical_operator.h"
+#include "sql/operator/field_cul_logical_operator.h"
 #include "sql/expr/expression.h"
 #include "common/log/log.h"
 
@@ -116,6 +118,10 @@ RC PhysicalPlanGenerator::create(LogicalOperator &logical_operator, unique_ptr<P
     // 必须先把头文件都引入了，否则会报错Non-const lvalue reference to type 'FunctionLogicalOperator' cannot bind to a value of unrelated type 
     case LogicalOperatorType::FUNCTION: {
       return create_plan(static_cast<FunctionLogicalOperator&>(logical_operator), oper);
+    }break;
+
+    case LogicalOperatorType::FIELD_CUL: {
+      return create_plan(static_cast<FieldCulLogicalOperator&>(logical_operator), oper);
     }break;
 
     default: {
@@ -286,9 +292,14 @@ RC PhysicalPlanGenerator::create_plan(ProjectLogicalOperator &project_oper, uniq
   }
 
   ProjectPhysicalOperator *project_operator = new ProjectPhysicalOperator(project_oper.get_with_table_name());
-  const vector<Field> &project_fields = project_oper.fields();
-  for (const Field &field : project_fields) {
-    project_operator->add_projection(field.table(), field.meta());
+  // const vector<Field> &project_fields = project_oper.fields();
+  // for (const Field &field : project_fields) {
+  //   project_operator->add_projection(field.table(), field.meta());
+  // }
+
+  auto proj_fields = project_oper.get_field_identifiers();
+  for(auto& fid: proj_fields){
+    project_operator->add_projection(fid);
   }
 
   if (child_phy_oper) {
@@ -558,7 +569,7 @@ RC PhysicalPlanGenerator::create_plan(FunctionLogicalOperator& function_oper, st
     LogicalOperator *child_oper = child_opers.front().get();
     rc = create(*child_oper, child_phy_oper);
     if (rc != RC::SUCCESS) {
-      LOG_WARN("failed to create project logical operator's child physical operator. rc=%s", strrc(rc));
+      LOG_WARN("failed to create function logical operator's child physical operator. rc=%s", strrc(rc));
       return rc;
     }
     oper = make_unique<FunctionPhysicalOperator>(std::move(function_oper.kernel_), function_oper.be_functioned_field_, function_oper.virtual_meta_);
@@ -566,6 +577,26 @@ RC PhysicalPlanGenerator::create_plan(FunctionLogicalOperator& function_oper, st
   }else{
     oper = make_unique<FunctionPhysicalOperator>(std::move(function_oper.kernel_), function_oper.be_functioned_field_, function_oper.virtual_meta_);
   }
+
+  return rc;
+}
+
+RC PhysicalPlanGenerator::create_plan(FieldCulLogicalOperator& logical_oper, std::unique_ptr<PhysicalOperator> &oper){
+  vector<unique_ptr<LogicalOperator>> &child_opers = logical_oper.children();
+  unique_ptr<PhysicalOperator> child_phy_oper;
+
+  RC rc = RC::SUCCESS;
+  if (!child_opers.empty()) {
+    LogicalOperator *child_oper = child_opers.front().get();
+    rc = create(*child_oper, child_phy_oper);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to create field cul logical operator's child physical operator. rc=%s", strrc(rc));
+      return rc;
+    }
+  }
+
+  oper = make_unique<FieldCulPhysicalOperator>(logical_oper.virtual_meta_, std::move(logical_oper.cul_expr_));
+  oper->add_child(std::move(child_phy_oper));
 
   return rc;
 }

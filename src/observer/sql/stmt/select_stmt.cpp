@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #include <cassert>
 
+#include "sql/stmt/field_with_alias.h"
 #include "sql/stmt/select_stmt.h"
 #include "sql/parser/parse_defs.h"
 #include "sql/stmt/filter_stmt.h"
@@ -45,7 +46,8 @@ static void wildcard_fields(Table *table, std::vector<SelectExprField>& select_e
   const TableMeta &table_meta = table->table_meta();
   const int field_num = table_meta.field_num();
   for (int i = table_meta.sys_field_num(); i < field_num; i++) {
-    select_expr_fields.push_back(Field(table, table_meta.field(i)));
+    auto fwa = FieldWithAlias(Field(table, table_meta.field(i)), "");
+    select_expr_fields.push_back(fwa);
   }
 }
 
@@ -248,8 +250,10 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
             }
 
             auto common_field = Field(table, field_meta);
-            select_expr_fields.push_back(common_field);
+            // select_expr_fields.push_back(common_field);
             common_fields_set.insert(FieldIdentifier(table->name(), field_meta->name()));
+            auto fwa = FieldWithAlias(common_field, relation_attr->alias_);
+            select_expr_fields.push_back(fwa);
           }
         }
 
@@ -268,8 +272,10 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
         }
 
         auto common_field = Field(table, field_meta);
-        select_expr_fields.push_back(common_field);
+        // select_expr_fields.push_back(common_field);
         common_fields_set.insert(FieldIdentifier(table->name(), field_meta->name()));
+        auto fwa = FieldWithAlias(common_field, relation_attr->alias_);
+        select_expr_fields.push_back(fwa);
       }
 
     }else if(auto agg_sql_node = get_if<AggregateFuncSqlNode>(&select_expr_field)){
@@ -288,7 +294,9 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
         }
       }
       bool with_table_name = tables.size() > 1;
-      select_expr_fields.push_back(FieldsWithGroupBy(agg_field, group_fields, agg_sql_node->agg_op, with_table_name));
+      auto fwgb = FieldsWithGroupBy(agg_field, group_fields, agg_sql_node->agg_op, with_table_name, true);
+      fwgb.alias_ = agg_sql_node->alias_;
+      select_expr_fields.push_back(std::move(fwgb));
     }else if(auto func_sql_node = get_if<FunctionSqlNode>(&select_expr_field)){
       if(func_sql_node->is_const){
         select_expr_fields.push_back(FieldWithFunction(func_sql_node->virtual_field_name, Field(), std::move(func_sql_node->function_kernel)));
@@ -296,8 +304,15 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
         Field func_field;
         auto rc = resolve_common_field(db, table_map, tables, func_sql_node->rel_attr, func_field);
         HANDLE_RC(rc);
-        select_expr_fields.push_back(FieldWithFunction(func_sql_node->virtual_field_name, func_field, std::move(func_sql_node->function_kernel)));
+        auto fwf = FieldWithFunction(func_sql_node->virtual_field_name, func_field, std::move(func_sql_node->function_kernel));
+        fwf.alias_ = func_sql_node->alias_;
+        select_expr_fields.push_back(std::move(fwf));
       }
+    }else if(auto field_cul_sql_node = get_if<FieldCulSqlNode>(&select_expr_field)){
+      // TODO：expr怎么校验
+      auto fwc = FieldWithCul(field_cul_sql_node->virtual_field_name_, std::move(field_cul_sql_node->cul_expr_));
+      fwc.alias_ = field_cul_sql_node->alias_;
+      select_expr_fields.push_back(std::move(fwc));
     }else{
       // 出问题了，debug模式下直接kill
       assert(0);
@@ -348,6 +363,26 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
     having_exprs.emplace_back(having_resolve_result.owns_result_expr_tree());
 
     /* TODO: 处理HAVING子句中，不存在于select的列中的聚集函数，使用having_resolve_result.get_agg_expr_infos()接口 */
+    std::vector<AggExprInfo> agg_infos = having_resolve_result.get_agg_expr_infos();
+    for(auto& agg_info: agg_infos){
+      Field agg_field;
+      RelAttrSqlNode attr;
+      attr.relation_name = agg_info.agg_field().table_name();
+      attr.attribute_name = agg_info.agg_field().field_name();
+      auto rc = resolve_common_field(db, table_map, tables, attr, agg_field);
+      if(rc != RC::SUCCESS){
+        // 若为COUNT(*)的处理。AGG算子中要手动释放agg_field的内存
+        if(agg_info.agg_op() == AGG_COUNT && 0 == strcmp(attr.attribute_name.c_str(), "*") ){
+          FieldMeta* meta =  new FieldMeta("*", INTS, 1,1,false, false);
+          assert(tables[0]);
+          agg_field = Field(tables[0], meta);
+        }else{
+          return rc;
+        }
+      }
+      bool with_table_name = tables.size() > 1;
+      select_expr_fields.push_back(FieldsWithGroupBy(agg_field, group_fields, agg_info.agg_op(), with_table_name, false));
+    }
   }
   glob_ctx->pop_stmt_ctx();
 

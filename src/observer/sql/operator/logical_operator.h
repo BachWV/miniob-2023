@@ -48,6 +48,7 @@ enum class LogicalOperatorType
   EXISTENTIAL_SUBQUERY,  ///< 存在性检测子查询
   QUANTIFIEDCOMP_SUBQUERY,  ///< 集合比较子查询
   FUNCTION,
+  FIELD_CUL,
 };
 
 /**

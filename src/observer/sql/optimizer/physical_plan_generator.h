@@ -38,6 +38,7 @@ class ScalarSubqueryLogicalOperator;
 class ExistentialSubqueryLogicalOperator;
 class QuantifiedCompSubqueryLogicalOperator;
 class FunctionLogicalOperator;
+class FieldCulLogicalOperator;
 
 /**
  * @brief 物理计划生成器
@@ -71,4 +72,5 @@ private:
   RC create_plan(ExistentialSubqueryLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
   RC create_plan(QuantifiedCompSubqueryLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
   RC create_plan(FunctionLogicalOperator& logical_oper, std::unique_ptr<PhysicalOperator> &oper);
+  RC create_plan(FieldCulLogicalOperator& logical_oper, std::unique_ptr<PhysicalOperator> &oper);
 };

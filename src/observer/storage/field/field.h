@@ -92,6 +92,8 @@ class FieldIdentifier
 {
 public:
   FieldIdentifier() = default;
+  FieldIdentifier(std::string table_name, std::string field_name, std::string alias)
+    :table_name_(table_name), field_name_(field_name), alias_(alias){}
   FieldIdentifier(const std::string &table_name, const std::string &field_name) 
     : table_name_(table_name), field_name_(field_name) {}
   FieldIdentifier(const std::string &colunm_name) : field_name_(colunm_name) {}
@@ -102,6 +104,10 @@ public:
 
   const std::string &field_name() const {
     return field_name_;
+  }
+
+  const std::string &alias() const {
+    return alias_;
   }
 
   TupleCellSpec to_tuple_cell_spec() const {
@@ -115,7 +121,7 @@ public:
 private:
 
   /* 若table_name_不为空，则identifier是表的列名。否则，field_name_表示虚拟列名(表达式/聚集/用于替代子查询表达式的名字) */
-  std::string table_name_, field_name_;
+  std::string table_name_, field_name_, alias_;
 };
 
 struct FieldIdentifierHash{
@@ -128,22 +134,22 @@ struct FieldIdentifierHash{
 // group by; 感觉groupBy不应该开一个stmt，并且resolver是在做校验，所以在这里定义了
 class FieldsWithGroupBy{
 public:
-  FieldsWithGroupBy(const Field agg_field, const std::vector<Field> group_fields, AggregateOp op, bool with_table_name)
-    : agg_field_(agg_field), group_fields_(group_fields), op_(op), with_table_name_(with_table_name){}
+  FieldsWithGroupBy(const Field agg_field, const std::vector<Field> group_fields, AggregateOp op, bool with_table_name, bool visible)
+    : agg_field_(agg_field), group_fields_(group_fields), op_(op), with_table_name_(with_table_name), visible_(visible){}
   Field agg_field_;
   std::vector<Field> group_fields_;
   AggregateOp op_;
   bool with_table_name_;
+  bool visible_;
+  std::string alias_;
 
   // 返回了一个FieldMeta为堆内存的Field，调用者要保证内存管理
   Field get_tmp_field() const{
     std::string field_name;
     if(with_table_name_){
       field_name = agg_str_name[op_] + "(" + agg_field_.table_name() + "." + agg_field_.field_name() + ")";
-      transform(field_name.begin(), field_name.end(), field_name.begin(), ::toupper);
     }else{
       field_name = agg_str_name[op_] + "(" + agg_field_.field_name() + ")";
-      transform(field_name.begin(), field_name.end(), field_name.begin(), ::toupper);
     }
 
     LOG_DEBUG("Field get_tmp_field()::field_name: %s", field_name.c_str());

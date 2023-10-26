@@ -38,6 +38,9 @@ class ProjectLogicalOperator : public LogicalOperator
 {
 public:
   ProjectLogicalOperator(const std::vector<Field> &fields, bool with_table_name);
+  ProjectLogicalOperator(const std::vector<FieldIdentifier>& field_identifiers, bool with_table_name)
+   :field_identifiers_(field_identifiers), with_table_name_(with_table_name){}
+  
   virtual ~ProjectLogicalOperator() = default;
 
   LogicalOperatorType type() const override
@@ -62,11 +65,16 @@ public:
     return with_table_name_;
   }
 
+  std::vector<FieldIdentifier> get_field_identifiers(){
+    return field_identifiers_;
+  }
+
 private:
   //! 投影映射的字段名称
   //! 并不是所有的select都会查看表字段，也可能是常量数字、字符串，
   //! 或者是执行某个函数。所以这里应该是表达式Expression。
   //! 不过现在简单处理，就使用字段来描述
+  std::vector<FieldIdentifier> field_identifiers_;
   std::vector<Field> fields_;
   bool with_table_name_;
 };

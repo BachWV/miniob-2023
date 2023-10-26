@@ -9,6 +9,7 @@ class Value;
 
 class FunctionKernel{
 public:
+	virtual ~FunctionKernel() = default;
 	virtual RC do_func(const Value& in, Value& out) = 0;
 	void set_meta(const char* table_name, const char* field_name);
 	void set_is_const(bool b){

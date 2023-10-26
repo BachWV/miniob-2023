@@ -31,6 +31,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/sort_logical_operator.h"
 #include "sql/operator/function_logical_operator.h"
 #include "sql/stmt/field_with_function.h"
+#include "sql/operator/field_cul_logical_operator.h"
 
 #include "sql/stmt/stmt.h"
 #include "sql/stmt/calc_stmt.h"
@@ -172,11 +173,13 @@ RC LogicalPlanGenerator::create_plan(
   opers.push_back(std::move(predicate_oper));
 
   // agg / field-cul-expr: 构建算子的同时把all_fields按序构建出来
-  std::vector<Field> all_fields;
+  std::vector<FieldIdentifier> all_field_identifiers;
   bool has_agg = false;
   for(auto &sef : select_expr_fields){
-    if(auto field = std::get_if<Field>(&sef)){
-      all_fields.push_back(*field);
+    if(auto fwa = std::get_if<FieldWithAlias>(&sef)){
+      //all_fields.push_back(*field);
+      auto fid = FieldIdentifier(fwa->field_.table_name(), fwa->field_.field_name(), fwa->alias_);
+      all_field_identifiers.push_back(fid);
     }else if (auto fwgb = std::get_if<FieldsWithGroupBy>(&sef)) {
       // 第一个group by聚集算子，在其之前构建一个sort；非group by的聚集没必要sort
       if(!has_agg){
@@ -200,10 +203,11 @@ RC LogicalPlanGenerator::create_plan(
       unique_ptr<LogicalOperator> agg_oper = std::make_unique<AggregateLogicalOperator>(const_cast<FieldMeta*>(tmp_field.meta()), fwgb->agg_field_, fwgb->group_fields_, fwgb->op_);
 
       opers.push_back(std::move(agg_oper));
-      all_fields.push_back(tmp_field);
+      if(fwgb->visible_){
+        auto fid = FieldIdentifier("", tmp_field.field_name(), fwgb->alias_);
+        all_field_identifiers.push_back(fid);
+      }
     }else if(auto fwf = std::get_if<FieldWithFunction>(&sef)){
-      // 如果后面没跟表，那么opers的第一个和第二个算子都是nullptr
-      // if(fwf->function_kernal_.)
       Field tmp_field = fwf->get_tmp_field();
       unique_ptr<LogicalOperator> function_oper(nullptr);
       if(fwf->function_kernal_->get_is_const()){
@@ -213,7 +217,13 @@ RC LogicalPlanGenerator::create_plan(
       }
 
       opers.push_back(std::move(function_oper));
-      all_fields.push_back(tmp_field);
+      auto fid = FieldIdentifier("", tmp_field.field_name(), fwf->alias_);
+      all_field_identifiers.push_back(fid);
+    }else if(auto fwc = std::get_if<FieldWithCul>(&sef)){
+      Field tmp_field = fwf->get_tmp_field();
+      auto fid = FieldIdentifier("", tmp_field.field_name(), fwgb->alias_);
+      all_field_identifiers.push_back(fid);
+      unique_ptr<LogicalOperator> function_oper = std::make_unique<FieldCulLogicalOperator>(const_cast<FieldMeta*>(tmp_field.meta()), std::move(fwc->cul_expr_));
     }else{
       assert(0);
     }
@@ -246,7 +256,7 @@ RC LogicalPlanGenerator::create_plan(
 
   // proj: 当前的proj中包含group-by / field-cul-expr构建的tep_field
   bool with_table_name = select_stmt->tables().size() > 1;
-  unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_fields, with_table_name));
+  unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_field_identifiers, with_table_name));
   opers.push_back(std::move(project_oper));
 
   // top_oper

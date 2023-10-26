@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/operator/physical_operator.h"
 #include "sql/expr/tuple.h"
+#include "storage/field/field.h"
 
 /**
  * @brief 选择/投影物理算子
@@ -34,6 +35,7 @@ public:
     
   }
   void add_projection(const Table *table, const FieldMeta *field);
+  void add_projection(FieldIdentifier& fi);
 
   PhysicalOperatorType type() const override
   {

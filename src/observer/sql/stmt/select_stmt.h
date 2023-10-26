@@ -20,6 +20,8 @@ See the Mulan PSL v2 for more details. */
 
 #include "common/rc.h"
 #include "sql/parser/parse_defs.h"
+#include "sql/stmt/field_with_alias.h"
+#include "sql/stmt/field_with_cul.h"
 #include "sql/stmt/stmt.h"
 #include "storage/field/field.h"
 #include "sql/stmt/field_with_function.h"
@@ -36,7 +38,7 @@ class ApplyStmt;
 
 // 这里不应该叫“field”，应该是xx_stmt。但是我看按照他的方式，开stmt也不太合适，
 // 我们只是需要个中间态的数据结构暂时保存下数据，索性就把数据放在Field这个文件里了
-using SelectExprField = std::variant<Field, FieldsWithGroupBy, FieldWithFunction>;
+using SelectExprField = std::variant<Field, FieldsWithGroupBy, FieldWithFunction, FieldWithCul, FieldWithAlias>;
 
 /**
  * @brief 表示select语句

@@ -1273,11 +1273,12 @@ function_node_const_list:
       $$->emplace_back(std::move(*$1));
       delete $1;
     }
-    | function_node_const COMMA function_node_const_list{
-      $$ = $3;
-      $$->emplace_back(std::move(*$1));
-      delete $1;
-    }
+    | function_node_const_list COMMA function_node_const{
+      $$ = $1;
+      $$->emplace_back(std::move(*$3));
+      delete $3;
+    }                                                                     
+    ;
 
 alias:
     /* empty */
