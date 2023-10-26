@@ -66,4 +66,6 @@ private:
 
 	int all_index_;
 	std::vector<AddOneFieldTuple> all_aof_tuples_;
+
+	int avg_not_null_count_ ;
 };
