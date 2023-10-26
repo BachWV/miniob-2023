@@ -160,6 +160,12 @@ struct SelectSqlNode
   Conditions             having_attrs;
 };
 
+struct InnerJoinSqlNode
+{
+  std::string join_relation;  // inner join右边的表
+  Conditions join_conditions; // inner join的on后面的条件
+};
+
 /**
  * @brief 算术表达式计算的语法树
  * @ingroup SQLParser
