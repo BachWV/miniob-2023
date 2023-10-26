@@ -85,7 +85,12 @@ RC UpdatePhysicalOperator::next()
 
       values_new.at(value.first) = expr_value;
     }
-    
+
+    RC rc = table_->make_record(static_cast<int>(values_new.size()), values_new.data(), record_new);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to make record. rc=%s", strrc(rc));
+      return rc;
+    } 
 
     rc = trx_->delete_record(table_, record);
     if (rc != RC::SUCCESS) {
@@ -93,11 +98,6 @@ RC UpdatePhysicalOperator::next()
       return rc;
     }
 
-    RC rc = table_->make_record(static_cast<int>(values_new.size()), values_new.data(), record_new);
-    if (rc != RC::SUCCESS) {
-      LOG_WARN("failed to make record. rc=%s", strrc(rc));
-      return rc;
-    }
     rc = trx_->insert_record(table_, record_new);
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to update record: %s", strrc(rc));

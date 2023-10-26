@@ -90,6 +90,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         AND
         OR
         SET
+        SYM_INNER_JOIN
         ON
         LOAD
         DATA
@@ -162,6 +163,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   FunctionSqlNode*                  function_node;
   std::vector<FunctionSqlNode>*     function_node_list;
   std::string*                       std_string;
+  std::vector<InnerJoinSqlNode>*    inner_join_list;
+  InnerJoinSqlNode*                 inner_join;
 }
 
 /* %token <number> DATE */
@@ -235,6 +238,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <expr_node_list>      expr_list having
 %type <sql_node>            sub_query
 %type <expr_sql_set>        expr_set
+%type <inner_join>          inner_join
+%type <inner_join_list>     inner_join_list
 
 %nonassoc SYM_IS_NULL SYM_IS_NOT_NULL SYM_IN SYM_NOT_IN
 %left EQ LT GT LE GE NE
@@ -607,9 +612,9 @@ set_value:
     }
     ;
 
-
+/* 添加了inner_join_list，合并代码时注意，右边非终结符的标号不要搞错了！ */
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT select_expr_list FROM ID rel_list where group_by having order_by 
+    SELECT select_expr_list FROM ID rel_list inner_join_list where group_by having order_by 
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
       if ($2 != nullptr) {
@@ -626,27 +631,42 @@ select_stmt:        /*  select 语句的语法解析树*/
       std::reverse($$->selection.relations.begin(), $$->selection.relations.end());
 
       if ($6 != nullptr) {
-        $$->selection.conditions.type = $6->type;
-        $$->selection.conditions.exprs.swap($6->exprs);
+        for (auto &inner_join: *$6)
+        {
+          $$->selection.relations.emplace_back(inner_join.join_relation);
+
+          $$->selection.conditions.exprs.insert($$->selection.conditions.exprs.end(), 
+            std::make_move_iterator(inner_join.join_conditions.exprs.begin()), 
+            std::make_move_iterator(inner_join.join_conditions.exprs.end()));
+        }
         delete $6;
       }
 
+      // 当前AND和OR混合使用，则结果未定义
       if ($7 != nullptr) {
-        $$->selection.group_by_attrs.swap(*$7);
-        std::reverse($$->selection.group_by_attrs.begin(), $$->selection.group_by_attrs.end());
+        $$->selection.conditions.type = $7->type;
+        $$->selection.conditions.exprs.swap($7->exprs);
+        $$->selection.conditions.exprs.insert($$->selection.conditions.exprs.end(),
+          std::make_move_iterator($7->exprs.begin()), std::make_move_iterator($7->exprs.end()));
         delete $7;
       }
 
-      if($8 != nullptr){
-        $$->selection.having_attrs.type = $8->type;
-        $$->selection.having_attrs.exprs.swap($8->exprs);
+      if ($8 != nullptr) {
+        $$->selection.group_by_attrs.swap(*$8);
+        std::reverse($$->selection.group_by_attrs.begin(), $$->selection.group_by_attrs.end());
         delete $8;
       }
 
-      if ($9 != nullptr) {
-        $$->selection.order_by_attrs.swap(*$9);
-        std::reverse($$->selection.order_by_attrs.begin(), $$->selection.order_by_attrs.end());
+      if($9 != nullptr){
+        $$->selection.having_attrs.type = $9->type;
+        $$->selection.having_attrs.exprs.swap($9->exprs);
         delete $9;
+      }
+
+      if ($10 != nullptr) {
+        $$->selection.order_by_attrs.swap(*$10);
+        std::reverse($$->selection.order_by_attrs.begin(), $$->selection.order_by_attrs.end());
+        delete $10;
       }
 
       free($4);
@@ -784,6 +804,37 @@ rel_list:
       free($2);
     }
     ;
+
+inner_join_list:
+    /* empty */
+    {
+      $$ = nullptr;
+    }
+    | inner_join_list inner_join
+    {
+      if ($1 == nullptr)
+       $1 = new std::vector<InnerJoinSqlNode>;
+      $1->emplace_back(std::move(*$2));
+      $$ = $1;
+      delete $2;
+    }
+    ;
+
+inner_join:
+  SYM_INNER_JOIN ID ON expr_list
+  {
+    $$ = new InnerJoinSqlNode;
+    $$->join_relation = $2;
+    $$->join_conditions = std::move(*$4);
+    delete $2;
+    delete $4;
+  }
+  | SYM_INNER_JOIN ID
+  {
+    $$ = new InnerJoinSqlNode;
+    $$->join_relation = $2;
+    delete $2;
+  }
 
 where:
     /* empty */
