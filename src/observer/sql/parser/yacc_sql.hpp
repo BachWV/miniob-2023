@@ -1,4 +1,4 @@
-/* A Bison parser, made by GNU Bison 3.8.  */
+/* A Bison parser, made by GNU Bison 3.8.2.  */
 
 /* Bison interface for Yacc-like parsers in C
 
@@ -119,12 +119,16 @@ extern int yydebug;
     HAVING = 320,                  /* HAVING  */
     SYM_LIKE = 321,                /* SYM_LIKE  */
     SYM_NOT_LIKE = 322,            /* SYM_NOT_LIKE  */
-    DATE_STR = 323,                /* DATE_STR  */
-    NUMBER = 324,                  /* NUMBER  */
-    FLOAT = 325,                   /* FLOAT  */
-    ID = 326,                      /* ID  */
-    SSS = 327,                     /* SSS  */
-    UMINUS = 328                   /* UMINUS  */
+    ROUND = 323,                   /* ROUND  */
+    LENGTH = 324,                  /* LENGTH  */
+    DATE_FORMAT = 325,             /* DATE_FORMAT  */
+    AS = 326,                      /* AS  */
+    DATE_STR = 327,                /* DATE_STR  */
+    NUMBER = 328,                  /* NUMBER  */
+    FLOAT = 329,                   /* FLOAT  */
+    ID = 330,                      /* ID  */
+    SSS = 331,                     /* SSS  */
+    UMINUS = 332                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -133,7 +137,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 128 "yacc_sql.y"
+#line 131 "yacc_sql.y"
 
   ParsedSqlNode *                   sql_node;
   Value *                           value;
@@ -164,7 +168,12 @@ union YYSTYPE
   std::vector<SelectExprSqlNode>*    select_expr_list;
   SelectExprSqlNode*                 select_expr;
 
-#line 168 "yacc_sql.hpp"
+  // Function
+  FunctionSqlNode*                  function_node;
+  std::vector<FunctionSqlNode>*     function_node_const_list;
+  std::string*                       std_string;
+
+#line 177 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

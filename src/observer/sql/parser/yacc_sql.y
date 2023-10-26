@@ -125,6 +125,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         ROUND
         LENGTH
         DATE_FORMAT
+        AS
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -160,6 +161,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   // Function
   FunctionSqlNode*                  function_node;
   std::vector<FunctionSqlNode>*     function_node_const_list;
+  std::string*                       std_string;
 }
 
 /* %token <number> DATE */
@@ -227,6 +229,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <function_node>       function_node_field
 %type <function_node>       function_node_all
 %type <function_node_const_list>       function_node_const_list
+%type <std_string>          alias
 
 
 // expr
@@ -1105,20 +1108,29 @@ select_expr:
       attr_node.attribute_name = "*";
       *$$ = attr_node;
     }
-    | agg_func {
+    | agg_func alias{
+      if($2 != nullptr)
+        $1->alias_ = *$2;
       $$ = new SelectExprSqlNode();
       *$$ = *$1;
       delete $1;
+      delete $2;
     }
-    | rel_attr {
+    | rel_attr alias{
+      if($2 != nullptr)
+        $1->alias_ = *$2;
       $$ = new SelectExprSqlNode();
       *$$ = *$1;
       delete $1;
+      delete $2;
     }
-    | function_node_all{
+    | function_node_all alias{
+      if($2 != nullptr)
+        $1->alias_ = *$2;
       $$ = new SelectExprSqlNode();
       *$$ = std::move(*$1);
       delete $1;
+      delete $2;
     }
     ;
 
@@ -1265,6 +1277,20 @@ function_node_const_list:
       $$ = $3;
       $$->emplace_back(std::move(*$1));
       delete $1;
+    }
+
+alias:
+    /* empty */
+    {
+      $$ = nullptr;
+    }
+    | ID{
+      $$ = new std::string($1);
+      delete $1;
+    }
+    | AS ID{
+      $$ = new std::string($2);
+      delete $2;
     }
 
 opt_semicolon: /*empty*/

@@ -129,6 +129,7 @@ LENGTH                                  RETURN_TOKEN(LENGTH);
 "GROUP BY"                              RETURN_TOKEN(GROUP_BY);
 "HAVING"                                RETURN_TOKEN(HAVING);     
 ASC                                     RETURN_TOKEN(ASC);
+AS                                           RETURN_TOKEN(AS);
 "not null"                              RETURN_TOKEN(SYM_NOT_NULL);
 "is null"                               RETURN_TOKEN(SYM_IS_NULL);
 "is not null"                           RETURN_TOKEN(SYM_IS_NOT_NULL);

@@ -40,6 +40,7 @@ struct RelAttrSqlNode
 {
   std::string relation_name;   ///< relation name (may be NULL) 表名
   std::string attribute_name;  ///< attribute name              属性名
+  std::string alias_;
 };
 
 struct FunctionSqlNode{
@@ -49,13 +50,13 @@ struct FunctionSqlNode{
   RelAttrSqlNode rel_attr;
   std::unique_ptr<FunctionKernel> function_kernel;
   std::string virtual_field_name;
+  std::string alias_;
+};
 
-  // FunctionSqlNode(FunctionSqlNode&& node){
-  //   this->is_const = node.is_const;
-  //   this->rel_attr = node.rel_attr;
-  //   this->virtual_field_name = node.virtual_field_name;
-  //   this->function_kernel = std::move(node.function_kernel);
-  // }
+struct FieldCulSqlNode{
+  std::unique_ptr<Expression> cul_expr_;
+  std::string                 virtual_field_name_;
+  std::string alias_;
 };
 
 /**
@@ -138,6 +139,7 @@ struct AggregateFuncSqlNode{
   AggregateOp agg_op;
   RelAttrSqlNode attr;
   std::string name;
+  std::string alias_;
 };
 
 
@@ -166,7 +168,7 @@ using ExprSqlSet = std::vector<std::unique_ptr<ExprSqlNode>>;
  * 甚至可以包含复杂的表达式。
  */
 
-using SelectExprSqlNode = std::variant<RelAttrSqlNode, AggregateFuncSqlNode, FunctionSqlNode>;
+using SelectExprSqlNode = std::variant<RelAttrSqlNode, AggregateFuncSqlNode, FunctionSqlNode, FieldCulSqlNode>;
 struct SelectSqlNode
 {
   std::vector<SelectExprSqlNode>  select_exprs;
