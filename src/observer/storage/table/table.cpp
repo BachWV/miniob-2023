@@ -233,33 +233,29 @@ RC Table::drop()
 RC Table::insert_record(Record &record)
 {
   RC rc = RC::SUCCESS;
-  rc = record_handler_->insert_record(record.data(), table_meta_.record_size(), &record.rid());
-  if (rc != RC::SUCCESS) {
-    LOG_ERROR("Insert record failed. table name=%s, rc=%s", table_meta_.name(), strrc(rc));
-    return rc;
-  }
+  RID rid(1,2);
 
   // 用索引来检查主键完整性约束，如果当前的表没有index呢？
-  rc = insert_entry_of_indexes(record.data(), record.rid());
+  rc = insert_entry_of_indexes(record,rid);
   if (rc != RC::SUCCESS) { // 可能出现了键值重复
     if(rc==RC::RECORD_DUPLICATE_KEY){
-      RC rc2 = record_handler_->delete_record(&record.rid());
-      if (rc2 != RC::SUCCESS) {
-        LOG_PANIC("Duplicate key ,need to delete record. table name=%s, rc=%d:%s",
-                name(), rc2, strrc(rc2));
-      }
+      // RC rc2 = record_handler_->delete_record(&record.rid());
+      // if (rc2 != RC::SUCCESS) {
+      //   LOG_PANIC("Duplicate key ,need to delete record. table name=%s, rc=%d:%s",
+      //           name(), rc2, strrc(rc2));
+      // }
       return rc;
     }
-    RC rc2 = delete_entry_of_indexes(record.data(), record.rid(), false/*error_on_not_exists*/);
+    RC rc2 = delete_entry_of_indexes(record.data(), rid, false/*error_on_not_exists*/);
     if (rc2 != RC::SUCCESS) {
       LOG_ERROR("Failed to rollback index data when insert index entries failed. table name=%s, rc=%d:%s",
                 name(), rc2, strrc(rc2));
     }
-    rc2 = record_handler_->delete_record(&record.rid());
-    if (rc2 != RC::SUCCESS) {
-      LOG_PANIC("Failed to rollback record data when insert index entries failed. table name=%s, rc=%d:%s",
-                name(), rc2, strrc(rc2));
-    }
+  }
+  rc = record_handler_->insert_record(record.data(), table_meta_.record_size(), &record.rid());
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Insert record failed. table name=%s, rc=%s", table_meta_.name(), strrc(rc));
+    return rc;
   }
   return rc;
 }
@@ -301,7 +297,7 @@ RC Table::recover_insert_record(Record &record)
     return rc;
   }
 
-  rc = insert_entry_of_indexes(record.data(), record.rid());
+  rc = insert_entry_of_indexes(record, record.rid());
   if (rc != RC::SUCCESS) { // 可能出现了键值重复
     RC rc2 = delete_entry_of_indexes(record.data(), record.rid(), false/*error_on_not_exists*/);
     if (rc2 != RC::SUCCESS) {
@@ -625,11 +621,39 @@ RC Table::update_record(const Record &record)
   return rc;
 }
 
-RC Table::insert_entry_of_indexes(const char *record, const RID &rid)
+RC Table::insert_entry_of_indexes(Record &record, const RID &rid)
 {
   RC rc = RC::SUCCESS;
   for (Index *index : indexes_) {
-    rc = index->insert_entry(record, &rid);
+
+    auto metas=table_meta_.field_metas();
+    int len=0;
+    int finish=0;
+    char *null_bitmap = record.data() + table_meta_.get_null_bitmap_offset();
+    common::Bitmap bitmap_oper(null_bitmap, table_meta_.field_num());
+    for(int i=0;i<metas->size();i++){
+      auto  index_field =metas->at(i);
+      len+=index_field.len();
+   
+      if (bitmap_oper.get_bit(i)){
+        finish=1;
+        break;
+      }
+    }
+    if(finish) continue;
+
+    char *new_str = new char[len];
+    int str_count=0;
+    for(int i=0;i<metas->size();i++){
+      auto  index_field =metas->at(i);
+      //可能会获得不到index_field的name，因为初始化构造有问题
+      //std::string ss=index_field->name();
+      //strncpy(new_str,record+index_field->offset(),index_field->len());
+      strncpy(new_str+str_count,record.data()+index_field.offset(),index_field.len());
+      str_count+=index_field.len();
+    }
+
+    rc = index->insert_entry(record.data(), &rid);
     if (rc != RC::SUCCESS) {
       break;
     }

@@ -95,22 +95,8 @@ RC BplusTreeIndex::close()
 
 RC BplusTreeIndex::insert_entry(const char *record, const RID *rid)
 { 
-  int len=0;
-  for(auto &index_field : field_metas_){
-    len+=index_field->len();
-  }
-  char *new_str = new char[len];
-  int str_count=0;
-  for(auto &index_field : field_metas_){
-    //可能会获得不到index_field的name，因为初始化构造有问题
-    //std::string ss=index_field->name();
-    //取record的第0-4个字节，8-12字节
-    //strncpy(new_str,record+index_field->offset(),index_field->len());
-    strncpy(new_str+str_count,record+index_field->offset(),index_field->len());
-    str_count+=index_field->len();
-  }
 
-  return index_handler_.insert_entry(new_str, rid);
+  return index_handler_.insert_entry(record, rid);
 }
 
 RC BplusTreeIndex::delete_entry(const char *record, const RID *rid)
