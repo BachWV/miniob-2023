@@ -357,9 +357,7 @@ public:
   FunctionExprSqlNode(const std::string &expr_name, FunctionSqlNode &&func_sql)
     : ExprSqlNode(expr_name, ExprSqlNodeType::Function), func_sql_(std::move(func_sql)) {}
 
-  RC resolve(ExprResolveContext *ctx, ExprResolveResult *result) const override {
-    return RC::SUCCESS;  // TODO 
-  }
+  RC resolve(ExprResolveContext *ctx, ExprResolveResult *result) const override;
 
   FunctionSqlNode &fetch_func_sql_node() { return func_sql_; }
 

@@ -462,3 +462,22 @@ RC QuantifiedCompExprSetExpr::get_value(const Tuple &tuple, Value &value) const
   value.set_boolean(op_ == QuantifiedComp::IN ? is_in : !is_in);
   return RC::SUCCESS;
 }
+
+////////////////////////////////////////////////////////////////////////////////
+
+RC FunctionExpr::get_value(const Tuple &tuple, Value &value) const
+{
+  RC rc = RC::SUCCESS;
+  Value func_arg;
+  rc = tuple.find_cell(func_arg_.to_tuple_cell_spec(), func_arg);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to get value of function argument. rc=%s", strrc(rc));
+    return rc;
+  }
+  rc = kernel_->do_func(func_arg, value);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to do function. rc=%s", strrc(rc));
+    return rc;
+  }
+  return RC::SUCCESS;
+}

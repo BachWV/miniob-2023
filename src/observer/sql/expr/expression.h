@@ -24,6 +24,7 @@ See the Mulan PSL v2 for more details. */
 
 class PhysicalOperator;
 class Tuple;
+class FunctionKernel;
 
 /**
  * @defgroup Expression
@@ -50,7 +51,8 @@ enum class ExprType
   SELECTEXPR,
   COMPNULL,
   LIKE,         // like谓词
-  QUANTIFIED_COMP_EXPR_SET  // 集合比较: expr in/not in/all/any... (expr, expr, ...)
+  QUANTIFIED_COMP_EXPR_SET,  // 集合比较: expr in/not in/all/any... (expr, expr, ...)
+  FUNCTION,
 };
 
 /**
@@ -406,4 +408,21 @@ private:
   std::unique_ptr<Expression> child_;
   QuantifiedComp op_;
   std::vector<std::unique_ptr<Expression>> set_;
+};
+
+class FunctionExpr: public Expression
+{
+public:
+  FunctionExpr(std::unique_ptr<FunctionKernel> kernel, const FieldIdentifier &func_arg)
+    : kernel_(std::move(kernel)), func_arg_(func_arg) {};
+
+  RC get_value(const Tuple &tuple, Value &value) const override;
+
+  ExprType type() const override { return ExprType::FUNCTION; }
+
+  AttrType value_type() const override { return UNDEFINED; }
+
+private:
+  std::unique_ptr<FunctionKernel> kernel_;
+  FieldIdentifier func_arg_;
 };

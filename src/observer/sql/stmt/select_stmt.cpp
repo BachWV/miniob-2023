@@ -154,7 +154,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
     return RC::INVALID_ARGUMENT;
   }
 
-  StmtResolveContext current_where_resolve_ctx;  // 解析where子句的上下文
+  StmtResolveContext current_expr_ctx;  // 解析语句内表达式的上下文
   StmtResolveContext having_resolve_ctx;  // 解析having子句的上下文
 
   // collect tables in `from` statement
@@ -178,7 +178,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
     tables.push_back(table);
     table_map.insert(std::pair<std::string, Table *>(table_name, table));
 
-    current_where_resolve_ctx.add_table_to_namespace(table_name, table);
+    current_expr_ctx.add_table_to_namespace(table_name, table);
     having_resolve_ctx.add_table_to_namespace(table_name, table);
   }
 
@@ -311,12 +311,19 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
         select_expr_fields.push_back(std::move(fwf));
       }
     }else if(auto field_cul_sql_node = get_if<FieldCulSqlNode>(&select_expr_field)){
-      // TODO：expr怎么校验
+      glob_ctx->push_stmt_ctx(&current_expr_ctx);
+      ExprResolveResult field_cul_resolve_result;
+      auto rc = field_cul_sql_node->cul_expr_->resolve(glob_ctx, &field_cul_resolve_result);
+      HANDLE_RC(rc);
+      glob_ctx->pop_stmt_ctx();
 
-      // success
-      // auto fwc = FieldWithCul(field_cul_sql_node->virtual_field_name_, std::move(field_cul_sql_node->cul_expr_));
-      // fwc.alias_ = field_cul_sql_node->alias_;
-      // select_expr_fields.push_back(std::move(fwc));
+      assert(field_cul_resolve_result.get_subquerys_in_expr().empty());
+      assert(field_cul_resolve_result.get_correlate_exprs().empty());
+      assert(field_cul_resolve_result.get_agg_expr_infos().empty());
+
+      auto fwc = FieldWithCul(field_cul_sql_node->virtual_field_name_, field_cul_resolve_result.owns_result_expr_tree());
+      fwc.alias_ = field_cul_sql_node->alias_;
+      select_expr_fields.push_back(std::move(fwc));
     }else{
       // 出问题了，debug模式下直接kill
       assert(0);
@@ -371,7 +378,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
 
     having_exprs.emplace_back(having_resolve_result.owns_result_expr_tree());
 
-    /* TODO: 处理HAVING子句中，不存在于select的列中的聚集函数，使用having_resolve_result.get_agg_expr_infos()接口 */
+    /*  处理HAVING子句中，不存在于select的列中的聚集函数，使用having_resolve_result.get_agg_expr_infos()接口 */
     std::vector<AggExprInfo> agg_infos = having_resolve_result.get_agg_expr_infos();
     for(auto& agg_info: agg_infos){
       Field agg_field;
@@ -398,7 +405,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
   /* 开始解析where子句 */
   std::vector<std::unique_ptr<ApplyStmt>> apply_stmts;
   std::vector<std::unique_ptr<Expression>> where_exprs;
-  glob_ctx->push_stmt_ctx(&current_where_resolve_ctx);
+  glob_ctx->push_stmt_ctx(&current_expr_ctx);
 
   // 解析每一个where条件(目前所有条件用AND连接)
   bool has_where = false;

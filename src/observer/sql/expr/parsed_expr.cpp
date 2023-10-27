@@ -452,3 +452,14 @@ RC QuantifiedCmpExprSetExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolve
     result->set_result_expr_tree(std::move(expr_tree));
     return RC::SUCCESS;
 }
+
+RC FunctionExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *result) const 
+{
+    FieldIdentifier func_arg(func_sql_.rel_attr.relation_name, func_sql_.rel_attr.attribute_name, func_sql_.rel_attr.alias_);
+
+    // 这里需要move FunctionExprSqlNode里的东西，但接口是const!!!
+    FunctionExprSqlNode *non_const_this = const_cast<FunctionExprSqlNode*>(this);
+    auto expr = std::make_unique<FunctionExpr>(std::move(non_const_this->func_sql_.function_kernel), func_arg);
+    result->set_result_expr_tree(std::move(expr));
+    return RC::SUCCESS;
+}
