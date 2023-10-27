@@ -161,7 +161,6 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 
   // Function
   FunctionSqlNode*                  function_node;
-  std::vector<FunctionSqlNode>*     function_node_list;
   std::string*                       std_string;
   std::vector<InnerJoinSqlNode>*    inner_join_list;
   InnerJoinSqlNode*                 inner_join;
@@ -229,7 +228,6 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <rel_attr_list>       group_by_list 
 // function
 %type <function_node>       function_node
-%type <function_node_list>       function_node_list
 %type <std_string>          alias
 
 
@@ -1321,19 +1319,6 @@ function_node:
       $$->rel_attr = *$3;
       delete $3;
     }
-    ;
-
-function_node_list:
-    function_node{
-      $$ = new std::vector<FunctionSqlNode>;
-      $$->emplace_back(std::move(*$1));
-      delete $1;
-    }
-    | function_node_list COMMA function_node{
-      $$ = $1;
-      $$->emplace_back(std::move(*$3));
-      delete $3;
-    }                                                                     
     ;
 
 alias:

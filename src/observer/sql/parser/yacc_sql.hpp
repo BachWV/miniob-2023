@@ -171,12 +171,11 @@ union YYSTYPE
 
   // Function
   FunctionSqlNode*                  function_node;
-  std::vector<FunctionSqlNode>*     function_node_list;
   std::string*                       std_string;
   std::vector<InnerJoinSqlNode>*    inner_join_list;
   InnerJoinSqlNode*                 inner_join;
 
-#line 180 "yacc_sql.hpp"
+#line 179 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;
