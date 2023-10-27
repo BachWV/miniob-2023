@@ -224,10 +224,11 @@ RC LogicalPlanGenerator::create_plan(
       auto fid = FieldIdentifier("", tmp_field.field_name(), fwf->alias_);
       all_field_identifiers.push_back(fid);
     }else if(auto fwc = std::get_if<FieldWithCul>(&sef)){
-      Field tmp_field = fwf->get_tmp_field();
-      auto fid = FieldIdentifier("", tmp_field.field_name(), fwgb->alias_);
+      Field tmp_field = fwc->get_tmp_field();
+      auto fid = FieldIdentifier("", tmp_field.field_name(), fwc->alias_);
       all_field_identifiers.push_back(fid);
-      unique_ptr<LogicalOperator> function_oper = std::make_unique<FieldCulLogicalOperator>(const_cast<FieldMeta*>(tmp_field.meta()), std::move(fwc->cul_expr_));
+      unique_ptr<LogicalOperator> field_cul_oper = std::make_unique<FieldCulLogicalOperator>(const_cast<FieldMeta*>(tmp_field.meta()), std::move(fwc->cul_expr_));
+      opers.push_back(std::move(field_cul_oper));
     }else{
       assert(0);
     }

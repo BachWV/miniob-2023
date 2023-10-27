@@ -123,6 +123,9 @@ public:
   void add_subquerys(std::vector<std::unique_ptr<ApplyStmt>> &subquerys);
 
   void add_agg_expr_info(AggExprInfo &&info) { agg_expr_infos_.emplace_back(std::move(info)); }
+  void add_agg_expr_infos(std::vector<AggExprInfo> &&infos) { 
+    agg_expr_infos_.insert(agg_expr_infos_.end(), std::make_move_iterator(infos.begin()), std::make_move_iterator(infos.end()));
+  }
 
   std::vector<std::unique_ptr<ApplyStmt>>& get_subquerys_in_expr() { return subquerys_; }
   std::unordered_map<size_t, std::vector<CorrelateExpr*>> &get_correlate_exprs();

@@ -68,6 +68,8 @@ public:
 		format_ = format;
 	}
 private:
+RC format(const std::string& input, const std::string& formatText, std::string &output );
+RC format(int input_int,const std::string& formatText,std::string &output);
 	std::string format_;
 	std::string const_val_;
 };

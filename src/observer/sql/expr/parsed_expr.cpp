@@ -170,6 +170,7 @@ RC NegativeArithExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult 
     result->set_result_expr_tree(std::move(expr_tree));
     result->add_correlate_exprs(sub_result.get_correlate_exprs());
     result->add_subquerys(sub_result.get_subquerys_in_expr());
+    result->add_agg_expr_infos(std::move(sub_result.get_agg_expr_infos()));
 
     return RC::SUCCESS;
 }
@@ -198,6 +199,8 @@ RC BinaryArithExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *r
     result->add_correlate_exprs(right_result.get_correlate_exprs());
     result->add_subquerys(left_result.get_subquerys_in_expr());
     result->add_subquerys(right_result.get_subquerys_in_expr());
+    result->add_agg_expr_infos(std::move(left_result.get_agg_expr_infos()));
+    result->add_agg_expr_infos(std::move(right_result.get_agg_expr_infos()));
 
     return RC::SUCCESS;
 }
@@ -219,6 +222,8 @@ RC CompareExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *resul
     result->add_correlate_exprs(right_result.get_correlate_exprs());
     result->add_subquerys(left_result.get_subquerys_in_expr());
     result->add_subquerys(right_result.get_subquerys_in_expr());
+    result->add_agg_expr_infos(std::move(left_result.get_agg_expr_infos()));
+    result->add_agg_expr_infos(std::move(right_result.get_agg_expr_infos()));
 
     return RC::SUCCESS;
 }
@@ -234,6 +239,8 @@ RC PredNullExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *resu
     result->set_result_expr_tree(std::move(expr_tree));
     result->add_correlate_exprs(sub_result.get_correlate_exprs());
     result->add_subquerys(sub_result.get_subquerys_in_expr());
+    result->add_agg_expr_infos(std::move(sub_result.get_agg_expr_infos()));
+
     return RC::SUCCESS;
 }
 
@@ -326,6 +333,7 @@ RC QuantifiedCompSubqueryExprSqlNode::resolve(ExprResolveContext *ctx, ExprResol
         return rc;
     }
     result->add_correlate_exprs(child_result.get_correlate_exprs());
+    result->add_agg_expr_infos(std::move(child_result.get_agg_expr_infos()));
 
     /* Expr中的子查询要先于右边的(sub_query)执行，所以要先把它们添加进结果 */
     result->add_subquerys(child_result.get_subquerys_in_expr());
@@ -423,6 +431,8 @@ RC LikeExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *result) 
     result->set_result_expr_tree(std::move(expr_tree));
     result->add_correlate_exprs(sub_result.get_correlate_exprs());
     result->add_subquerys(sub_result.get_subquerys_in_expr());
+    result->add_agg_expr_infos(std::move(sub_result.get_agg_expr_infos()));
+
     return RC::SUCCESS;
 }
 
@@ -434,6 +444,7 @@ RC QuantifiedCmpExprSetExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolve
         return rc;
     result->add_correlate_exprs(sub_result.get_correlate_exprs());
     result->add_subquerys(sub_result.get_subquerys_in_expr());
+    result->add_agg_expr_infos(std::move(sub_result.get_agg_expr_infos()));
 
     std::vector<std::unique_ptr<Expression>> expr_for_set;
     for (auto &expr_in_set: *expr_set_)
