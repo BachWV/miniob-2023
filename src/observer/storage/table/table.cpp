@@ -156,22 +156,29 @@ RC Table::open(const char *meta_file, const char *base_dir)
 
   base_dir_ = base_dir;
 
-  const int index_num = table_meta_.index_num();
+  const int index_num = table_meta_.index_num();//获取索引的个数
   for (int i = 0; i < index_num; i++) {
     // 获取索引的字段
     const IndexMeta *index_meta = table_meta_.index(i);
-    const FieldMeta *field_meta = table_meta_.field(index_meta->field());
-    if (field_meta == nullptr) {
-      LOG_ERROR("Found invalid index meta info which has a non-exists field. table=%s, index=%s, field=%s",
-                name(), index_meta->name(), index_meta->field());
-      // skip cleanup
-      //  do all cleanup action in destructive Table function
-      return RC::INTERNAL;
+    //一个索引可以是multi多个字段
+    std::vector<const FieldMeta *> field_metas;
+
+    for(std::string index_name : index_meta->fields()) {
+      const FieldMeta *field_meta = table_meta_.field(index_name.c_str());
+      field_metas.push_back(field_meta);
+      if (field_meta == nullptr) {
+        LOG_ERROR("Found invalid index meta info which has a non-exists field. table=%s, index=%s, field=%s",
+                  name(), index_meta->name(), index_meta->fields()[0]);
+        // skip cleanup
+        //  do all cleanup action in destructive Table function
+        return RC::INTERNAL;
+      }
     }
+
 
     BplusTreeIndex *index = new BplusTreeIndex();
     std::string index_file = table_index_file(base_dir, name(), index_meta->name());
-    rc = index->open(index_file.c_str(), *index_meta, *field_meta);
+    rc = index->open(index_file.c_str(), *index_meta, field_metas);
     if (rc != RC::SUCCESS) {
       delete index;
       LOG_ERROR("Failed to open index. table=%s, index=%s, file=%s, rc=%s",
@@ -235,6 +242,14 @@ RC Table::insert_record(Record &record)
   // 用索引来检查主键完整性约束，如果当前的表没有index呢？
   rc = insert_entry_of_indexes(record.data(), record.rid());
   if (rc != RC::SUCCESS) { // 可能出现了键值重复
+    if(rc==RC::RECORD_DUPLICATE_KEY){
+      RC rc2 = record_handler_->delete_record(&record.rid());
+      if (rc2 != RC::SUCCESS) {
+        LOG_PANIC("Duplicate key ,need to delete record. table name=%s, rc=%d:%s",
+                name(), rc2, strrc(rc2));
+      }
+      return rc;
+    }
     RC rc2 = delete_entry_of_indexes(record.data(), record.rid(), false/*error_on_not_exists*/);
     if (rc2 != RC::SUCCESS) {
       LOG_ERROR("Failed to rollback index data when insert index entries failed. table name=%s, rc=%d:%s",
@@ -445,19 +460,25 @@ RC Table::get_record_scanner(RecordFileScanner &scanner, Trx *trx, bool readonly
   return rc;
 }
 
-RC Table::create_index(Trx *trx, const FieldMeta *field_meta, const char *index_name)
+RC Table::create_index(Trx *trx, std::vector<const FieldMeta *>field_metas, const char *index_name,bool is_unique)
 {
-  if (common::is_blank(index_name) || nullptr == field_meta) {
+  if (common::is_blank(index_name) || field_metas.empty()) {
     LOG_INFO("Invalid input arguments, table name is %s, index_name is blank or attribute_name is blank", name());
     return RC::INVALID_ARGUMENT;
   }
+  
+ // for(const FieldMeta *field_meta : field_metas) {
+    const FieldMeta *field_meta = field_metas[0];
+    if (field_meta == nullptr) {
+      LOG_INFO("Invalid input arguments, table name is %s, field_meta is nullptr", name());
+      return RC::INVALID_ARGUMENT;
+    }
+ // }
+    
 
-  /* 对nullable的列，避免建索引(B+树目前不支持空值key) */
-  if (field_meta->nullable())
-    return RC::SUCCESS;
 
   IndexMeta new_index_meta;
-  RC rc = new_index_meta.init(index_name, *field_meta);
+  RC rc = new_index_meta.init(index_name, field_metas,is_unique);
   if (rc != RC::SUCCESS) {
     LOG_INFO("Failed to init IndexMeta in table:%s, index_name:%s, field_name:%s", 
              name(), index_name, field_meta->name());
@@ -467,15 +488,21 @@ RC Table::create_index(Trx *trx, const FieldMeta *field_meta, const char *index_
   // 创建索引相关数据
   BplusTreeIndex *index = new BplusTreeIndex();
   std::string index_file = table_index_file(base_dir_.c_str(), name(), index_name);
-  rc = index->create(index_file.c_str(), new_index_meta, *field_meta);
+  rc = index->create(index_file.c_str(), new_index_meta, field_metas);
   if (rc != RC::SUCCESS) {
     delete index;
     LOG_ERROR("Failed to create bplus tree index. file name=%s, rc=%d:%s", index_file.c_str(), rc, strrc(rc));
     return rc;
   } 
 
-  // 遍历当前的所有数据，插入这个索引
   RecordFileScanner scanner;
+  Record record;
+    /* 对nullable的列，避免建索引(B+树目前不支持空值key) */
+  if (field_meta->nullable())
+    goto meta_data_write;
+
+  // 遍历当前的所有数据，插入这个索引
+
   rc = get_record_scanner(scanner, trx, true/*readonly*/);
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to create scanner while creating index. table=%s, index=%s, rc=%s", 
@@ -483,7 +510,7 @@ RC Table::create_index(Trx *trx, const FieldMeta *field_meta, const char *index_
     return rc;
   }
 
-  Record record;
+
   while (scanner.has_next()) {
     rc = scanner.next(record);
     if (rc != RC::SUCCESS) {
@@ -501,6 +528,9 @@ RC Table::create_index(Trx *trx, const FieldMeta *field_meta, const char *index_
   scanner.close_scan();
   LOG_INFO("inserted all records into new index. table=%s, index=%s", name(), index_name);
   
+
+
+meta_data_write:
   indexes_.push_back(index);
 
   /// 接下来将这个索引放到表的元数据中

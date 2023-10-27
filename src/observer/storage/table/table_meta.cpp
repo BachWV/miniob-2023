@@ -35,7 +35,9 @@ TableMeta::TableMeta(const TableMeta &other)
     name_(other.name_),
     fields_(other.fields_),
     indexes_(other.indexes_),
-    record_size_(other.record_size_)
+    record_size_(other.record_size_),
+    null_bitmap_offset(other.null_bitmap_offset),
+    null_bitmap_len(other.null_bitmap_len)
 {}
 
 void TableMeta::swap(TableMeta &other) noexcept

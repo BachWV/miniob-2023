@@ -51,16 +51,19 @@ RC UpdatePhysicalOperator::next()
     RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
     Record &record = row_tuple->record();
     //tuple已经拿到数据了，tuple存有record的指针
-  
+    Record record_need_delete;
     Record record_new;
 
     int cell_num=row_tuple->cell_num();
     vector<Value> values_new;
+    vector<Value> values_need_delete;
     values_new.resize(cell_num);
+    values_need_delete.resize(cell_num);
     for(int i=0;i<cell_num;i++){
       Value value;
       row_tuple->cell_at(i,value);
       values_new.at(i)=value;
+      values_need_delete.at(i)=value;
     }
     for(auto &value:value_list_)
     {
@@ -99,7 +102,25 @@ RC UpdatePhysicalOperator::next()
     }
 
     rc = trx_->insert_record(table_, record_new);
-    if (rc != RC::SUCCESS) {
+    if(rc==RC::RECORD_DUPLICATE_KEY){
+        LOG_WARN("update fail: duplicate key ,failed to insert record: %s", strrc(rc));
+        RC rc2 = table_->make_record(static_cast<int>(values_need_delete.size()),values_need_delete.data(),record_need_delete);
+        if(rc2!=RC::SUCCESS)
+        {
+          LOG_WARN("update rollback :failed to make deteled record. rc=%s", strrc(rc2));
+          return rc2;
+        }
+        RC rc3 = trx_->insert_record(table_, record_need_delete);
+        if(rc3!=RC::SUCCESS)
+        {
+          LOG_WARN("update rollback :failed to insert deteled record. rc=%s", strrc(rc2));
+          return rc3;
+        }
+        LOG_WARN("update rollback :SUCCESS,Deleted record insert success. rc=%s", strrc(rc));
+        return rc;
+      }
+    else if (rc != RC::SUCCESS) {
+      
       LOG_WARN("failed to update record: %s", strrc(rc));
       return rc;
     }
