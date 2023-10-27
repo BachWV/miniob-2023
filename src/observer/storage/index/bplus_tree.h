@@ -119,7 +119,8 @@ public:
         if(v1[i]!=v2[i]) return -1;
       }
       return 0;
-    }
+    }else return -1;
+    return -1;
 
     // RID比较
   // 属性值相等，比较RID
