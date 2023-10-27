@@ -1266,14 +1266,14 @@ function_node:
       $$->virtual_field_name = token_name(sql_string, &@$);
     }
     | LENGTH LBRACE SSS RBRACE{
-      // length('str')
+      // length('str')  // bug: length('date') error 
       $$ = new FunctionSqlNode();
       std::string s = std::string($3).substr(1, strlen($3) - 2);
       $$->function_kernel = make_unique<LengthFunctionKernel>(true, s);
       $$->is_const = true;
       $$->virtual_field_name = token_name(sql_string, &@$);
     }
-    | DATE_FORMAT LBRACE SSS COMMA SSS RBRACE{
+    | DATE_FORMAT LBRACE DATE_STR COMMA SSS RBRACE{
       // date_format("2017-06-15", "%y")
       $$ = new FunctionSqlNode();
       std::string s = std::string($3).substr(1, strlen($3) - 2);
