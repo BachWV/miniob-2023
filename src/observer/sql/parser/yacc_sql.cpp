@@ -2051,7 +2051,7 @@ yyreduce:
   case 37: /* attr_def: basic_attr_def  */
 #line 402 "yacc_sql.y"
     {
-      (yyvsp[0].attr_info)->nullable = false;
+      (yyvsp[0].attr_info)->nullable = true;
       (yyval.attr_info) = (yyvsp[0].attr_info);
     }
 #line 2058 "yacc_sql.cpp"

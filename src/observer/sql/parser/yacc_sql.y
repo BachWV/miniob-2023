@@ -400,7 +400,7 @@ attr_def_list:
 attr_def:
     basic_attr_def 
     {
-      $1->nullable = false;
+      $1->nullable = true;
       $$ = $1;
     }
     | basic_attr_def SYM_NOT_NULL 
