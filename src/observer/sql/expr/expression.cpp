@@ -262,15 +262,13 @@ RC ArithmeticExpr::calc_value(const Value &left_value, const Value &right_value,
     case Type::DIV: {
       if (target_type == AttrType::INTS) {
         if (right_value.get_int() == 0) {
-          // NOTE: 设置为整数最大值是不正确的。通常的做法是设置为NULL，但是当前的miniob没有NULL概念，所以这里设置为整数最大值。
-          value.set_int(numeric_limits<int>::max());
+          value.set_null();
         } else {
           value.set_int(left_value.get_int() / right_value.get_int());
         }
       } else {
         if (right_value.get_float() > -EPSILON && right_value.get_float() < EPSILON) {
-          // NOTE: 设置为浮点数最大值是不正确的。通常的做法是设置为NULL，但是当前的miniob没有NULL概念，所以这里设置为浮点数最大值。
-          value.set_float(numeric_limits<float>::max());
+          value.set_null();
         } else {
           value.set_float(left_value.get_float() / right_value.get_float());
         }
@@ -469,10 +467,12 @@ RC FunctionExpr::get_value(const Tuple &tuple, Value &value) const
 {
   RC rc = RC::SUCCESS;
   Value func_arg;
-  rc = tuple.find_cell(func_arg_.to_tuple_cell_spec(), func_arg);
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to get value of function argument. rc=%s", strrc(rc));
-    return rc;
+  if (!is_const_) {
+    rc = tuple.find_cell(func_arg_.to_tuple_cell_spec(), func_arg);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to get value of function argument. rc=%s", strrc(rc));
+      return rc;
+    }
   }
   rc = kernel_->do_func(func_arg, value);
   if (rc != RC::SUCCESS) {
