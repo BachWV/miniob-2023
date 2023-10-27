@@ -17,8 +17,6 @@ See the Mulan PSL v2 for more details. */
 #include "storage/db/db.h"
 #include "common/lang/string.h"
 #include "common/log/log.h"
-#include "event/sql_debug.h"
-#include <cstring>
 
 using namespace std;
 using namespace common;
@@ -28,13 +26,6 @@ RC CreateIndexStmt::create(Db *db, const CreateIndexSqlNode &create_index, Stmt 
   stmt = nullptr;
 
   const char *table_name = create_index.relation_name.c_str();
-  if(strcmp(table_name,"unique_table2")==0){
-
-    for(int i=0;i<create_index.attribute_names.size();i++){
-      sql_debug("field :%s",create_index.attribute_names[i].c_str());
-     
-    }
-  }
   if (is_blank(table_name) || is_blank(create_index.index_name.c_str()) || create_index.attribute_names.empty()) {
     LOG_WARN("invalid argument. db=%p, table_name=%p, index name=%s, attribute name=%s",
         db, table_name, create_index.index_name.c_str(), create_index.attribute_names.data());

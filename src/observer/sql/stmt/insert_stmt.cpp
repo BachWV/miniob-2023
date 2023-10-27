@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
+#include "event/sql_debug.h"
 
 InsertStmt::InsertStmt(Table *table, std::vector<std::vector<Value> >value_rows)
     : table_(table), value_rows_(value_rows)
@@ -38,6 +39,14 @@ RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
     return RC::SCHEMA_TABLE_NOT_EXIST;
   }
   const TableMeta &table_meta = table->table_meta();
+  if(table_meta.index_num()==0){
+    sql_debug("index is null");
+  }else{
+    for(auto fid: table_meta.index(0)->fields()){
+      sql_debug("field :%s",fid.c_str());
+    }
+  }
+
       // 注意我们要减去sys_field
   const int field_num = table_meta.field_num() - table_meta.sys_field_num();
 
