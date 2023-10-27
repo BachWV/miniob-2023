@@ -99,7 +99,8 @@ RC check_order_by_field(Db *db, const std::unordered_map<std::string, Table *>& 
 
 // 只检查具名的字段(如id，name等)，带有"*"不会通过check。RelAttrNode -> Field
 // 成功返回RC::success，并返回构建好的field；失败返回RC::SCHEMA_FIELD_MISSING
-RC resolve_common_field(Db *db, const std::unordered_map<std::string, Table *>& table_map, const std::vector<Table *>& tables,
+RC resolve_common_field(Db *db, const std::unordered_map<std::string, Table *>& table_map, 
+  const std::vector<std::pair<Table *, std::string>>& tables,
   const RelAttrSqlNode& relation_attr, Field& field){
     
     if (!common::is_blank(relation_attr.relation_name.c_str())) {
@@ -158,12 +159,13 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
   StmtResolveContext having_resolve_ctx;  // 解析having子句的上下文
 
   // collect tables in `from` statement
-  std::vector<Table *> tables;
+  std::vector<std::pair<Table *, std::string>> tables;
   std::unordered_map<std::string, Table *> table_map;
 
   /* 做别名时记得在这里修改 */
   for (size_t i = 0; i < select_sql.relations.size(); i++) {
-    const char *table_name = select_sql.relations[i].c_str();
+    const char *table_name = select_sql.relations[i].first.c_str();
+    const std::string &alias_name = select_sql.relations[i].second;
     if (nullptr == table_name) {
       LOG_WARN("invalid argument. relation name is null. index=%d", i);
       return RC::INVALID_ARGUMENT;
@@ -175,11 +177,18 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
       return RC::SCHEMA_TABLE_NOT_EXIST;
     }
 
-    tables.push_back(table);
-    table_map.insert(std::pair<std::string, Table *>(table_name, table));
+    tables.emplace_back(table, alias_name);
 
-    current_expr_ctx.add_table_to_namespace(table_name, table);
-    having_resolve_ctx.add_table_to_namespace(table_name, table);
+    std::string avail_table_name;
+    if (alias_name.length() != 0)
+      avail_table_name = alias_name;
+    else
+      avail_table_name = table_name;
+
+    table_map.insert(std::pair<std::string, Table *>(avail_table_name, table));
+
+    current_expr_ctx.add_table_to_namespace(avail_table_name, table);
+    having_resolve_ctx.add_table_to_namespace(avail_table_name, table);
   }
 
   // collect fields in `group by` statement
@@ -455,6 +464,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
   // everything alright
   SelectStmt *select_stmt = new SelectStmt();
   select_stmt->tables_.swap(tables);
+  select_stmt->alias_.swap(alias);
   select_stmt->select_expr_fields_.swap(select_expr_fields);
   select_stmt->group_by_field_.swap(group_fields);
   select_stmt->order_fields_ = order_fields;

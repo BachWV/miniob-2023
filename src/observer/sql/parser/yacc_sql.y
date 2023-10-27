@@ -142,7 +142,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   std::vector<std::vector<Value>> *    value_rows;
   std::vector<Value> *              value_list;
   std::vector<RelAttrSqlNode> *     rel_attr_list;
-  std::vector<std::string> *        relation_list;
+  std::vector<relation_with_alias> *        relation_list;
+  relation_with_alias*              rel_with_alias;
   char *                            string;
   int                               number;
   float                             floats;
@@ -186,6 +187,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <value_list>          value_list
 %type <expr_node_list>      where
 %type <relation_list>       rel_list
+%type <rel_with_alias>      rel_with_alias
 %type <expression>          expression
 %type <expression_list>     expression_list
 %type <sql_node>            calc_stmt
@@ -582,7 +584,7 @@ update_stmt:      /*  update 语句的语法解析树*/
         $$->update.conditions.exprs.swap($5->exprs);
         delete $5;
       }
-      delete $2;
+      free($2);
       
     }
     ;
@@ -606,13 +608,13 @@ set_value:
       $$ = new SetValueSqlNode;
       $$->attr_name = $1;
       $$->rhs_expr.reset($3);
-      delete $1;
+      free($1);
     }
     ;
 
 /* 添加了inner_join_list，合并代码时注意，右边非终结符的标号不要搞错了！ */
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT select_expr_list FROM ID rel_list inner_join_list where group_by having order_by 
+    SELECT select_expr_list FROM rel_list inner_join_list where group_by having order_by 
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
       if ($2 != nullptr) {
@@ -621,15 +623,13 @@ select_stmt:        /*  select 语句的语法解析树*/
         std::reverse($$->selection.select_exprs.begin(), $$->selection.select_exprs.end());
         delete $2;
       }
-      if ($5 != nullptr) {
-        $$->selection.relations.swap(*$5);
-        delete $5;
+      if ($4 != nullptr) {
+        $$->selection.relations.swap(*$4);
+        delete $4;
       }
-      $$->selection.relations.push_back($4);
-      std::reverse($$->selection.relations.begin(), $$->selection.relations.end());
 
-      if ($6 != nullptr) {
-        for (auto &inner_join: *$6)
+      if ($5 != nullptr) {
+        for (auto &inner_join: *$5)
         {
           $$->selection.relations.emplace_back(inner_join.join_relation);
 
@@ -637,37 +637,35 @@ select_stmt:        /*  select 语句的语法解析树*/
             std::make_move_iterator(inner_join.join_conditions.exprs.begin()), 
             std::make_move_iterator(inner_join.join_conditions.exprs.end()));
         }
-        delete $6;
+        delete $5;
       }
 
       // 当前AND和OR混合使用，则结果未定义
-      if ($7 != nullptr) {
-        $$->selection.conditions.type = $7->type;
-        $$->selection.conditions.exprs.swap($7->exprs);
+      if ($6 != nullptr) {
+        $$->selection.conditions.type = $6->type;
+        $$->selection.conditions.exprs.swap($6->exprs);
         $$->selection.conditions.exprs.insert($$->selection.conditions.exprs.end(),
-          std::make_move_iterator($7->exprs.begin()), std::make_move_iterator($7->exprs.end()));
+          std::make_move_iterator($6->exprs.begin()), std::make_move_iterator($6->exprs.end()));
+        delete $6;
+      }
+
+      if ($7 != nullptr) {
+        $$->selection.group_by_attrs.swap(*$7);
+        std::reverse($$->selection.group_by_attrs.begin(), $$->selection.group_by_attrs.end());
         delete $7;
       }
 
-      if ($8 != nullptr) {
-        $$->selection.group_by_attrs.swap(*$8);
-        std::reverse($$->selection.group_by_attrs.begin(), $$->selection.group_by_attrs.end());
+      if($8 != nullptr){
+        $$->selection.having_attrs.type = $8->type;
+        $$->selection.having_attrs.exprs.swap($8->exprs);
         delete $8;
       }
 
-      if($9 != nullptr){
-        $$->selection.having_attrs.type = $9->type;
-        $$->selection.having_attrs.exprs.swap($9->exprs);
+      if ($9 != nullptr) {
+        $$->selection.order_by_attrs.swap(*$9);
+        std::reverse($$->selection.order_by_attrs.begin(), $$->selection.order_by_attrs.end());
         delete $9;
       }
-
-      if ($10 != nullptr) {
-        $$->selection.order_by_attrs.swap(*$10);
-        std::reverse($$->selection.order_by_attrs.begin(), $$->selection.order_by_attrs.end());
-        delete $10;
-      }
-
-      free($4);
     }
     | SELECT select_expr_list{
       $$ = new ParsedSqlNode(SCF_SELECT);
@@ -787,21 +785,29 @@ rel_attr:
     ;
 
 rel_list:
-    /* empty */
-    {
-      $$ = nullptr;
+    rel_with_alias{
+      $$ = new std::vector<relation_with_alias>;
+      $$.emplace_back(std::move(*$1));
+      delete $1;
     }
-    | COMMA ID rel_list {
-      if ($3 != nullptr) {
-        $$ = $3;
-      } else {
-        $$ = new std::vector<std::string>;
-      }
-
-      $$->push_back($2);
-      free($2);
+    | rel_list COMMA rel_with_alias {
+      $$ = $1;
+      $$->emplace_back(std::move(*$3));
+      free($3);
     }
     ;
+
+rel_with_alias:
+    ID alias {
+      $$ = new relation_with_alias;
+      $$.first = std::string($1);
+      free($1);
+      if ($2 != nullptr)
+      {
+        $$.second = *$2;
+        delete $2;
+      }
+    }
 
 inner_join_list:
     /* empty */
@@ -824,14 +830,14 @@ inner_join:
     $$ = new InnerJoinSqlNode;
     $$->join_relation = $2;
     $$->join_conditions = std::move(*$4);
-    delete $2;
+    free($2);
     delete $4;
   }
   | SYM_INNER_JOIN ID
   {
     $$ = new InnerJoinSqlNode;
     $$->join_relation = $2;
-    delete $2;
+    free($2);
   }
 
 where:
@@ -989,10 +995,13 @@ identifier:
     ID
     {
       $$ = new IdentifierExprSqlNode(token_name(sql_string, &@$), std::string(), $1);
+      free(1);
     }
     | ID DOT ID
     {
       $$ = new IdentifierExprSqlNode(token_name(sql_string, &@$), $1, $3);
+      free(1);
+      free(3);
     }
     ;
 
@@ -1328,11 +1337,11 @@ alias:
     }
     | ID{
       $$ = new std::string($1);
-      delete $1;
+      free($1);
     }
     | AS ID{
       $$ = new std::string($2);
-      delete $2;
+      free($2);
     }
 
 opt_semicolon: /*empty*/
