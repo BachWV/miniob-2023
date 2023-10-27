@@ -582,8 +582,7 @@ update_stmt:      /*  update 语句的语法解析树*/
         $$->update.conditions.exprs.swap($5->exprs);
         delete $5;
       }
-      delete $2;
-      
+       free($2);
     }
     ;
 set_value_list:
@@ -606,7 +605,7 @@ set_value:
       $$ = new SetValueSqlNode;
       $$->attr_name = $1;
       $$->rhs_expr.reset($3);
-      delete $1;
+      free($1);
     }
     ;
 
@@ -824,14 +823,14 @@ inner_join:
     $$ = new InnerJoinSqlNode;
     $$->join_relation = $2;
     $$->join_conditions = std::move(*$4);
-    delete $2;
+    free($2);
     delete $4;
   }
   | SYM_INNER_JOIN ID
   {
     $$ = new InnerJoinSqlNode;
     $$->join_relation = $2;
-    delete $2;
+    free($2);
   }
 
 where:
@@ -989,10 +988,13 @@ identifier:
     ID
     {
       $$ = new IdentifierExprSqlNode(token_name(sql_string, &@$), std::string(), $1);
+      free($1);
     }
     | ID DOT ID
     {
       $$ = new IdentifierExprSqlNode(token_name(sql_string, &@$), $1, $3);
+      free($1);
+      free($3);
     }
     ;
 
@@ -1328,11 +1330,11 @@ alias:
     }
     | ID{
       $$ = new std::string($1);
-      delete $1;
+      free($1);
     }
     | AS ID{
       $$ = new std::string($2);
-      delete $2;
+      free($2);
     }
 
 opt_semicolon: /*empty*/
