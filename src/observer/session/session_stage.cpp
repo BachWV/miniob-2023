@@ -100,6 +100,7 @@ void SessionStage::handle_request(StageEvent *event)
 
   Session::set_current_session(sev->session());
   sev->session()->set_current_request(sev);
+  sev->session()->set_sql_debug(true);
   SQLStageEvent sql_event(sev, sql);
   (void)handle_sql(&sql_event);
 
