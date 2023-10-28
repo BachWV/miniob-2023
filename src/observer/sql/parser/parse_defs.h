@@ -19,6 +19,7 @@ See the Mulan PSL v2 for more details. */
 #include <variant>
 #include <vector>
 #include <string>
+#include <utility>
 
 #include "sql/parser/value.h"
 #include "sql/function_kernel/function_kernel.h"
@@ -169,6 +170,7 @@ struct FieldCulSqlNode{
  */
 
 using SelectExprSqlNode = std::variant<RelAttrSqlNode, AggregateFuncSqlNode, FunctionSqlNode, FieldCulSqlNode>;
+using relation_with_alias = std::pair<std::string, std::string>;
 
 struct SelectExprWithAlias
 {
@@ -179,7 +181,7 @@ struct SelectExprWithAlias
 struct SelectSqlNode
 {
   std::vector<SelectExprWithAlias>  select_exprs;
-  std::vector<std::string>        relations;     ///< 查询的表
+  std::vector<relation_with_alias> relations;     ///< 查询的表和其别名<table name, alias>
   Conditions   conditions;    ///< 查询条件，使用AND串联起来多个条件
   std::vector<OrderByAttrSqlNode>  order_by_attrs;  ///< 排序字段及升降序
   std::vector<RelAttrSqlNode>     group_by_attrs;

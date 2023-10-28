@@ -75,7 +75,7 @@ public:
     std::unordered_map<size_t, std::vector<CorrelateExpr*>> *correlate_exprs);
 
 public:
-  const std::vector<Table *> &tables() const
+  const std::vector<std::pair<Table *, std::string>> &tables() const
   {
     return tables_;
   }
@@ -102,7 +102,10 @@ private:
   RC resolve_select_expr_sql_node(const SelectExprSqlNode& sesn, SelectExprField& sef);
 
 private:
-  std::vector<Table *> tables_;
+  // table对象，和它在select语句中的别名。
+  // 如果没有别名，则tables_.second.empty()为true，即std::string里是空字符串
+  std::vector<std::pair<Table *, std::string>> tables_;
+
   std::vector<FieldWithOrder> order_fields_;
   
   bool has_where_ = false;

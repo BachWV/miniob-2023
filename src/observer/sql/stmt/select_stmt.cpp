@@ -193,12 +193,13 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
   StmtResolveContext having_resolve_ctx;  // 解析having子句的上下文
 
   // collect tables in `from` statement
-  std::vector<Table *> tables;
+  std::vector<std::pair<Table *, std::string>> tables;
   std::unordered_map<std::string, Table *> table_map;
 
   /* 做别名时记得在这里修改 */
   for (size_t i = 0; i < select_sql.relations.size(); i++) {
-    const char *table_name = select_sql.relations[i].c_str();
+    const char *table_name = select_sql.relations[i].first.c_str();
+    const std::string &alias_name = select_sql.relations[i].second;
     if (nullptr == table_name) {
       LOG_WARN("invalid argument. relation name is null. index=%d", i);
       return RC::INVALID_ARGUMENT;
@@ -210,11 +211,18 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
       return RC::SCHEMA_TABLE_NOT_EXIST;
     }
 
-    tables.push_back(table);
-    table_map.insert(std::pair<std::string, Table *>(table_name, table));
+    tables.emplace_back(table, alias_name);
 
-    current_expr_ctx.add_table_to_namespace(table_name, table);
-    having_resolve_ctx.add_table_to_namespace(table_name, table);
+    std::string avail_table_name;
+    if (alias_name.length() != 0)
+      avail_table_name = alias_name;
+    else
+      avail_table_name = table_name;
+
+    table_map.insert(std::pair<std::string, Table *>(avail_table_name, table));
+
+    current_expr_ctx.add_table_to_namespace(avail_table_name, table);
+    having_resolve_ctx.add_table_to_namespace(avail_table_name, table);
   }
 
   // collect fields in `group by` statement

@@ -152,7 +152,8 @@ union YYSTYPE
   std::vector<std::vector<Value>> *    value_rows;
   std::vector<Value> *              value_list;
   std::vector<RelAttrSqlNode> *     rel_attr_list;
-  std::vector<std::string> *        relation_list;
+  std::vector<relation_with_alias> *        relation_list;
+  relation_with_alias*              rel_with_alias;
   char *                            string;
   int                               number;
   float                             floats;
@@ -175,7 +176,7 @@ union YYSTYPE
   std::vector<InnerJoinSqlNode>*    inner_join_list;
   InnerJoinSqlNode*                 inner_join;
 
-#line 179 "yacc_sql.hpp"
+#line 180 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;
