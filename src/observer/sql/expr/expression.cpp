@@ -228,6 +228,27 @@ AttrType ArithmeticExpr::value_type() const
   return AttrType::FLOATS;
 }
 
+ExprValueAttr ArithmeticExpr::value_attr() const 
+{
+  if (!right_) {
+    return left_->value_attr();
+  }
+
+  ExprValueAttr left_attr = left_->value_attr();
+  ExprValueAttr right_attr = right_->value_attr();
+
+  ExprValueAttr attr;
+  attr.nullable = true;
+  attr.length = 4;
+
+  if (left_attr.type == AttrType::INTS && right_attr.type == AttrType::INTS && arithmetic_type_ != Type::DIV)
+    attr.type = AttrType::INTS;
+  else
+    attr.type = AttrType::FLOATS;
+
+  return attr;
+}
+
 RC ArithmeticExpr::calc_value(const Value &left_value, const Value &right_value, Value &value) const
 {
   RC rc = RC::SUCCESS;
@@ -486,4 +507,9 @@ RC FunctionExpr::get_value(const Tuple &tuple, Value &value) const
     return rc;
   }
   return RC::SUCCESS;
+}
+
+ExprValueAttr FunctionExpr::value_attr() const 
+{
+  return kernel_->get_value_attr();
 }

@@ -119,4 +119,7 @@ private:
   bool has_having_ = false;
   std::unique_ptr<ConjunctionExpr> having_exprs_;
   std::vector<AggExprInfo> having_agg_infos_;  // having中的聚集函数
+
+  // select t1.id new_id, t2.name new_name, t1.score + t2.score as total_score from t1, t2 where t1.id = t2.id;
+  std::vector<AttrInfoSqlNode> column_attrs_;  // 列的值属性
 };

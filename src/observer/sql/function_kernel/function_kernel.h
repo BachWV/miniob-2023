@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common/rc.h"
+#include "sql/expr/expr_attr.h"
 #include <string>
 // #include "storage/field/field.h"
 
@@ -22,6 +23,10 @@ public:
 	bool get_is_const(){
 		return is_const_;
 	}
+
+	// virtual AttrInfoSqlNode get_attr_info() = 0;
+	virtual ExprValueAttr get_value_attr() const = 0;
+
 protected:
 	// 不应该用FieldIdentifier，因为FieldIdentifier中的字段需要resolve校验，而FunctionKernel中的参数不需要和DB校验
 	// FieldIdentifier 难受，用这个的话，再在paese_defs.h中会产生循环引用
@@ -36,6 +41,15 @@ public:
 	LengthFunctionKernel(bool is_const, std::string const_val)
 		: const_val_(const_val){set_is_const(is_const);}
 	virtual RC do_func(const Value& in, Value& out) override;
+
+	virtual ExprValueAttr get_value_attr() const override {
+		ExprValueAttr attr;
+		attr.length = 4;
+		attr.type = AttrType::INTS;
+		attr.nullable = true;
+		return attr;
+	}
+
 private:
 	std::string const_val_;
 };
@@ -52,6 +66,15 @@ public:
 	void set_is_single_(bool b){
 		is_single_ = b;
 	}
+
+	virtual ExprValueAttr get_value_attr() const override {
+		ExprValueAttr attr;
+		attr.length = 4;
+		attr.type = AttrType::FLOATS;
+		attr.nullable = true;
+		return attr;
+	}
+
 private:
 	bool is_single_;
 	int decimals_;
@@ -67,6 +90,15 @@ public:
 	void set_format(std::string format){
 		format_ = format;
 	}
+
+	virtual ExprValueAttr get_value_attr() const override {
+		ExprValueAttr attr;
+		attr.length = 200;
+		attr.type = AttrType::CHARS;
+		attr.nullable = true;
+		return attr;
+	}
+
 private:
 RC format(const std::string& input, const std::string& formatText, std::string &output );
 RC format(int input_int,const std::string& formatText,std::string &output);

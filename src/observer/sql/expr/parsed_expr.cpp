@@ -8,8 +8,16 @@
 #include "common/log/log.h"
 
 RC StmtResolveContext::resolve_table_field_identifier(const std::string &table_name, const std::string &field_name,
-    std::optional<FieldIdentifier> &result) const
+    std::optional<FieldIdentifier> &result, ExprValueAttr &value_attr) const
 {
+    auto field_meta_to_value_attr = [](const FieldMeta *field_meta) {
+        ExprValueAttr value_attr;
+        value_attr.type = field_meta->type();
+        value_attr.length = field_meta->len();
+        value_attr.nullable = field_meta->nullable();
+        return value_attr;
+    };
+
     result = std::nullopt;
 
     /* 给定了表名，则只查找该表 */
@@ -22,7 +30,10 @@ RC StmtResolveContext::resolve_table_field_identifier(const std::string &table_n
         const FieldMeta *field_meta = table->table_meta().field(field_name.c_str());
 
         if (field_meta != nullptr)
+        {
             result = FieldIdentifier(table_name, field_name);
+            value_attr = field_meta_to_value_attr(field_meta);
+        }
         
         return RC::SUCCESS;
     }
@@ -44,6 +55,7 @@ RC StmtResolveContext::resolve_table_field_identifier(const std::string &table_n
                 }
                 target_table_name = ele_table_name;
                 target_field = field_meta;
+                value_attr = field_meta_to_value_attr(field_meta);
             }
         }
 
@@ -121,7 +133,8 @@ RC IdentifierExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *re
 
         /* Identifier类型的表达式只能是引用表中列名的表达式，其它的名字引用用其它类型的表达式实现 */
         std::optional<FieldIdentifier> field_identifier;
-        RC rc = stmt_ctx.resolve_table_field_identifier(table_name, field_name, field_identifier);
+        ExprValueAttr value_attr;
+        RC rc = stmt_ctx.resolve_table_field_identifier(table_name, field_name, field_identifier, value_attr);
         if (rc != RC::SUCCESS)
             return rc;
         
@@ -131,12 +144,15 @@ RC IdentifierExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *re
             // 如果是在当前作用域中搜索到的，也就是标识符引用的是当前层的表，那么不是相关表达式，就是一个IdentifierExpr
             if (level == ctx->current_level())
             {
-                expr = std::make_unique<IdentifierExpr>(field_identifier.value());
+                auto id_expr = std::make_unique<IdentifierExpr>(field_identifier.value());
+                id_expr->set_value_attr(value_attr);
+                expr.reset(id_expr.release());
             }
             // 否则，这个标识符是一个相关表达式，是第level层查询的相关子查询
             else
             {
                 auto correlate_expr = std::make_unique<CorrelateExpr>(field_identifier.value());
+                correlate_expr->set_value_attr(value_attr);
                 result->add_correlate_expr(level, correlate_expr.get());
                 expr.reset(correlate_expr.release());
                 LOG_DEBUG("add correlate expr : %s.%s . Correlate to level=%u, table=%s, field=%s", 
@@ -383,6 +399,7 @@ RC AggIdentifierExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult 
     RC rc = RC::SUCCESS;
     bool is_in_select_column = false;
     std::optional<FieldIdentifier> resolved_identifier;
+    ExprValueAttr agg_field_attr;
 
     const StmtResolveContext& stmt_ctx = ctx->get_ith_level_stmt_ctx(ctx->current_level());
     
@@ -400,7 +417,8 @@ RC AggIdentifierExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult 
     }
     else
     {
-        rc = stmt_ctx.resolve_table_field_identifier(agg_field_.table_name(), agg_field_.field_name(), resolved_identifier);
+        rc = stmt_ctx.resolve_table_field_identifier(agg_field_.table_name(), agg_field_.field_name(), resolved_identifier,
+            agg_field_attr);
         if (rc != RC::SUCCESS || !resolved_identifier.has_value())
         {
             LOG_WARN("resolve agg field failed.");
@@ -418,6 +436,26 @@ RC AggIdentifierExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult 
 
     /* 生成一个以聚集函数全名为Identifer的表达式，用于从tuple中取出聚集函数结果 */
     auto expr = std::make_unique<IdentifierExpr>(FieldIdentifier(expr_name_));
+
+    ExprValueAttr value_attr;
+    if (op_ == AggregateOp::AGG_COUNT)
+    {
+        value_attr.length = 4;
+        value_attr.type = AttrType::INTS;
+        value_attr.nullable = true;
+    }
+    else if (op_ == AggregateOp::AGG_AVG)
+    {
+        value_attr.length = 4;
+        value_attr.type = AttrType::FLOATS;
+        value_attr.nullable = true;
+    }
+    else  // MAX, MIN, SUM
+    {
+        value_attr = agg_field_attr;
+    }
+    expr->set_value_attr(value_attr);
+
     result->set_result_expr_tree(std::move(expr));
     return RC::SUCCESS;
 }
@@ -468,12 +506,15 @@ RC QuantifiedCmpExprSetExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolve
 RC FunctionExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *result) const 
 {
     std::unique_ptr<FunctionExpr> expr;
+    ExprValueAttr value_attr;
     if (!func_sql_.is_const)
     {
         // 这里不考虑Function中的参数是相关表达式
         const StmtResolveContext& cur_ctx = ctx->get_ith_level_stmt_ctx(ctx->current_level());
         std::optional<FieldIdentifier> arg;
-        RC rc = cur_ctx.resolve_table_field_identifier(func_sql_.rel_attr.relation_name, func_sql_.rel_attr.attribute_name, arg);
+        ExprValueAttr arg_attr;
+        RC rc = cur_ctx.resolve_table_field_identifier(func_sql_.rel_attr.relation_name, func_sql_.rel_attr.attribute_name, arg,
+            arg_attr);
         if (rc != RC::SUCCESS || !arg.has_value())
         {
             LOG_WARN("resolve arg in function failed");
@@ -489,7 +530,7 @@ RC FunctionExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *resu
         FunctionExprSqlNode *non_const_this = const_cast<FunctionExprSqlNode*>(this);
         expr = std::make_unique<FunctionExpr>(std::move(non_const_this->func_sql_.function_kernel));
     }
-
+    
     result->set_result_expr_tree(std::move(expr));
     return RC::SUCCESS;
 }

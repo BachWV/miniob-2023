@@ -11,6 +11,7 @@
 #include "sql/parser/value.h"
 #include "storage/field/field.h"
 #include "sql/parser/parse_defs.h"
+#include "sql/expr/expr_attr.h"
 
 class Expression;
 class Table;
@@ -75,7 +76,7 @@ public:
 
   /* 解析引用表中某一列的名字。解析成功（找不到也算成功，都返回RC::SUCCESS）。解析中出现错误（如出现歧义），返回其错误码 */
   RC resolve_table_field_identifier(const std::string &table_name, const std::string &field_name,
-    std::optional<FieldIdentifier> &result) const;
+    std::optional<FieldIdentifier> &result, ExprValueAttr &value_attr) const;
   
   /* 解析聚集函数等虚拟字段的名字 */
   RC resolve_other_column_name(const std::string &col_name) const;
@@ -218,6 +219,7 @@ protected:
   Value value_;
 };
 
+// 
 class IdentifierExprSqlNode : public ExprSqlNode
 {
 public:
@@ -226,6 +228,7 @@ public:
   virtual ~IdentifierExprSqlNode() = default;
 
   RC resolve(ExprResolveContext *ctx, ExprResolveResult *result) const override;
+  // AttrInfo get_attr_info(): 
 
   const std::string& get_table_name() const { return table_name; }
   const std::string& get_field_name() const { return field_name; } 

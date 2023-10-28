@@ -88,6 +88,11 @@ RC RoundFunctionKernel::do_func(const Value &in, Value &out)
 
 RC FormatFunctionKernel::do_func(const Value &in, Value &out)
 {
+  if (in.is_null_value())
+  {
+    out = in;
+    return RC::SUCCESS;
+  }
   string ori = in.get_string();
   std::string formatted;
   if(is_const_){
