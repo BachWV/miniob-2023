@@ -185,6 +185,11 @@ struct InnerJoinSqlNode
   Conditions join_conditions; // inner join的on后面的条件
 };
 
+struct CreateTableSelectSqlNode{
+  std::string created_table_name_;
+  SelectSqlNode selected_sql_node_;
+};
+
 /**
  * @brief 算术表达式计算的语法树
  * @ingroup SQLParser
@@ -243,7 +248,7 @@ struct UpdateSqlNode
 struct AttrInfoSqlNode
 {
   AttrType    type;       ///< Type of attribute
-  std::string name;       ///< Attribute name
+  std::string name;       ///< Attribute name // cts中，别名resolve后直接设置成正名
   size_t      length;     ///< Length of attribute
   bool nullable = false;  // 是否能为空值
 };
@@ -377,6 +382,7 @@ enum SqlCommandFlag
   SCF_EXIT,
   SCF_EXPLAIN,
   SCF_SET_VARIABLE, ///< 设置变量
+  SCF_CREATE_TABLE_SELECT,
 };
 /**
  * @brief 表示一个SQL语句
@@ -400,6 +406,7 @@ public:
   LoadDataSqlNode           load_data;
   ExplainSqlNode            explain;
   SetVariableSqlNode        set_variable;
+  CreateTableSelectSqlNode  create_table_select;  // 记得设置scf
 
 public:
   ParsedSqlNode();

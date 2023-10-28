@@ -47,6 +47,8 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/function_logical_operator.h"
 #include "sql/operator/field_cul_physical_operator.h"
 #include "sql/operator/field_cul_logical_operator.h"
+#include "sql/operator/insert_multi_physical_operator.h"
+#include "sql/operator/insert_multi_logical_operator.h"
 #include "sql/expr/expression.h"
 #include "common/log/log.h"
 
@@ -122,6 +124,10 @@ RC PhysicalPlanGenerator::create(LogicalOperator &logical_operator, unique_ptr<P
 
     case LogicalOperatorType::FIELD_CUL: {
       return create_plan(static_cast<FieldCulLogicalOperator&>(logical_operator), oper);
+    }break;
+
+    case LogicalOperatorType::INSERT_MULTI: {
+      return create_plan(static_cast<InsertMultiLogicalOperator&>(logical_operator), oper);
     }break;
 
     default: {
@@ -596,6 +602,27 @@ RC PhysicalPlanGenerator::create_plan(FieldCulLogicalOperator& logical_oper, std
   }
 
   oper = make_unique<FieldCulPhysicalOperator>(logical_oper.virtual_meta_, std::move(logical_oper.cul_expr_));
+  oper->add_child(std::move(child_phy_oper));
+
+  return rc;
+}
+
+RC PhysicalPlanGenerator::create_plan(InsertMultiLogicalOperator& logical_oper, std::unique_ptr<PhysicalOperator> &oper)
+{
+  vector<unique_ptr<LogicalOperator>> &child_opers = logical_oper.children();
+  unique_ptr<PhysicalOperator> child_phy_oper;
+
+  RC rc = RC::SUCCESS;
+  if (!child_opers.empty()) {
+    LogicalOperator *child_oper = child_opers.front().get();
+    rc = create(*child_oper, child_phy_oper);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to create insert multi logical operator's child physical operator. rc=%s", strrc(rc));
+      return rc;
+    }
+  }
+
+  oper = make_unique<InsertMultiPhysicalOperator>();
   oper->add_child(std::move(child_phy_oper));
 
   return rc;

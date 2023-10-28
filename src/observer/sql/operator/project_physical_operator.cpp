@@ -82,6 +82,7 @@ void ProjectPhysicalOperator::add_projection(const Table *table, const FieldMeta
   tuple_.add_cell_spec(spec);
 }
 
+// void ProjectPhysicalOperator::add_projection(FieldIdentifier &fi, std::string output_name)
 void ProjectPhysicalOperator::add_projection(FieldIdentifier &fi)
 {
   std::string schema_name;

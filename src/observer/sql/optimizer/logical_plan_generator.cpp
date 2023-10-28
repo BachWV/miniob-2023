@@ -30,8 +30,11 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/explain_logical_operator.h"
 #include "sql/operator/sort_logical_operator.h"
 #include "sql/operator/function_logical_operator.h"
+#include "sql/stmt/create_table_stmt.h"
 #include "sql/stmt/field_with_function.h"
 #include "sql/operator/field_cul_logical_operator.h"
+#include "sql/operator/insert_multi_logical_operator.h"
+
 
 #include "sql/stmt/stmt.h"
 #include "sql/stmt/calc_stmt.h"
@@ -43,6 +46,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/explain_stmt.h"
 #include "sql/stmt/apply_stmt.h"
 #include "storage/field/field.h"
+#include "sql/stmt/create_table_select_stmt.h"
 #include <memory>
 
 using namespace std;
@@ -80,6 +84,12 @@ RC LogicalPlanGenerator::create(Stmt *stmt, unique_ptr<LogicalOperator> &logical
       ExplainStmt *explain_stmt = static_cast<ExplainStmt *>(stmt);
       rc = create_plan(explain_stmt, logical_operator);
     } break;
+
+    case StmtType::CREATE_TABLE_SELECT: {
+      CreateTableSelectStmt* cts_stmt = static_cast<CreateTableSelectStmt *>(stmt);
+      rc = create_plan(cts_stmt, logical_operator);
+    } break;
+
     default: {
       rc = RC::UNIMPLENMENT;
     }
@@ -317,7 +327,6 @@ RC LogicalPlanGenerator::create_plan(
   Table *table = insert_stmt->table();
   vector<vector<Value>> value_rows(insert_stmt->value_rows());
 
-  // 它为什么还要重新构建一个values呢？直接用stmt的values不行吗
   InsertLogicalOperator *insert_operator = new InsertLogicalOperator(table, value_rows);
   logical_operator.reset(insert_operator);
   return RC::SUCCESS;
@@ -419,4 +428,18 @@ RC LogicalPlanGenerator::create_plan(
   logical_operator = unique_ptr<LogicalOperator>(new ExplainLogicalOperator);
   logical_operator->add_child(std::move(child_oper));
   return rc;
+}
+
+RC LogicalPlanGenerator::create_plan(CreateTableSelectStmt *cts_stmt, std::unique_ptr<LogicalOperator> &logical_operator){
+  unique_ptr<LogicalOperator> select_top_oper(nullptr);
+  RC rc = RC::SUCCESS;
+  rc = create(cts_stmt->original_table_stmt(), select_top_oper);
+  HANDLE_RC(rc);
+
+  assert(select_top_oper.get());
+  unique_ptr<InsertMultiLogicalOperator> insert_multi_oper = make_unique<InsertMultiLogicalOperator>();
+  insert_multi_oper->add_child(std::move(select_top_oper));
+
+  logical_operator = std::move(insert_multi_oper);
+  return RC::SUCCESS;
 }

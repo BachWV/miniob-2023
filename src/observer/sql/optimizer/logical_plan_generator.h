@@ -31,6 +31,7 @@ class ExplainStmt;
 class LogicalOperator;
 class Expression;
 class ConjunctionExpr;
+class CreateTableSelectStmt;
 
 class LogicalPlanGenerator
 {
@@ -49,6 +50,7 @@ private:
   RC create_plan(DeleteStmt *delete_stmt, std::unique_ptr<LogicalOperator> &logical_operator);
   RC create_plan(UpdateStmt *update_stmt, std::unique_ptr<LogicalOperator> &logical_operator);
   RC create_plan(ExplainStmt *explain_stmt, std::unique_ptr<LogicalOperator> &logical_operator);
+  RC create_plan(CreateTableSelectStmt *cts_stmt, std::unique_ptr<LogicalOperator> &logical_operator);
 
   // 返回的PredicateLogicOperator接管cond_exprs中Expression的所有权
   RC create_plan(std::unique_ptr<ConjunctionExpr> cond_exprs, std::unique_ptr<LogicalOperator> &logical_operator);

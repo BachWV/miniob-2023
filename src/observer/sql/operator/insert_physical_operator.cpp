@@ -25,6 +25,7 @@ InsertPhysicalOperator::InsertPhysicalOperator(Table *table, vector<vector<Value
 
 RC InsertPhysicalOperator::open(Trx *trx)
 {
+  // TODO: 看孩子是否为空进行判断，有孩子，则孩子的分支直接打开下层算子
   RC rc= RC::SUCCESS;
   std::vector<Record> records;
   for(auto &values : value_rows_) {
@@ -48,6 +49,7 @@ RC InsertPhysicalOperator::open(Trx *trx)
 
 RC InsertPhysicalOperator::next()
 {
+    // TODO: 看孩子是否为空进行判断，若有孩子，那么具体的插入在这里
   return RC::RECORD_EOF;
 }
 

@@ -49,6 +49,7 @@ enum class LogicalOperatorType
   QUANTIFIEDCOMP_SUBQUERY,  ///< 集合比较子查询
   FUNCTION,
   FIELD_CUL,
+  INSERT_MULTI,
 };
 
 /**

@@ -210,6 +210,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <sql_node>            set_variable_stmt
 %type <sql_node>            help_stmt
 %type <sql_node>            exit_stmt
+%type <sql_node>            create_table_select_stmt
 %type <sql_node>            command_wrapper
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
@@ -274,6 +275,7 @@ command_wrapper:
   | set_variable_stmt
   | help_stmt
   | exit_stmt
+  | create_table_select_stmt
     ;
 
 exit_stmt:      
@@ -1334,6 +1336,17 @@ alias:
       $$ = new std::string($2);
       delete $2;
     }
+
+create_table_select_stmt:
+    CREATE TABLE ID AS select_stmt{
+      $$ = new ParsedSqlNode(SCF_CREATE_TABLE_SELECT);
+      CreateTableSelectSqlNode &create_table_select = $$->create_table_select;
+      create_table_select.selected_sql_node_ = std::move($5->selection);
+      delete $5;
+      create_table_select.created_table_name_ = $3;
+      free($3);
+    }
+    ;
 
 opt_semicolon: /*empty*/
     | SEMICOLON

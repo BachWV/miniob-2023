@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #include <string>
 #include <sstream>
 
+#include "common/rc.h"
 #include "sql/executor/execute_stage.h"
 
 #include "common/log/log.h"
@@ -22,7 +23,9 @@ See the Mulan PSL v2 for more details. */
 #include "event/storage_event.h"
 #include "event/sql_event.h"
 #include "event/session_event.h"
+#include "sql/operator/insert_multi_physical_operator.h"
 #include "sql/operator/project_physical_operator.h"
+#include "sql/stmt/create_table_select_stmt.h"
 #include "sql/stmt/stmt.h"
 #include "sql/stmt/select_stmt.h"
 #include "storage/default/default_handler.h"
@@ -96,6 +99,34 @@ RC ExecuteStage::handle_request_with_physical_operator(SQLStageEvent *sql_event)
 
     case StmtType::EXPLAIN: {
       schema.append_cell("Query Plan");
+    } break;
+
+    case StmtType::CREATE_TABLE_SELECT:{
+      CreateTableSelectStmt* cts_stmt = static_cast<CreateTableSelectStmt*>(stmt);
+      // 1. 根据解析出来的proj和从db中拿到的字段名来create table
+      Session *session = sql_event->session_event()->session();
+      RC rc = session->get_current_db()->create_table(cts_stmt->created_table_name().c_str(), cts_stmt->created_table_infos().size(), cts_stmt->created_table_infos().data());
+      HANDLE_RC(rc);
+      // 2. static_cast
+      auto insert_multi_oper = dynamic_cast<InsertMultiPhysicalOperator*>(physical_operator.get());
+      // 3. insert_multy.set(table)
+      insert_multi_oper->set_table(session->get_current_db()->find_table(cts_stmt->created_table_name().c_str()));
+      // 4. 执行并判断是否成功
+      Trx *trx = session->current_trx();
+      trx->start_if_need();
+      rc = insert_multi_oper->open(trx);
+      HANDLE_RC(rc);
+
+      while(RC::SUCCESS == (rc = insert_multi_oper->next())); // 一直执行完
+      
+      if(rc != RC::RECORD_EOF){
+        sql_event->session_event()->sql_result()->set_return_code(rc);
+        return rc;
+      }
+
+      rc = (rc == RC::RECORD_EOF) ? RC::SUCCESS : rc;
+      sql_event->session_event()->sql_result()->set_return_code(rc);
+      return rc;
     } break;
     default: {
       // 只有select返回结果
