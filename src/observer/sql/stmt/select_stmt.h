@@ -75,9 +75,9 @@ public:
     std::unordered_map<size_t, std::vector<CorrelateExpr*>> *correlate_exprs);
 
 public:
-  const std::vector<std::pair<Table *, std::string>> &tables() const
+  const std::unordered_map<std::string, Table *> &table_map() const
   {
-    return tables_;
+    return table_map_;
   }
   std::vector<SelectColumnInfo> &select_expr_fields()
   {
@@ -102,9 +102,10 @@ private:
   RC resolve_select_expr_sql_node(const SelectExprSqlNode& sesn, SelectExprField& sef);
 
 private:
-  // table对象，和它在select语句中的别名。
-  // 如果没有别名，则tables_.second.empty()为true，即std::string里是空字符串
-  std::vector<std::pair<Table *, std::string>> tables_;
+  // 查询的表的名字（有别名则是别名，否则是原名），映射到对应的Table对象
+  // 多个表名可能会映射到同一个Table对象，比如select * from table1 as t1, table1 as t2，
+  // 每一个表名都要建一个TableGet，所以用此结构代替原来的table_数组 
+  std::unordered_map<std::string, Table *> table_map_;
 
   std::vector<FieldWithOrder> order_fields_;
   

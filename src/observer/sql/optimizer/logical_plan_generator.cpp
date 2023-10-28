@@ -127,23 +127,12 @@ RC LogicalPlanGenerator::create_plan(
   unique_ptr<LogicalOperator> table_oper(nullptr);
   std::vector<std::unique_ptr<LogicalOperator>> opers;
 
-  const std::vector<Table *> &tables = select_stmt->tables();
+  auto &table_map = select_stmt->table_map();
   std::vector<SelectExprField>& select_expr_fields = select_stmt->select_expr_fields();
 
   // table-get / join
-  for (Table *table : tables) {
-    std::vector<Field> fields;
-    // 同一个Table中的Field拿出来
-    // 为什么要拿出来，TGlogicOp里的fields成员没有任何引用，这可以改了
-    for (const auto &sef : select_expr_fields) {
-      if(auto fwa = std::get_if<FieldWithAlias>(&sef)){
-        if (common::str_equal(fwa->field_.table_name(), table->name())) {
-          fields.push_back(fwa->field_);
-        }
-      }
-    }
-
-    unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, fields, true/*readonly*/));
+  for (auto& [table_name, table] : table_map) {
+    unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, table_name, true/*readonly*/));
     if (table_oper == nullptr) {
       table_oper = std::move(table_get_oper);
     } else {

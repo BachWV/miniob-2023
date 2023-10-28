@@ -41,8 +41,7 @@ std::unique_ptr<ConjunctionExpr> SelectStmt::fetch_having_exprs()
   return std::move(having_exprs_);
 }
 
-// 如果有表别名，则table_name里是别名，否则是表原名，内部不再使用从Table对象中拿到的名字
-static void wildcard_fields(Table *table, const std::string &table_name, std::vector<std::string>& column_names)
+static void wildcard_fields(Table *table, std::vector<std::string>& column_names)
 {
   const TableMeta &table_meta = table->table_meta();
   const int field_num = table_meta.field_num();
@@ -169,8 +168,11 @@ static bool is_star_identifier(ExprSqlNode *expr)
   return false;
 }
 
-static std::string gen_output_name_for_field_id(bool need_table_name, const std::string &table_name, const std::string &field_name)
+static std::string gen_output_name_for_field_id(bool need_table_name, const std::string &table_name, const std::string &field_name,
+  const std::string &alias)
 {
+  if (!alias.empty())
+    return alias;
   if (need_table_name)
     return table_name + "." + field_name;
   else
@@ -193,10 +195,8 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
   StmtResolveContext having_resolve_ctx;  // 解析having子句的上下文
 
   // collect tables in `from` statement
-  std::vector<std::pair<Table *, std::string>> tables;
-  std::unordered_map<std::string, Table *> table_map;
+  std::unordered_map<std::string, Table *> table_map;  // table的名字（有别名则是别名，否则是表原名），映射到Table对象
 
-  /* 做别名时记得在这里修改 */
   for (size_t i = 0; i < select_sql.relations.size(); i++) {
     const char *table_name = select_sql.relations[i].first.c_str();
     const std::string &alias_name = select_sql.relations[i].second;
@@ -211,15 +211,13 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
       return RC::SCHEMA_TABLE_NOT_EXIST;
     }
 
-    tables.emplace_back(table, alias_name);
-
     std::string avail_table_name;
     if (alias_name.length() != 0)
       avail_table_name = alias_name;
     else
       avail_table_name = table_name;
 
-    table_map.insert(std::pair<std::string, Table *>(avail_table_name, table));
+    table_map.emplace(avail_table_name, table);
 
     current_expr_ctx.add_table_to_namespace(avail_table_name, table);
     having_resolve_ctx.add_table_to_namespace(avail_table_name, table);
@@ -255,18 +253,16 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
       if (common::is_blank(id->get_table_name().c_str())) 
       {
         // 空.*
-        for (Table *table : tables) 
+        for (auto &[table_name, table] : table_map) 
         {
-          std::string table_name = table->name();  // 有表别名时需要在这改
-
           std::vector<std::string> col_names;
-          wildcard_fields(table, table_name, col_names);
+          wildcard_fields(table, col_names);
           for (auto &col_name: col_names)
           {
             SelectColumnInfo col_info;
             col_info.expr_ = std::make_unique<IdentifierExpr>(FieldIdentifier(table_name, col_name));
             col_info.tuple_cell_spec_ = glob_ctx->get_col_id_generator().generate_identifier();
-            col_info.output_name_ = gen_output_name_for_field_id(table_map.size() > 1, table_name, col_name);
+            col_info.output_name_ = gen_output_name_for_field_id(table_map.size() > 1, table_name, col_name, expr_alias);
             select_columns.emplace_back(std::move(col_info));
 
             /* 生成一个表名.列名，用于group by的校验 */
@@ -295,13 +291,13 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
 
           Table *table = iter->second;
           std::vector<std::string> col_names;
-          wildcard_fields(table, id->get_table_name(), col_names);
+          wildcard_fields(table, col_names);
           for (auto &col_name: col_names)
           {
             SelectColumnInfo col_info;
             col_info.expr_ = std::make_unique<IdentifierExpr>(FieldIdentifier(table_name, col_name));
             col_info.tuple_cell_spec_ = glob_ctx->get_col_id_generator().generate_identifier();
-            col_info.output_name_ = gen_output_name_for_field_id(true, table_name, col_name);
+            col_info.output_name_ = gen_output_name_for_field_id(true, table_name, col_name, expr_alias);
             select_columns.emplace_back(std::move(col_info));
 
             /* 生成一个表名.列名，用于group by的校验 */
@@ -333,7 +329,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
         IdentifierExpr *id = static_cast<IdentifierExpr *>(col_info.expr_.get());
         const std::string &table_name = id->field().table_name();
         const std::string &field_name = id->field().field_name();
-        col_info.output_name_ = gen_output_name_for_field_id(table_map.size() > 1, table_name, field_name);
+        col_info.output_name_ = gen_output_name_for_field_id(table_map.size() > 1, table_name, field_name, expr_alias);
         common_fields_set.emplace(table_name, field_name);  // 用于group by校验
       }
       else
@@ -502,7 +498,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
 
   // everything alright
   SelectStmt *select_stmt = new SelectStmt();
-  select_stmt->tables_.swap(tables);
+  select_stmt->table_map_.swap(table_map);
   select_stmt->select_expr_fields_.swap(select_columns);
   select_stmt->group_by_field_.swap(group_fields);
   select_stmt->order_fields_ = order_fields;
