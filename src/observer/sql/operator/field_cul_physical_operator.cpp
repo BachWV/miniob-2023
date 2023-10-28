@@ -1,7 +1,7 @@
 #include "field_cul_physical_operator.h"
 
 RC  FieldCulPhysicalOperator::open(Trx *trx){
-  aof_tuple_.set_new_field_meta(*virtual_meta_);
+  aof_tuple_.set_new_field_meta(virtual_meta_);
   assert(!children_.empty());
   return children_.front()->open(trx);
 }
@@ -35,8 +35,4 @@ RC  FieldCulPhysicalOperator::close(){
 
 Tuple * FieldCulPhysicalOperator::current_tuple(){
   return &aof_tuple_;
-}
-
-FieldCulPhysicalOperator::~FieldCulPhysicalOperator(){
-  delete virtual_meta_;
 }

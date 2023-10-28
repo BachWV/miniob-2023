@@ -142,7 +142,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   std::vector<std::vector<Value>> *    value_rows;
   std::vector<Value> *              value_list;
   std::vector<RelAttrSqlNode> *     rel_attr_list;
-  std::vector<std::string> *        relation_list;
+  std::vector<relation_with_alias> *        relation_list;
+  relation_with_alias*              rel_with_alias;
   char *                            string;
   int                               number;
   float                             floats;
@@ -156,13 +157,13 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   Conditions*                       expr_node_list;
   ExprSqlSet *                      expr_sql_set;
   AggregateFuncSqlNode*             agg_func;
-  std::vector<SelectExprSqlNode>*    select_expr_list;
-  SelectExprSqlNode*                 select_expr;
+  std::vector<SelectExprWithAlias>*   select_expr_list;
+  SelectExprWithAlias*              select_expr;
 
   // Function
   FunctionSqlNode*                  function_node;
   std::string*                       std_string;
-  std::vector<InnerJoinSqlNode>*    inner_join_list;
+  std::vector<std::unique_ptr<InnerJoinSqlNode>>*    inner_join_list;
   InnerJoinSqlNode*                 inner_join;
 }
 
@@ -186,6 +187,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <value_list>          value_list
 %type <expr_node_list>      where
 %type <relation_list>       rel_list
+%type <rel_with_alias>      rel_with_alias
 %type <expression>          expression
 %type <expression_list>     expression_list
 %type <sql_node>            calc_stmt
@@ -342,7 +344,10 @@ create_index_stmt:    /*create index 语句的语法解析树*/
       create_index.index_name = $3;
       create_index.relation_name = $5;
       if ($8 != nullptr) {
-        create_index.attribute_names.swap(*$8);
+        std::vector<std::string> old_list;
+        for(auto& [ori_name, alias]: *$8){
+          create_index.attribute_names.push_back(ori_name);
+        }
         delete $8;
       }
       $$->create_index.attribute_names.push_back($7);
@@ -584,7 +589,7 @@ update_stmt:      /*  update 语句的语法解析树*/
         $$->update.conditions.exprs.swap($5->exprs);
         delete $5;
       }
-      delete $2;
+      free($2);
       
     }
     ;
@@ -608,30 +613,26 @@ set_value:
       $$ = new SetValueSqlNode;
       $$->attr_name = $1;
       $$->rhs_expr.reset($3);
-      delete $1;
+      free($1);
     }
     ;
 
 /* 添加了inner_join_list，合并代码时注意，右边非终结符的标号不要搞错了！ */
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT select_expr_list FROM ID rel_list inner_join_list where group_by having order_by 
+    SELECT select_expr_list FROM rel_list inner_join_list where group_by having order_by 
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
       if ($2 != nullptr) {
         $$->selection.select_exprs.swap(*$2);
-        // 在这里直接把expr_list翻转过来
-        std::reverse($$->selection.select_exprs.begin(), $$->selection.select_exprs.end());
         delete $2;
       }
-      if ($5 != nullptr) {
-        $$->selection.relations.swap(*$5);
-        delete $5;
+      if ($4 != nullptr) {
+        $$->selection.relations.swap(*$4);
+        delete $4;
       }
-      $$->selection.relations.push_back($4);
-      std::reverse($$->selection.relations.begin(), $$->selection.relations.end());
 
-      if ($6 != nullptr) {
-        for (auto &inner_join: *$6)
+      if ($5 != nullptr) {
+        for (auto &inner_join: *$5)
         {
           $$->selection.relations.emplace_back(inner_join.join_relation);
 
@@ -639,57 +640,40 @@ select_stmt:        /*  select 语句的语法解析树*/
             std::make_move_iterator(inner_join.join_conditions.exprs.begin()), 
             std::make_move_iterator(inner_join.join_conditions.exprs.end()));
         }
-        delete $6;
+        delete $5;
       }
 
       // 当前AND和OR混合使用，则结果未定义
-      if ($7 != nullptr) {
-        $$->selection.conditions.type = $7->type;
-        $$->selection.conditions.exprs.swap($7->exprs);
+      if ($6 != nullptr) {
+        $$->selection.conditions.type = $6->type;
+        $$->selection.conditions.exprs.swap($6->exprs);
         $$->selection.conditions.exprs.insert($$->selection.conditions.exprs.end(),
-          std::make_move_iterator($7->exprs.begin()), std::make_move_iterator($7->exprs.end()));
+          std::make_move_iterator($6->exprs.begin()), std::make_move_iterator($6->exprs.end()));
+        delete $6;
+      }
+
+      if ($7 != nullptr) {
+        $$->selection.group_by_attrs.swap(*$7);
+        std::reverse($$->selection.group_by_attrs.begin(), $$->selection.group_by_attrs.end());
         delete $7;
       }
 
-      if ($8 != nullptr) {
-        $$->selection.group_by_attrs.swap(*$8);
-        std::reverse($$->selection.group_by_attrs.begin(), $$->selection.group_by_attrs.end());
+      if($8 != nullptr){
+        $$->selection.having_attrs.type = $8->type;
+        $$->selection.having_attrs.exprs.swap($8->exprs);
         delete $8;
       }
 
-      if($9 != nullptr){
-        $$->selection.having_attrs.type = $9->type;
-        $$->selection.having_attrs.exprs.swap($9->exprs);
+      if ($9 != nullptr) {
+        $$->selection.order_by_attrs.swap(*$9);
+        std::reverse($$->selection.order_by_attrs.begin(), $$->selection.order_by_attrs.end());
         delete $9;
       }
-
-      if ($10 != nullptr) {
-        $$->selection.order_by_attrs.swap(*$10);
-        std::reverse($$->selection.order_by_attrs.begin(), $$->selection.order_by_attrs.end());
-        delete $10;
-      }
-
-      free($4);
     }
     | SELECT select_expr_list{
       $$ = new ParsedSqlNode(SCF_SELECT);
-      if ($2 != nullptr) {
-        std::reverse($2->begin(), $2->end());
-        for(auto& select_expr_sql_node: *$2){
-          if(auto func_sql_node = get_if<FunctionSqlNode>(&select_expr_sql_node)){
-            if(!func_sql_node->is_const){
-              std::unique_ptr<ParsedSqlNode> error_sql_node = std::make_unique<ParsedSqlNode>(SCF_ERROR);
-              sql_result->add_sql_node(std::move(error_sql_node));
-            }
-          }else{
-            std::unique_ptr<ParsedSqlNode> error_sql_node = std::make_unique<ParsedSqlNode>(SCF_ERROR);
-            sql_result->add_sql_node(std::move(error_sql_node));
-          }
-        } 
-
-        $$->selection.select_exprs.swap(*$2);
-        delete $2;
-      }
+      $$->selection.select_exprs.swap(*$2);
+      delete $2;
     }
     ;
 
@@ -789,21 +773,29 @@ rel_attr:
     ;
 
 rel_list:
-    /* empty */
-    {
-      $$ = nullptr;
+    rel_with_alias{
+      $$ = new std::vector<relation_with_alias>;
+      $$->emplace_back(std::move(*$1));
+      delete $1;
     }
-    | COMMA ID rel_list {
-      if ($3 != nullptr) {
-        $$ = $3;
-      } else {
-        $$ = new std::vector<std::string>;
-      }
-
-      $$->push_back($2);
-      free($2);
+    | rel_list COMMA rel_with_alias {
+      $$ = $1;
+      $$->emplace_back(std::move(*$3));
+      free($3);
     }
     ;
+
+rel_with_alias:
+    ID alias {
+      $$ = new relation_with_alias;
+      $$->first = std::string($1);
+      free($1);
+      if ($2 != nullptr)
+      {
+        $$->second = *$2;
+        delete $2;
+      }
+    }
 
 inner_join_list:
     /* empty */
@@ -813,10 +805,9 @@ inner_join_list:
     | inner_join_list inner_join
     {
       if ($1 == nullptr)
-       $1 = new std::vector<InnerJoinSqlNode>;
-      $1->emplace_back(std::move(*$2));
+       $1 = new std::vector<std::unique_ptr<InnerJoinSqlNode>>;
+      $1->emplace_back($2);
       $$ = $1;
-      delete $2;
     }
     ;
 
@@ -826,14 +817,14 @@ inner_join:
     $$ = new InnerJoinSqlNode;
     $$->join_relation = $2;
     $$->join_conditions = std::move(*$4);
-    delete $2;
+    free($2);
     delete $4;
   }
   | SYM_INNER_JOIN ID
   {
     $$ = new InnerJoinSqlNode;
     $$->join_relation = $2;
-    delete $2;
+    free($2);
   }
 
 where:
@@ -991,10 +982,22 @@ identifier:
     ID
     {
       $$ = new IdentifierExprSqlNode(token_name(sql_string, &@$), std::string(), $1);
+      free($1);
     }
     | ID DOT ID
     {
       $$ = new IdentifierExprSqlNode(token_name(sql_string, &@$), $1, $3);
+      free($1);
+      free($3);
+    }
+    | '*'
+    {
+      $$ = new IdentifierExprSqlNode(token_name(sql_string, &@$), std::string(), std::string("*"));
+    }
+    | ID DOT '*'
+    {
+      $$ = new IdentifierExprSqlNode(token_name(sql_string, &@$), $1, std::string("*"));
+      free($1);
     }
     ;
 
@@ -1167,78 +1170,24 @@ agg_func:
 
 // 写完之后放到上面去
 select_expr:
-    '*'{
-      $$ = new SelectExprSqlNode;
-      RelAttrSqlNode attr_node;
-      attr_node.relation_name  = "";
-      attr_node.attribute_name = "*";
-      *$$ = attr_node;
-    }
-    | expr alias {
-      $$ = new SelectExprSqlNode();
-      switch ($1->get_type()) {
-        case ExprSqlNodeType::Identifier: {
-          IdentifierExprSqlNode *identifier = dynamic_cast<IdentifierExprSqlNode *>($1);
-          RelAttrSqlNode attr_node;
-          attr_node.relation_name = identifier->get_table_name();
-          attr_node.attribute_name = identifier->get_field_name();
-
-          if($2 != nullptr)
-            attr_node.alias_ = *$2;
-
-          *$$ = attr_node;
-        } break;
-
-        case ExprSqlNodeType::AggIdentifier: {
-          AggIdentifierExprSqlNode *agg_identifier = dynamic_cast<AggIdentifierExprSqlNode *>($1);
-          FieldIdentifier agg_field = agg_identifier->agg_field();
-
-          AggregateFuncSqlNode agg_node;
-          agg_node.agg_op = agg_identifier->agg_op();
-          agg_node.attr.relation_name = agg_field.table_name();
-          agg_node.attr.attribute_name = agg_field.field_name();
-          agg_node.name = agg_identifier->expr_name();
-
-          if($2 != nullptr)
-            agg_node.alias_ = *$2;
-          
-          *$$ = agg_node;
-        } break;
-
-        case ExprSqlNodeType::Function: {
-          FunctionExprSqlNode *func_expr = dynamic_cast<FunctionExprSqlNode *>($1);
-          auto &func_node = func_expr->fetch_func_sql_node();
-
-          if ($2 != nullptr)
-            func_node.alias_ = *$2;
-          
-          *$$ = std::move(func_node);
-        } break;
-
-        default: {
-          FieldCulSqlNode field_cul_node;
-          field_cul_node.cul_expr_.reset($1);
-          field_cul_node.virtual_field_name_ = field_cul_node.cul_expr_->expr_name();
-
-          if ($2 != nullptr)
-            field_cul_node.alias_ = *$2;
-          
-          *$$ = std::move(field_cul_node);
-        } break;
-      }
+    expr alias {
+      $$ = new SelectExprWithAlias();
+      $$->expr_.reset($1);
+      $$->alias_ = std::move(*$2);
+      delete $2;
     }
     ;
 
 select_expr_list:
     select_expr{
-      $$ = new std::vector<SelectExprSqlNode>;
+      $$ = new std::vector<SelectExprWithAlias>;
       $$->emplace_back(std::move(*$1));
       delete $1;
     }
-    | select_expr COMMA select_expr_list{
-      $$ = $3;
-      $$->emplace_back(std::move(*$1));
-      delete $1;
+    | select_expr_list COMMA select_expr{
+      $$ = $1;
+      $$->emplace_back(std::move(*$3));
+      delete $3;
     }
     ;
 
@@ -1268,14 +1217,14 @@ function_node:
       $$->virtual_field_name = token_name(sql_string, &@$);
     }
     | LENGTH LBRACE SSS RBRACE{
-      // length('str')
+      // length('str')  // bug: length('date') error 
       $$ = new FunctionSqlNode();
       std::string s = std::string($3).substr(1, strlen($3) - 2);
       $$->function_kernel = make_unique<LengthFunctionKernel>(true, s);
       $$->is_const = true;
       $$->virtual_field_name = token_name(sql_string, &@$);
     }
-    | DATE_FORMAT LBRACE SSS COMMA SSS RBRACE{
+    | DATE_FORMAT LBRACE DATE_STR COMMA SSS RBRACE{
       // date_format("2017-06-15", "%y")
       $$ = new FunctionSqlNode();
       std::string s = std::string($3).substr(1, strlen($3) - 2);
@@ -1330,11 +1279,11 @@ alias:
     }
     | ID{
       $$ = new std::string($1);
-      delete $1;
+      free($1);
     }
     | AS ID{
       $$ = new std::string($2);
-      delete $2;
+      free($2);
     }
 
 create_table_select_stmt:

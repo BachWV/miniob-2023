@@ -56,47 +56,11 @@ Tuple *ProjectPhysicalOperator::current_tuple()
   return &tuple_;
 }
 
-// Q:
-// 我们要投影的tuple建立好了之后，为什么current_tuple直接设置的是children的tuple呢，children是怎么根据我们proj算子存储的tuple来设置自己的tuple呢？
-// A: ProjTuple在cell_at函数中帮我们用内部存储的待投影的字段specs_过滤了一下
-void ProjectPhysicalOperator::add_projection(const Table *table, const FieldMeta *field_meta)
-{
-  // 对单表来说，展示的(alias) 字段总是字段名称，
-  // 对多表查询来说，展示的alias 需要带表名字
-  const char *table_name;
-  if (table != nullptr) {
-    table_name = table->name();
-    if (with_table_name_) {
-      schema_.append_cell(table->name(), field_meta->name());
-    } else {
-      schema_.append_cell(field_meta->name());
-    }
-
-  } else {
-    table_name = nullptr;
-    // 只是单独的agg
-    schema_.append_cell(field_meta->name());
-  }
-
-  TupleCellSpec *spec = new TupleCellSpec(table_name, field_meta->name(), field_meta->name());
-  tuple_.add_cell_spec(spec);
-}
-
 // void ProjectPhysicalOperator::add_projection(FieldIdentifier &fi, std::string output_name)
-void ProjectPhysicalOperator::add_projection(FieldIdentifier &fi)
+void ProjectPhysicalOperator::add_projection(FieldIdentifier &fi, std::string output_name)
 {
-  std::string schema_name;
-  if (fi.alias().empty()) {
-    if (with_table_name_) {
-      schema_name = fi.table_name() + "." + fi.field_name();
-    } else {
-      schema_name = fi.field_name();
-    }
-  } else {
-    schema_name = fi.alias();
-  }
-  schema_.append_cell(schema_name.c_str());
+  schema_.append_cell(output_name.c_str());
 
-  TupleCellSpec *spec = new TupleCellSpec(fi.table_name(), fi.field_name(), fi.alias());
+  TupleCellSpec *spec = new TupleCellSpec(fi.table_name(), fi.field_name());
   tuple_.add_cell_spec(spec);
 }

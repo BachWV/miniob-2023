@@ -17,10 +17,10 @@ See the Mulan PSL v2 for more details. */
 #include "storage/trx/trx.h"
 
 IndexScanPhysicalOperator::IndexScanPhysicalOperator(
-    Table *table, Index *index, bool readonly, 
+    Table *table, const std::string &table_name, Index *index, bool readonly, 
     const Value *left_value, bool left_inclusive, 
     const Value *right_value, bool right_inclusive)
-    : table_(table), 
+    : table_(table), table_name_(table_name),
       index_(index), 
       readonly_(readonly), 
       left_inclusive_(left_inclusive), 
@@ -60,6 +60,7 @@ RC IndexScanPhysicalOperator::open(Trx *trx)
   index_scanner_ = index_scanner;
 
   tuple_.set_schema(table_, table_->table_meta().field_metas());
+  tuple_.set_table_name(table_name_);
 
   trx_ = trx;
   return RC::SUCCESS;

@@ -351,6 +351,8 @@ public:
   /* 在FieldIdentifier内维护类型代价高，直接通过get_value返回的value就能拿到类型了，不应该用这个接口 */
   AttrType value_type() const override{ return AttrType::UNDEFINED; }
 
+  const FieldIdentifier &field() const { return field_; }
+
 private:
   FieldIdentifier field_;
 };
@@ -414,7 +416,10 @@ class FunctionExpr: public Expression
 {
 public:
   FunctionExpr(std::unique_ptr<FunctionKernel> kernel, const FieldIdentifier &func_arg)
-    : kernel_(std::move(kernel)), func_arg_(func_arg) {};
+    : kernel_(std::move(kernel)), func_arg_(func_arg), is_const_(false) {};
+
+  FunctionExpr(std::unique_ptr<FunctionKernel> kernel)
+    : kernel_(std::move(kernel)), is_const_(true) {}
 
   RC get_value(const Tuple &tuple, Value &value) const override;
 
@@ -425,4 +430,5 @@ public:
 private:
   std::unique_ptr<FunctionKernel> kernel_;
   FieldIdentifier func_arg_;
+  bool is_const_;
 };

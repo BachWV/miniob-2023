@@ -15,10 +15,10 @@ enum AggregateOp;
 
 class AggregatePhysicalOperator: public PhysicalOperator{
 public:
-	AggregatePhysicalOperator(Field agg_field ,FieldMeta* new_meta, std::vector<Field> group_by_fields, AggregateOp op)
-		: agg_field_(agg_field), new_meta_(new_meta), group_by_fields_(group_by_fields), op_(op){
-			if(!group_by_fields.empty()){
-				cur_group_by_value_.resize(group_by_fields.size());
+	AggregatePhysicalOperator(FieldIdentifier fid ,std::string virtual_name, std::vector<FieldIdentifier> group_by_fids, AggregateOp op)
+		: agg_fid_(fid), virtual_name_(virtual_name), group_by_fids_(group_by_fids), op_(op){
+			if(!group_by_fids.empty()){
+				cur_group_by_value_.resize(group_by_fids.size());
 			}
 		}
 	~AggregatePhysicalOperator();
@@ -51,11 +51,11 @@ public:
 	RC do_group_agg();
 
 private:
-	Field agg_field_;
-	FieldMeta* new_meta_;
+	FieldIdentifier agg_fid_;
+	// 必须是agg的原名
+	std::string virtual_name_;
+	std::vector<FieldIdentifier> group_by_fids_;
 	AggregateOp op_;
-
-	std::vector<Field> group_by_fields_;
 
 	std::vector<AddOneFieldTuple> aof_tuples_;// 就是curr_group_tuples_+这一轮的agg_value
 	// 只保证每个gb-key轮次的状态

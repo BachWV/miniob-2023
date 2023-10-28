@@ -20,24 +20,8 @@ RC CreateTableSelectStmt::create(Db *db, CreateTableSelectSqlNode &sql_node, Stm
 
   select_stmt = dynamic_cast<SelectStmt*>(stmt_tmp);
 
-  // 当前create select只支持普通字段，不支持虚拟字段
-  std::vector<SelectExprField>& select_exprs_fields = select_stmt->select_expr_fields();
-  std::vector<AttrInfoSqlNode> infos;
-  for(auto& e: select_exprs_fields){
-    if(auto fwa = std::get_if<FieldWithAlias>(&e)){
-      AttrInfoSqlNode info = fwa->field_.meta()->to_attr_info();
-      if(!fwa->alias_.empty()){ // 别名的处理
-        info.name = fwa->alias_;
-      }
-      infos.push_back(info);
-      continue;
-    }else{
-      return RC::SQL_SYNTAX;
-    }
-  }
-
   CreateTableSelectStmt* cts_stmt = new CreateTableSelectStmt();
-  cts_stmt->created_table_infos_ = infos;
+  cts_stmt->created_table_infos_ = select_stmt->column_attrs();
   cts_stmt->original_table_stmt_ =select_stmt;
   cts_stmt->created_table_name_ = sql_node.created_table_name_;
   stmt = cts_stmt;

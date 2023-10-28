@@ -14,5 +14,5 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/operator/project_logical_operator.h"
 
-ProjectLogicalOperator::ProjectLogicalOperator(const std::vector<Field> &fields, bool with_table_name) : fields_(fields), with_table_name_(with_table_name)
+ProjectLogicalOperator::ProjectLogicalOperator(const std::vector<Field> &fields, bool with_table_name) : fields_(fields)
 {}

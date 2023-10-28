@@ -188,6 +188,12 @@ public:
     }
   }
 
+  // 用于设置表名(外层可以使用原始表名和表别名，表别名会通过tuple_cell_spec传递到RowTuple，RowTuple要能够解析表别名)
+  void set_table_name(const std::string &table_name)
+  {
+    table_name_ = table_name;
+  }
+
   int cell_num() const override
   {
     return speces_.size();
@@ -218,10 +224,11 @@ public:
     const char *table_name = spec.table_name();
     const char *field_name = spec.field_name();
 
-
     // 理论上传不到这里
     assert(table_name != nullptr);
-    if (0 != strcmp(table_name, table_->name())) {
+
+    // 此处直接与外层使用set_table_name()设置的名字，不再使用table_中的名字，因为外层有可能使用别名
+    if (0 != strcmp(table_name, table_name_.c_str())) {
       return RC::NOTFOUND;
     }
 
@@ -260,6 +267,7 @@ public:
 private:
   Record *record_ = nullptr;
   const Table *table_ = nullptr;
+  std::string table_name_;
   std::vector<FieldExpr *> speces_;
 };
 

@@ -88,7 +88,6 @@ RC RoundFunctionKernel::do_func(const Value &in, Value &out)
 
 RC FormatFunctionKernel::do_func(const Value &in, Value &out)
 {
-  assert(in.attr_type() == CHARS);
   string ori = in.get_string();
   std::string formatted;
   if(is_const_){

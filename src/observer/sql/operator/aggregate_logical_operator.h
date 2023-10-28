@@ -2,14 +2,15 @@
 
 #include "sql/operator/logical_operator.h"
 #include "sql/parser/parse_defs.h"
+#include "storage/field/field.h"
 #include <vector>
 
 enum AggregateOp;
 
 class AggregateLogicalOperator : public LogicalOperator{
 public:
-	AggregateLogicalOperator(FieldMeta* new_meta ,Field agg_field, std::vector<Field> group_fields, AggregateOp op)
-		: new_meta_(new_meta), agg_field_(agg_field), group_fields_(group_fields), op_(op){}
+	AggregateLogicalOperator(FieldIdentifier fid ,std::string virtual_name, std::vector<FieldIdentifier> group_fids, AggregateOp op)
+		: virtual_name_(virtual_name), fid_(fid), group_fids_(group_fids), op_(op){}
 	virtual ~AggregateLogicalOperator() = default;
 
 	LogicalOperatorType type() const override
@@ -17,26 +18,8 @@ public:
     return LogicalOperatorType::AGGREGATE;
   }
 
-	Field get_agg_field(){
-		return agg_field_;
-	}
-
-	std::vector<Field> get_group_fields(){
-		return group_fields_;
-	}
-
-	AggregateOp get_op(){
-		return op_;
-	}
-
-	FieldMeta* get_new_meta(){
-		return new_meta_;
-	}
-	
-
-private:
-	FieldMeta* new_meta_;
-	Field agg_field_;
-	std::vector<Field> group_fields_;
+	FieldIdentifier fid_;
+	std::string virtual_name_;
+	std::vector<FieldIdentifier> group_fids_;
 	AggregateOp op_;
 };

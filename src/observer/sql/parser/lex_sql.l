@@ -124,7 +124,7 @@ AVG                                     RETURN_TOKEN(AVG);
 COUNT                                   RETURN_TOKEN(COUNT);
 SUM                                     RETURN_TOKEN(SUM);
 ROUND                                   RETURN_TOKEN(ROUND);
-DATE_FORMAT                                  RETURN_TOKEN(DATE_FORMAT);
+"DATE_FORMAT"                           RETURN_TOKEN(DATE_FORMAT);
 LENGTH                                  RETURN_TOKEN(LENGTH);
 "GROUP BY"                              RETURN_TOKEN(GROUP_BY);
 "HAVING"                                RETURN_TOKEN(HAVING);     

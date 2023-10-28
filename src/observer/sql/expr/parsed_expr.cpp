@@ -1,6 +1,7 @@
 #include "sql/expr/parsed_expr.h"
 #include "sql/expr/expression.h"
 #include "sql/stmt/apply_stmt.h"
+#include "sql/stmt/select_stmt.h"
 #include "storage/table/table.h"
 #include "storage/db/db.h"
 #include "session/session.h"
@@ -466,11 +467,29 @@ RC QuantifiedCmpExprSetExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolve
 
 RC FunctionExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *result) const 
 {
-    FieldIdentifier func_arg(func_sql_.rel_attr.relation_name, func_sql_.rel_attr.attribute_name, func_sql_.rel_attr.alias_);
+    std::unique_ptr<FunctionExpr> expr;
+    if (!func_sql_.is_const)
+    {
+        // 这里不考虑Function中的参数是相关表达式
+        const StmtResolveContext& cur_ctx = ctx->get_ith_level_stmt_ctx(ctx->current_level());
+        std::optional<FieldIdentifier> arg;
+        RC rc = cur_ctx.resolve_table_field_identifier(func_sql_.rel_attr.relation_name, func_sql_.rel_attr.attribute_name, arg);
+        if (rc != RC::SUCCESS || !arg.has_value())
+        {
+            LOG_WARN("resolve arg in function failed");
+            return rc;
+        }
 
-    // 这里需要move FunctionExprSqlNode里的东西，但接口是const!!!
-    FunctionExprSqlNode *non_const_this = const_cast<FunctionExprSqlNode*>(this);
-    auto expr = std::make_unique<FunctionExpr>(std::move(non_const_this->func_sql_.function_kernel), func_arg);
+        // 这里需要move FunctionExprSqlNode里的东西，但接口是const!!!
+        FunctionExprSqlNode *non_const_this = const_cast<FunctionExprSqlNode*>(this);
+        expr = std::make_unique<FunctionExpr>(std::move(non_const_this->func_sql_.function_kernel), arg.value());
+    }
+    else
+    {
+        FunctionExprSqlNode *non_const_this = const_cast<FunctionExprSqlNode*>(this);
+        expr = std::make_unique<FunctionExpr>(std::move(non_const_this->func_sql_.function_kernel));
+    }
+
     result->set_result_expr_tree(std::move(expr));
     return RC::SUCCESS;
 }

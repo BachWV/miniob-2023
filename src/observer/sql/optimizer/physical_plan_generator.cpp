@@ -183,12 +183,12 @@ RC PhysicalPlanGenerator::create_plan(AggregateLogicalOperator& aggregate_oper, 
     }
   }
   
-  oper = make_unique<AggregatePhysicalOperator>(aggregate_oper.get_agg_field(), aggregate_oper.get_new_meta(), aggregate_oper.get_group_fields(), aggregate_oper.get_op());
+  oper = make_unique<AggregatePhysicalOperator>(aggregate_oper.fid_, aggregate_oper.virtual_name_, aggregate_oper.group_fids_, aggregate_oper.op_);
   oper->add_child(std::move(child_phy_oper));
   return rc;
 }
 
-RC PhysicalPlanGenerator:: create_plan(TableGetLogicalOperator &table_get_oper, unique_ptr<PhysicalOperator> &oper)
+RC PhysicalPlanGenerator::create_plan(TableGetLogicalOperator &table_get_oper, unique_ptr<PhysicalOperator> &oper)
 {
   vector<unique_ptr<Expression>> &predicates = table_get_oper.predicates();
   // 看看是否有可以用于索引查找的表达式
@@ -240,7 +240,7 @@ RC PhysicalPlanGenerator:: create_plan(TableGetLogicalOperator &table_get_oper, 
 
     const Value &value = value_expr->get_value();
     IndexScanPhysicalOperator *index_scan_oper = new IndexScanPhysicalOperator(
-          table, index, table_get_oper.readonly(), 
+          table, table_get_oper.table_name(), index, table_get_oper.readonly(), 
           &value, true /*left_inclusive*/, 
           &value, true /*right_inclusive*/);
           
@@ -248,7 +248,7 @@ RC PhysicalPlanGenerator:: create_plan(TableGetLogicalOperator &table_get_oper, 
     oper = unique_ptr<PhysicalOperator>(index_scan_oper);
     LOG_TRACE("use index scan");
   } else {
-    auto table_scan_oper = new TableScanPhysicalOperator(table, table_get_oper.readonly());
+    auto table_scan_oper = new TableScanPhysicalOperator(table, table_get_oper.table_name(), table_get_oper.readonly());
     table_scan_oper->set_predicates(std::move(predicates));
     oper = unique_ptr<PhysicalOperator>(table_scan_oper);
     LOG_TRACE("use table scan");
@@ -297,15 +297,13 @@ RC PhysicalPlanGenerator::create_plan(ProjectLogicalOperator &project_oper, uniq
     }
   }
 
-  ProjectPhysicalOperator *project_operator = new ProjectPhysicalOperator(project_oper.get_with_table_name());
-  // const vector<Field> &project_fields = project_oper.fields();
-  // for (const Field &field : project_fields) {
-  //   project_operator->add_projection(field.table(), field.meta());
-  // }
+  ProjectPhysicalOperator *project_operator = new ProjectPhysicalOperator();
+
 
   auto proj_fields = project_oper.get_field_identifiers();
-  for(auto& fid: proj_fields){
-    project_operator->add_projection(fid);
+  auto output_names = project_oper.get_output_names();
+  for(int i = 0; i < output_names.size(); i++){
+    project_operator->add_projection( proj_fields[i],  output_names[i]);
   }
 
   if (child_phy_oper) {
@@ -601,7 +599,7 @@ RC PhysicalPlanGenerator::create_plan(FieldCulLogicalOperator& logical_oper, std
     }
   }
 
-  oper = make_unique<FieldCulPhysicalOperator>(logical_oper.virtual_meta_, std::move(logical_oper.cul_expr_));
+  oper = make_unique<FieldCulPhysicalOperator>(logical_oper.field_identifier_, std::move(logical_oper.cul_expr_));
   oper->add_child(std::move(child_phy_oper));
 
   return rc;

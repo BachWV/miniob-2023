@@ -10,7 +10,7 @@
 
 class DeduplicateAggPhysicalOperator: public PhysicalOperator{
 public:
-	DeduplicateAggPhysicalOperator(std::vector<Field> group_by_fields, bool only_put_one)
+	DeduplicateAggPhysicalOperator(std::vector<FieldIdentifier> group_by_fields, bool only_put_one)
 		: group_by_fields_(group_by_fields), only_put_one_(only_put_one){}
   virtual PhysicalOperatorType type() const override{
     return PhysicalOperatorType::DEDUPLICATE_AGG;
@@ -32,7 +32,7 @@ private:
 
   bool finish_;
 
-	std::vector<Field> group_by_fields_;	// 这个就是schema
+	std::vector<FieldIdentifier> group_by_fields_;	// 这个就是schema
   std::vector<Value> cur_group_by_value_;
   Tuple* curr_tuple_;
 };

@@ -9,7 +9,6 @@
 
 #include "common/rc.h"
 #include "sql/parser/value.h"
-#include "sql/stmt/select_stmt.h"
 #include "storage/field/field.h"
 #include "sql/parser/parse_defs.h"
 
@@ -26,6 +25,18 @@ public:
   FieldIdentifier generate_identifier() {
     // '-'号保证不会和其它列名冲突
     return FieldIdentifier("subquery-" + std::to_string(next_identifier_++));
+  }
+
+private:
+  size_t next_identifier_ = 0;
+};
+
+class ColumnIdentifierGenerator
+{
+public:
+  FieldIdentifier generate_identifier() {
+    // '-'号保证不会和其它用户列名冲突
+    return FieldIdentifier("C-" + std::to_string(next_identifier_++));
   }
 
 private:
@@ -103,10 +114,12 @@ public:
   void pop_stmt_ctx() { contexts_.pop_back(); }
 
   SubqueryIdentifierGenerator& get_subquery_identifier_generator() { return subquery_identifier_generator_; }
+  ColumnIdentifierGenerator& get_col_id_generator() { return col_id_generator_; }
 
 private:
   std::vector<StmtResolveContext*> contexts_;
   SubqueryIdentifierGenerator subquery_identifier_generator_;
+  ColumnIdentifierGenerator col_id_generator_;
 };
 
 class ExprResolveResult
