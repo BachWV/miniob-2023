@@ -233,25 +233,19 @@ RC Table::drop()
 RC Table::insert_record(Record &record)
 {
   RC rc = RC::SUCCESS;
-  RID rid(1,2);
 
   // 用索引来检查主键完整性约束，如果当前的表没有index呢？
-  rc = insert_entry_of_indexes(record,rid);
-  if (rc != RC::SUCCESS) { // 可能出现了键值重复
-    if(rc==RC::RECORD_DUPLICATE_KEY){
-      // RC rc2 = record_handler_->delete_record(&record.rid());
-      // if (rc2 != RC::SUCCESS) {
-      //   LOG_PANIC("Duplicate key ,need to delete record. table name=%s, rc=%d:%s",
-      //           name(), rc2, strrc(rc2));
-      // }
-      return rc;
-    }
-    RC rc2 = delete_entry_of_indexes(record.data(), rid, false/*error_on_not_exists*/);
-    if (rc2 != RC::SUCCESS) {
-      LOG_ERROR("Failed to rollback index data when insert index entries failed. table name=%s, rc=%d:%s",
-                name(), rc2, strrc(rc2));
-    }
-  }
+  // rc = insert_entry_of_indexes(record,record.rid());
+  // if (rc != RC::SUCCESS) { // 可能出现了键值重复
+  //   if(rc==RC::RECORD_DUPLICATE_KEY){
+  //     // RC rc2 = record_handler_->delete_record(&record.rid());
+  //     // if (rc2 != RC::SUCCESS) {
+  //     //   LOG_PANIC("Duplicate key ,need to delete record. table name=%s, rc=%d:%s",
+  //     //           name(), rc2, strrc(rc2));
+  //     // }
+  //     return rc;
+  //   }
+  // }
   rc = record_handler_->insert_record(record.data(), table_meta_.record_size(), &record.rid());
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Insert record failed. table name=%s, rc=%s", table_meta_.name(), strrc(rc));
@@ -573,12 +567,12 @@ meta_data_write:
 RC Table::delete_record(const Record &record)
 {
   RC rc = RC::SUCCESS;
-  for (Index *index : indexes_) {
-    rc = index->delete_entry(record.data(), &record.rid());
-    ASSERT(RC::SUCCESS == rc, 
-           "failed to delete entry from index. table name=%s, index name=%s, rid=%s, rc=%s",
-           name(), index->index_meta().name(), record.rid().to_string().c_str(), strrc(rc));
-  }
+  // for (Index *index : indexes_) {
+  //   rc = index->delete_entry(record.data(), &record.rid());
+  //   ASSERT(RC::SUCCESS == rc, 
+  //          "failed to delete entry from index. table name=%s, index name=%s, rid=%s, rc=%s",
+  //          name(), index->index_meta().name(), record.rid().to_string().c_str(), strrc(rc));
+  // }
   rc = record_handler_->delete_record(&record.rid());
   return rc;
 }
@@ -642,16 +636,7 @@ RC Table::insert_entry_of_indexes(Record &record, const RID &rid)
     }
     if(finish) continue;
 
-    char *new_str = new char[len];
-    int str_count=0;
-    for(int i=0;i<metas->size();i++){
-      auto  index_field =metas->at(i);
-      //可能会获得不到index_field的name，因为初始化构造有问题
-      //std::string ss=index_field->name();
-      //strncpy(new_str,record+index_field->offset(),index_field->len());
-      strncpy(new_str+str_count,record.data()+index_field.offset(),index_field.len());
-      str_count+=index_field.len();
-    }
+
 
     rc = index->insert_entry(record.data(), &rid);
     if (rc != RC::SUCCESS) {

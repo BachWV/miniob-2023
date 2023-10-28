@@ -100,30 +100,113 @@ RC UpdatePhysicalOperator::next()
       LOG_WARN("failed to delete record: %s", strrc(rc));
       return rc;
     }
+    RecordFileScanner scanner;
+    Record record_tmp;
+    RowTuple tuple_origin ;
 
-    rc = trx_->insert_record(table_, record_new);
-    if(rc==RC::RECORD_DUPLICATE_KEY){
-        LOG_WARN("update fail: duplicate key ,failed to insert record: %s", strrc(rc));
-        RC rc2 = table_->make_record(static_cast<int>(values_need_delete.size()),values_need_delete.data(),record_need_delete);
-        if(rc2!=RC::SUCCESS)
-        {
-          LOG_WARN("update rollback :failed to make deteled record. rc=%s", strrc(rc2));
-          return rc2;
-        }
-        RC rc3 = trx_->insert_record(table_, record_need_delete);
-        if(rc3!=RC::SUCCESS)
-        {
-          LOG_WARN("update rollback :failed to insert deteled record. rc=%s", strrc(rc2));
-          return rc3;
-        }
-        LOG_WARN("update rollback :SUCCESS,Deleted record insert success. rc=%s", strrc(rc));
+
+      TableMeta table_meta = table_->table_meta();
+      int field_num=table_meta.field_num();
+      std::vector<std::vector<int>> field_need_to_cmp_list_list;
+      if(table_meta.index_num()==0){ //不进表扫描
+        goto insert_it;
+      } 
+      rc = table_->get_record_scanner(scanner, trx_, true/*readonly*/);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("failed to create scanner . table=%s,, rc=%s", name(), strrc(rc));
         return rc;
       }
-    else if (rc != RC::SUCCESS) {
-      
-      LOG_WARN("failed to update record: %s", strrc(rc));
-      return rc;
+
+
+
+      tuple_origin.set_schema(table_, table_->table_meta().field_metas());
+      tuple_origin.set_record(&record_new);
+
+
+      for(int i=0;i<table_meta.index_num();i++){
+        //第i个索引，该索引可以包括多个col
+        
+        std::vector<int> field_need_to_cmp_list;
+        std::vector<std::string> index_field_name_list = table_meta.index(i)->fields();//在哪几个列建立了索引
+        if(table_meta.index(i)->is_unique()==false){
+          continue;//对于非unique的索引，不需要去重
+        }
+        for(int j=0;j<field_num;j++){
+          for(int jj=0;jj<index_field_name_list.size();jj++){
+            if(strcmp(table_meta.field(j)->name(),index_field_name_list[jj].c_str())==0){
+              //需要建立unique索引的列，全部弹入list
+              Value value1;
+              tuple_origin.cell_at(j,value1);
+              if(value1.is_null_value()) goto insert_it;//如果是null，不需要去重
+              field_need_to_cmp_list.push_back(j);
+              break;
+            }
+          }
+        }
+        if(field_need_to_cmp_list.size()>0) field_need_to_cmp_list_list.push_back(field_need_to_cmp_list);
+      }
+      if(field_need_to_cmp_list_list.size()==0) goto insert_it;//未建立unique索引，不需要去重
+
+
+
+      while (scanner.has_next()) {
+        rc = scanner.next(record_tmp);
+
+        RowTuple tuple_tmp;
+        tuple_tmp.set_schema(table_, table_->table_meta().field_metas());
+        tuple_tmp.set_record(&record_tmp);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("failed to scan records . table=%s,, rc=%s",name(), strrc(rc));
+          return rc;
+        }
+
+        for(std::vector<int> field_need_to_cmp_list:field_need_to_cmp_list_list){
+          bool flag=true;
+          for(int field_need_to_cmp:field_need_to_cmp_list){
+            Value value1;
+            Value value2;
+            tuple_tmp.cell_at(field_need_to_cmp,value1);
+            tuple_origin.cell_at(field_need_to_cmp,value2);
+            if(value1.compare(value2)!=0){
+              flag=false;
+              break;
+            }
+          }
+          if(flag){//全部相等,跳过插入,update failure,回滚
+            goto rollback;
+          }
+        }//比较结束
+      }//扫描结束
+      scanner.close_scan();
+
+insert_it:
+    rc = trx_->insert_record(table_, record_new);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to insert record by transaction. rc=%s", strrc(rc));
+    }else{
+      LOG_DEBUG("update success: insert new record success. rc=%s", strrc(rc));
+      continue;
     }
+
+
+   
+rollback:
+    LOG_WARN("update fail: duplicate key ,failed to insert record: %s", strrc(rc));
+    RC rc2 = table_->make_record(static_cast<int>(values_need_delete.size()),values_need_delete.data(),record_need_delete);
+    if(rc2!=RC::SUCCESS)
+    {
+      LOG_WARN("update rollback :failed to make deteled record. rc=%s", strrc(rc2));
+      return rc2;
+    }
+    RC rc3 = trx_->insert_record(table_, record_need_delete);
+    if(rc3!=RC::SUCCESS)
+    {
+      LOG_WARN("update rollback :failed to insert deteled record. rc=%s", strrc(rc2));
+      return rc3;
+    }
+    LOG_WARN("update rollback :SUCCESS,Deleted record insert success. rc=%s", strrc(rc));
+    return RC::RECORD_DUPLICATE_KEY;
+
   }
   return RC::RECORD_EOF;
 }

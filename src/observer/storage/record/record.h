@@ -172,6 +172,8 @@ public:
 
   /* index从0开始，判断第index个属性是否为空值 */
   bool is_null_value(int index) const {
+    if(index >= is_null.size())
+      return false;
     return is_null[index];
   }
 
