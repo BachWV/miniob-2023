@@ -428,7 +428,9 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
 
     // 将所有having中的聚集推到logic oper处理
     // 处理时不用再校验了，expr的resolve保证AggExprInfo里的东西是有效的
-    aggs_in_having.swap(having_resolve_result.get_agg_expr_infos());
+    auto &agg_infos_in_having = having_resolve_result.get_agg_expr_infos();
+    has_agg = agg_infos_in_having.empty() ? has_agg : true;
+    aggs_in_having.swap(agg_infos_in_having);
 
     // for(auto& agg_info: agg_infos){
     //   Field agg_field;
@@ -525,6 +527,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
     having_exprs);
   select_stmt->having_agg_infos_.swap(aggs_in_having);
   select_stmt->has_having_ = has_having;
+  select_stmt->has_agg_ = has_agg;
   stmt = select_stmt;
   return RC::SUCCESS;
 }

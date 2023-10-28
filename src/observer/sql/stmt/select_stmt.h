@@ -95,8 +95,12 @@ public:
     return group_by_field_;
   }
   bool has_having_clause() const { return has_having_; }
+  bool has_agg() const {return has_agg_;}
   std::unique_ptr<ConjunctionExpr> fetch_having_exprs();
   std::vector<AggExprInfo> &fetch_having_agg_infos() { return having_agg_infos_; }
+  std::vector<AttrInfoSqlNode> column_attrs(){
+    return column_attrs_;
+  }
 
 private:
   RC resolve_select_expr_sql_node(const SelectExprSqlNode& sesn, SelectExprField& sef);
@@ -110,6 +114,7 @@ private:
   std::vector<FieldWithOrder> order_fields_;
   
   bool has_where_ = false;
+  bool has_agg_ = false;
   std::unique_ptr<ConjunctionExpr> where_exprs_;
   std::vector<std::unique_ptr<ApplyStmt>> sub_querys_in_where_;
 

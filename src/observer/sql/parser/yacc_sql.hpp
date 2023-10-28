@@ -1,4 +1,4 @@
-/* A Bison parser, made by GNU Bison 3.8.  */
+/* A Bison parser, made by GNU Bison 3.8.2.  */
 
 /* Bison interface for Yacc-like parsers in C
 
@@ -173,7 +173,7 @@ union YYSTYPE
   // Function
   FunctionSqlNode*                  function_node;
   std::string*                       std_string;
-  std::vector<InnerJoinSqlNode>*    inner_join_list;
+  std::vector<std::unique_ptr<InnerJoinSqlNode>>*    inner_join_list;
   InnerJoinSqlNode*                 inner_join;
 
 #line 180 "yacc_sql.hpp"

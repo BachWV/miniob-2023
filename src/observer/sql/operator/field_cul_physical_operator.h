@@ -1,12 +1,15 @@
 #pragma once
 #include "sql/expr/tuple.h"
 #include "sql/operator/physical_operator.h"
+#include "storage/field/field_meta.h"
 
 class FieldCulPhysicalOperator : public PhysicalOperator
 {
 public:
-  FieldCulPhysicalOperator(FieldMeta *virtual_meta, std::unique_ptr<Expression> &&cul_expr)
-      : virtual_meta_(virtual_meta), cul_expr_(std::move(cul_expr)){}
+  FieldCulPhysicalOperator(FieldIdentifier& fi, std::unique_ptr<Expression> &&cul_expr)
+      : cul_expr_(std::move(cul_expr)){
+        virtual_meta_ = FieldMeta(fi.field_name().c_str(),INTS, 1, 1, true, false);
+      }
   ~FieldCulPhysicalOperator();
   PhysicalOperatorType type() const override { return PhysicalOperatorType::FIELD_CUL; }
 
@@ -18,6 +21,6 @@ public:
 
 private:
   AddOneFieldTuple            aof_tuple_;
-  FieldMeta                  *virtual_meta_;  // delete
+  FieldMeta                   virtual_meta_;  // delete
   std::unique_ptr<Expression> cul_expr_;
 };

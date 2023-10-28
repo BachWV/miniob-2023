@@ -165,3 +165,12 @@ const char *FieldMeta::null_bitmap_field_name()
   // 词法分析中ID不允许出现'-'字符，因此使用此名字作为隐藏的空位图属性名，不会引起冲突
   return "null-bitmap";
 }
+
+AttrInfoSqlNode FieldMeta::to_attr_info() const{
+  AttrInfoSqlNode node;
+  node.type = attr_type_;
+  node.name = name_;
+  node.length = attr_len_;    // 我记得内部好像可以为空，虚拟字段的len是随便设置的，debug的时候注意一下
+  node.nullable = nullable_;
+  return node;
+}

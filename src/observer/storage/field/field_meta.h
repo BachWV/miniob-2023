@@ -44,6 +44,7 @@ public:
   int len() const;
   bool visible() const;
   bool nullable() const;
+  AttrInfoSqlNode to_attr_info() const;
 
 public:
   void desc(std::ostream &os) const;
@@ -53,6 +54,7 @@ public:
   static RC from_json(const Json::Value &json_value, FieldMeta &field);
 
   static const char *null_bitmap_field_name();
+
 
 protected:
   std::string name_;

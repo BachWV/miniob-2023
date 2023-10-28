@@ -163,7 +163,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   // Function
   FunctionSqlNode*                  function_node;
   std::string*                       std_string;
-  std::vector<InnerJoinSqlNode>*    inner_join_list;
+  std::vector<std::unique_ptr<InnerJoinSqlNode>>*    inner_join_list;
   InnerJoinSqlNode*                 inner_join;
 }
 
@@ -212,6 +212,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <sql_node>            set_variable_stmt
 %type <sql_node>            help_stmt
 %type <sql_node>            exit_stmt
+%type <sql_node>            create_table_select_stmt
 %type <sql_node>            command_wrapper
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
@@ -276,6 +277,7 @@ command_wrapper:
   | set_variable_stmt
   | help_stmt
   | exit_stmt
+  | create_table_select_stmt
     ;
 
 exit_stmt:      
@@ -342,7 +344,10 @@ create_index_stmt:    /*create index 语句的语法解析树*/
       create_index.index_name = $3;
       create_index.relation_name = $5;
       if ($8 != nullptr) {
-        create_index.attribute_names.swap(*$8);
+        std::vector<std::string> old_list;
+        for(auto& [ori_name, alias]: *$8){
+          create_index.attribute_names.push_back(ori_name);
+        }
         delete $8;
       }
       $$->create_index.attribute_names.push_back($7);
@@ -770,7 +775,7 @@ rel_attr:
 rel_list:
     rel_with_alias{
       $$ = new std::vector<relation_with_alias>;
-      $$.emplace_back(std::move(*$1));
+      $$->emplace_back(std::move(*$1));
       delete $1;
     }
     | rel_list COMMA rel_with_alias {
@@ -783,11 +788,11 @@ rel_list:
 rel_with_alias:
     ID alias {
       $$ = new relation_with_alias;
-      $$.first = std::string($1);
+      $$->first = std::string($1);
       free($1);
       if ($2 != nullptr)
       {
-        $$.second = *$2;
+        $$->second = *$2;
         delete $2;
       }
     }
@@ -800,10 +805,9 @@ inner_join_list:
     | inner_join_list inner_join
     {
       if ($1 == nullptr)
-       $1 = new std::vector<InnerJoinSqlNode>;
-      $1->emplace_back(std::move(*$2));
+       $1 = new std::vector<std::unique_ptr<InnerJoinSqlNode>>;
+      $1->emplace_back($2);
       $$ = $1;
-      delete $2;
     }
     ;
 
@@ -1168,7 +1172,7 @@ agg_func:
 select_expr:
     expr alias {
       $$ = new SelectExprWithAlias();
-      $$->expr_ = std::move($1);
+      $$->expr_.reset($1);
       $$->alias_ = std::move(*$2);
       delete $2;
     }
@@ -1281,6 +1285,17 @@ alias:
       $$ = new std::string($2);
       free($2);
     }
+
+create_table_select_stmt:
+    CREATE TABLE ID AS select_stmt{
+      $$ = new ParsedSqlNode(SCF_CREATE_TABLE_SELECT);
+      CreateTableSelectSqlNode &create_table_select = $$->create_table_select;
+      create_table_select.selected_sql_node_ = std::move($5->selection);
+      delete $5;
+      create_table_select.created_table_name_ = $3;
+      free($3);
+    }
+    ;
 
 opt_semicolon: /*empty*/
     | SEMICOLON

@@ -25,8 +25,7 @@ See the Mulan PSL v2 for more details. */
 class ProjectPhysicalOperator : public PhysicalOperator
 {
 public:
-  ProjectPhysicalOperator(bool with_table_name): with_table_name_(with_table_name)
-  {}
+  ProjectPhysicalOperator() = default;
 
   virtual ~ProjectPhysicalOperator() = default;
 
@@ -34,8 +33,8 @@ public:
   {
     
   }
-  void add_projection(const Table *table, const FieldMeta *field);
-  void add_projection(FieldIdentifier& fi);
+
+  void add_projection(FieldIdentifier &fi, std::string output_name);
 
   PhysicalOperatorType type() const override
   {
@@ -53,12 +52,11 @@ public:
 
   Tuple *current_tuple() override;
 
-  void set_schema(TupleSchema& schema, bool with_table){
+  void set_schema(TupleSchema& schema){
     schema = schema_;
   }
 
 private:
   ProjectTuple tuple_;
   TupleSchema schema_;
-  bool with_table_name_;
 };

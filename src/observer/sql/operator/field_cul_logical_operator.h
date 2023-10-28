@@ -8,10 +8,10 @@ public:
     return LogicalOperatorType::FIELD_CUL;
   }
   
-  FieldCulLogicalOperator(FieldMeta *virtual_meta, std::unique_ptr<Expression> &&cul_expr)
-      : virtual_meta_(virtual_meta), cul_expr_(std::move(cul_expr))
+  FieldCulLogicalOperator(FieldIdentifier& field_identifier, std::unique_ptr<Expression> &&cul_expr)
+      : field_identifier_(field_identifier), cul_expr_(std::move(cul_expr))
   {}
   
-  FieldMeta                  *virtual_meta_;  // delete
+  FieldIdentifier field_identifier_;
   std::unique_ptr<Expression> cul_expr_;
 };

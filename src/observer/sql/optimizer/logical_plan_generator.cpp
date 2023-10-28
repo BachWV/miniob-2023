@@ -30,8 +30,11 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/explain_logical_operator.h"
 #include "sql/operator/sort_logical_operator.h"
 #include "sql/operator/function_logical_operator.h"
+#include "sql/stmt/create_table_stmt.h"
 #include "sql/stmt/field_with_function.h"
 #include "sql/operator/field_cul_logical_operator.h"
+#include "sql/operator/insert_multi_logical_operator.h"
+
 
 #include "sql/stmt/stmt.h"
 #include "sql/stmt/calc_stmt.h"
@@ -43,6 +46,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/explain_stmt.h"
 #include "sql/stmt/apply_stmt.h"
 #include "storage/field/field.h"
+#include "sql/stmt/create_table_select_stmt.h"
 #include <memory>
 
 using namespace std;
@@ -80,6 +84,12 @@ RC LogicalPlanGenerator::create(Stmt *stmt, unique_ptr<LogicalOperator> &logical
       ExplainStmt *explain_stmt = static_cast<ExplainStmt *>(stmt);
       rc = create_plan(explain_stmt, logical_operator);
     } break;
+
+    case StmtType::CREATE_TABLE_SELECT: {
+      CreateTableSelectStmt* cts_stmt = static_cast<CreateTableSelectStmt *>(stmt);
+      rc = create_plan(cts_stmt, logical_operator);
+    } break;
+
     default: {
       rc = RC::UNIMPLENMENT;
     }
@@ -128,7 +138,7 @@ RC LogicalPlanGenerator::create_plan(
   std::vector<std::unique_ptr<LogicalOperator>> opers;
 
   auto &table_map = select_stmt->table_map();
-  std::vector<SelectExprField>& select_expr_fields = select_stmt->select_expr_fields();
+  std::vector<SelectColumnInfo>& select_expr_fields = select_stmt->select_expr_fields();
 
   // table-get / join
   for (auto& [table_name, table] : table_map) {
@@ -168,64 +178,35 @@ RC LogicalPlanGenerator::create_plan(
 
   // agg / field-cul-expr: 构建算子的同时把all_fields按序构建出来
   std::vector<FieldIdentifier> all_field_identifiers;
-  bool has_agg = false;
-  for(auto &sef : select_expr_fields){
-    if(auto fwa = std::get_if<FieldWithAlias>(&sef)){
-      //all_fields.push_back(*field);
-      auto fid = FieldIdentifier(fwa->field_.table_name(), fwa->field_.field_name(), fwa->alias_);
-      all_field_identifiers.push_back(fid);
-    }else if (auto fwgb = std::get_if<FieldsWithGroupBy>(&sef)) {
-      // 第一个group by聚集算子，在其之前构建一个sort；非group by的聚集没必要sort
-      if(!has_agg){
-        has_agg = true;
-        
-        vector<FieldWithOrder> fwo;
-        // 构建fwo
-        if(!select_stmt->get_group_by_fields().empty()){
-          for(const auto & f:select_stmt->get_group_by_fields()){
-            // TODO:
-            fwo.push_back(FieldWithOrder(f, true));
-          }
-        }else{
-          // 按第一个字段排序
-          fwo.push_back(FieldWithOrder(tables[0] ,tables[0]->table_meta().field(0), true));
-        }
-
-        unique_ptr<LogicalOperator> sort_oper = make_unique<SortLogicalOperator>(fwo);
-        opers.push_back(std::move(sort_oper));
+  std::vector<std::string> all_output_names;
+  if(select_stmt->has_agg()){
+    vector<FieldWithOrder> fwo;
+    // 构建fwo
+    if(!select_stmt->get_group_by_fields().empty()){
+      for(const auto & f:select_stmt->get_group_by_fields()){
+        fwo.push_back(FieldWithOrder(f, true));
       }
-      Field tmp_field = fwgb->get_tmp_field();
-      unique_ptr<LogicalOperator> agg_oper = std::make_unique<AggregateLogicalOperator>(const_cast<FieldMeta*>(tmp_field.meta()), fwgb->agg_field_, fwgb->group_fields_, fwgb->op_);
-
-      opers.push_back(std::move(agg_oper));
-      if(fwgb->visible_){
-        auto fid = FieldIdentifier("", tmp_field.field_name(), fwgb->alias_);
-        all_field_identifiers.push_back(fid);
-      }
-    }else if(auto fwf = std::get_if<FieldWithFunction>(&sef)){
-      Field tmp_field = fwf->get_tmp_field();
-      unique_ptr<LogicalOperator> function_oper(nullptr);
-      if(fwf->function_kernal_->get_is_const()){
-        function_oper = std::make_unique<FunctionLogicalOperator>(std::move(fwf->function_kernal_), Field(), const_cast<FieldMeta*>(tmp_field.meta()));
-      }else{
-        function_oper = std::make_unique<FunctionLogicalOperator>(std::move(fwf->function_kernal_), fwf->be_functioned_field_, const_cast<FieldMeta*>(tmp_field.meta()));
-      }
-
-      opers.push_back(std::move(function_oper));
-      auto fid = FieldIdentifier("", tmp_field.field_name(), fwf->alias_);
-      all_field_identifiers.push_back(fid);
-    }else if(auto fwc = std::get_if<FieldWithCul>(&sef)){
-      Field tmp_field = fwc->get_tmp_field();
-      auto fid = FieldIdentifier("", tmp_field.field_name(), fwc->alias_);
-      all_field_identifiers.push_back(fid);
-      unique_ptr<LogicalOperator> field_cul_oper = std::make_unique<FieldCulLogicalOperator>(const_cast<FieldMeta*>(tmp_field.meta()), std::move(fwc->cul_expr_));
-      opers.push_back(std::move(field_cul_oper));
-
-      // expr.name 
-      // if agg: agg_info
     }else{
-      assert(0);
+      // 按第一个字段排序
+      auto& [table_name, table] = *(table_map.begin());
+      auto fid = FieldIdentifier(table->name(), table->table_meta().field(0)->name());
+      fwo.push_back(FieldWithOrder(fid, true));
     }
+
+    unique_ptr<LogicalOperator> sort_oper = make_unique<SortLogicalOperator>(fwo);
+    opers.push_back(std::move(sort_oper));
+  }
+
+  for(auto &column_info : select_expr_fields){
+    for(auto& agg_info: column_info.agg_infos_){
+      unique_ptr<LogicalOperator> agg_oper = make_unique<AggregateLogicalOperator>(agg_info.agg_field(), agg_info.full_name(), select_stmt->get_group_by_fields(), agg_info.agg_op());
+      opers.push_back(std::move(agg_oper));
+    }
+
+    unique_ptr<LogicalOperator> fwc_oper = make_unique<FieldCulLogicalOperator>(column_info.tuple_cell_spec_, std::move(column_info.expr_));
+    opers.push_back(std::move(fwc_oper));
+    all_field_identifiers.push_back(column_info.tuple_cell_spec_);
+    all_output_names.push_back(column_info.output_name_);
   }
 
   // having
@@ -237,7 +218,7 @@ RC LogicalPlanGenerator::create_plan(
   }
 
   // deduplicate
-  if(has_agg){
+  if(select_stmt->has_agg()){
     if(select_stmt->get_group_by_fields().empty()){
       // 无group by，只输出一条
       unique_ptr<LogicalOperator> deduplicate_oper = make_unique<DeduplicateLogicalOperator>(select_stmt->get_group_by_fields(), true);
@@ -256,8 +237,7 @@ RC LogicalPlanGenerator::create_plan(
   opers.push_back(std::move(sort_oper));
 
   // proj: 当前的proj中包含group-by / field-cul-expr构建的tep_field
-  bool with_table_name = select_stmt->tables().size() > 1;
-  unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_field_identifiers, with_table_name));
+  unique_ptr<LogicalOperator> project_oper(new ProjectLogicalOperator(all_field_identifiers, all_output_names));
   opers.push_back(std::move(project_oper));
 
   // top_oper
@@ -311,7 +291,6 @@ RC LogicalPlanGenerator::create_plan(
   Table *table = insert_stmt->table();
   vector<vector<Value>> value_rows(insert_stmt->value_rows());
 
-  // 它为什么还要重新构建一个values呢？直接用stmt的values不行吗
   InsertLogicalOperator *insert_operator = new InsertLogicalOperator(table, value_rows);
   logical_operator.reset(insert_operator);
   return RC::SUCCESS;
@@ -327,7 +306,7 @@ RC LogicalPlanGenerator::create_plan(
     const FieldMeta *field_meta = table->table_meta().field(i);
     fields.push_back(Field(table, field_meta));
   }
-  unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, fields, false/*readonly*/));
+  unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, table->name(), false/*readonly*/));
 
   unique_ptr<LogicalOperator> predicate_oper;
   RC rc = create_plan(delete_stmt->fetch_cond_exprs(), predicate_oper);
@@ -363,7 +342,7 @@ RC LogicalPlanGenerator::create_plan(
     const FieldMeta *field_meta = table->table_meta().field(i);
     fields.push_back(Field(table, field_meta));
   }
-  unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, fields, false/*readonly*/));
+  unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, table->name(), false/*readonly*/));
 
   unique_ptr<LogicalOperator> predicate_oper;
   RC rc = create_plan(update_stmt->fetch_cond_exprs(), predicate_oper);
@@ -413,4 +392,18 @@ RC LogicalPlanGenerator::create_plan(
   logical_operator = unique_ptr<LogicalOperator>(new ExplainLogicalOperator);
   logical_operator->add_child(std::move(child_oper));
   return rc;
+}
+
+RC LogicalPlanGenerator::create_plan(CreateTableSelectStmt *cts_stmt, std::unique_ptr<LogicalOperator> &logical_operator){
+  unique_ptr<LogicalOperator> select_top_oper(nullptr);
+  RC rc = RC::SUCCESS;
+  rc = create(cts_stmt->original_table_stmt(), select_top_oper);
+  HANDLE_RC(rc);
+
+  assert(select_top_oper.get());
+  unique_ptr<InsertMultiLogicalOperator> insert_multi_oper = make_unique<InsertMultiLogicalOperator>();
+  insert_multi_oper->add_child(std::move(select_top_oper));
+
+  logical_operator = std::move(insert_multi_oper);
+  return RC::SUCCESS;
 }

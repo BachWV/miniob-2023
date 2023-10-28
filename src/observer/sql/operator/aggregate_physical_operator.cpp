@@ -26,7 +26,7 @@ RC AggregatePhysicalOperator::open(Trx *trx){
 	HANDLE_RC(rc)
 
 	while(!is_last_group_){
-		assert(!group_by_fields_.empty());
+		assert(!group_by_fids_.empty());
 
 		auto rc = init_curr_group(false);
 		HANDLE_RC(rc);
@@ -61,15 +61,15 @@ RC AggregatePhysicalOperator::close(){
 }
 
 bool AggregatePhysicalOperator::cmp_group_by_fields(const Tuple* cur_tuple, const std::vector<Value>& cur_group_by_value){
-	if(group_by_fields_.empty()){
+	if(group_by_fids_.empty()){
 		// 无group by聚集函数，无视gbf的比较，直接全部累加
 		return true;
 	}
 
 	// 有group by
-	for(int i = 0; i < group_by_fields_.size(); i++){
+	for(int i = 0; i < group_by_fids_.size(); i++){
 		Value v;
-		TupleCellSpec spec(group_by_fields_[i].table_name(), group_by_fields_[i].field_name());
+		TupleCellSpec spec(group_by_fids_[i].table_name(), group_by_fids_[i].field_name());
 		auto rc = cur_tuple->find_cell(spec, v);
 		if(rc != RC::SUCCESS){
 			// 不应该发生，测试阶段，直接kill
@@ -85,8 +85,8 @@ bool AggregatePhysicalOperator::cmp_group_by_fields(const Tuple* cur_tuple, cons
 
 
 RC AggregatePhysicalOperator::set_group_by_value(const Tuple* tuple, std::vector<Value>& cur_group_by_value){
-	for(int i = 0; i < group_by_fields_.size(); i++){
-		TupleCellSpec tcs(group_by_fields_[i].table_name(), group_by_fields_[i].field_name());
+	for(int i = 0; i < group_by_fids_.size(); i++){
+		TupleCellSpec tcs(group_by_fids_[i].table_name(), group_by_fids_[i].field_name());
 		auto rc = tuple->find_cell(tcs, cur_group_by_value[i]);
 		HANDLE_ASSERT_RC(rc);
 	}
@@ -95,10 +95,10 @@ RC AggregatePhysicalOperator::set_group_by_value(const Tuple* tuple, std::vector
 
 RC AggregatePhysicalOperator::get_value(Tuple* tuple, Value& v){
 	RC rc;
-	if(0 == strcmp("COUNT(*)", new_meta_->name())){
+	if(0 == common::str_equal("COUNT(*)", virtual_name_.c_str())){
 		rc = tuple->cell_at(0, v);
 	}else{
-		auto spec = TupleCellSpec(agg_field_.table_name(), agg_field_.field_name());
+		auto spec = TupleCellSpec(agg_fid_.table_name(), agg_fid_.field_name());
 		rc = tuple->find_cell(spec, v);
 	}
 	return rc;
@@ -132,7 +132,8 @@ RC AggregatePhysicalOperator::init_curr_group(bool first){
 	rc = get_value(tuple, v);
 	HANDLE_RC(rc);
 	do_single_aggregate(v);
-	aof_tuples_.push_back(AddOneFieldTuple(tuple, *new_meta_));
+	auto meta = FieldMeta(virtual_name_.c_str(), INTS , 1,1, true, false);
+	aof_tuples_.push_back(AddOneFieldTuple(tuple, meta));
 
 	return RC::SUCCESS;
 }
@@ -153,7 +154,8 @@ RC AggregatePhysicalOperator::do_group_agg(){
 
 			do_single_aggregate(v);
 
-			aof_tuples_.push_back(AddOneFieldTuple(tuple, *new_meta_));
+			auto meta = FieldMeta(virtual_name_.c_str(), INTS , 1,1, true, false);
+			aof_tuples_.push_back(AddOneFieldTuple(tuple, meta));
 		}else{
 			break;
 		}
@@ -219,8 +221,7 @@ void AggregatePhysicalOperator::do_single_aggregate(const Value& curr_value){
 				curr_group_agg_value_.set_int(0);
 			}
 
-			// TODO: 这里要改，
-			if( (strcmp(new_meta_->name(), "COUNT(*)") != 0) && curr_value.is_null_value()){	//忽视NULL
+			if( (common::str_equal(virtual_name_.c_str(), "COUNT(*)") != 0) && curr_value.is_null_value()){	//忽视NULL
 				return;
 			}
 
@@ -286,16 +287,5 @@ void AggregatePhysicalOperator::do_single_aggregate(const Value& curr_value){
 			curr_group_agg_value_.set_float(v1+v2);
 			return;
 		};break;
-	}
-}
-
-AggregatePhysicalOperator::~AggregatePhysicalOperator(){
-	// new_meta在select logical generator的时候在堆上生成
-	// 该虚拟字段的生命周期和Agg算子绑定
-	delete new_meta_;
-	new_meta_ = nullptr;
-
-	if( op_ == AGG_COUNT && common::str_equal("COUNT(*)", agg_field_.field_name())){
-		delete agg_field_.meta();
 	}
 }

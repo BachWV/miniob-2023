@@ -291,6 +291,6 @@ bool str_equal(const char* s1, const char* s2){
     return false;
   }
   
-  return 0 == strcmp(s1, s2);
+  return 0 == strcasecmp(s1, s2);
 }
 }  // namespace common
