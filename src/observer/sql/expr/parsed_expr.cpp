@@ -1,6 +1,7 @@
 #include "sql/expr/parsed_expr.h"
 #include "sql/expr/expression.h"
 #include "sql/stmt/apply_stmt.h"
+#include "sql/stmt/select_stmt.h"
 #include "storage/table/table.h"
 #include "storage/db/db.h"
 #include "session/session.h"

@@ -134,6 +134,7 @@ RC LogicalPlanGenerator::create_plan(
   for (Table *table : tables) {
     std::vector<Field> fields;
     // 同一个Table中的Field拿出来
+    // 为什么要拿出来，TGlogicOp里的fields成员没有任何引用，这可以改了
     for (const auto &sef : select_expr_fields) {
       if(auto fwa = std::get_if<FieldWithAlias>(&sef)){
         if (common::str_equal(fwa->field_.table_name(), table->name())) {
@@ -193,6 +194,7 @@ RC LogicalPlanGenerator::create_plan(
         // 构建fwo
         if(!select_stmt->get_group_by_fields().empty()){
           for(const auto & f:select_stmt->get_group_by_fields()){
+            // TODO:
             fwo.push_back(FieldWithOrder(f, true));
           }
         }else{
@@ -229,6 +231,9 @@ RC LogicalPlanGenerator::create_plan(
       all_field_identifiers.push_back(fid);
       unique_ptr<LogicalOperator> field_cul_oper = std::make_unique<FieldCulLogicalOperator>(const_cast<FieldMeta*>(tmp_field.meta()), std::move(fwc->cul_expr_));
       opers.push_back(std::move(field_cul_oper));
+
+      // expr.name 
+      // if agg: agg_info
     }else{
       assert(0);
     }

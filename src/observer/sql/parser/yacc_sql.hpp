@@ -166,8 +166,8 @@ union YYSTYPE
   Conditions*                       expr_node_list;
   ExprSqlSet *                      expr_sql_set;
   AggregateFuncSqlNode*             agg_func;
-  std::vector<SelectExprSqlNode>*    select_expr_list;
-  SelectExprSqlNode*                 select_expr;
+  std::vector<SelectExprWithAlias>*   select_expr_list;
+  SelectExprWithAlias*              select_expr;
 
   // Function
   FunctionSqlNode*                  function_node;

@@ -169,9 +169,16 @@ struct FieldCulSqlNode{
  */
 
 using SelectExprSqlNode = std::variant<RelAttrSqlNode, AggregateFuncSqlNode, FunctionSqlNode, FieldCulSqlNode>;
+
+struct SelectExprWithAlias
+{
+  std::unique_ptr<ExprSqlNode> expr_;
+  std::string alias_;
+};
+
 struct SelectSqlNode
 {
-  std::vector<SelectExprSqlNode>  select_exprs;
+  std::vector<SelectExprWithAlias>  select_exprs;
   std::vector<std::string>        relations;     ///< 查询的表
   Conditions   conditions;    ///< 查询条件，使用AND串联起来多个条件
   std::vector<OrderByAttrSqlNode>  order_by_attrs;  ///< 排序字段及升降序

@@ -25,6 +25,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/stmt.h"
 #include "storage/field/field.h"
 #include "sql/stmt/field_with_function.h"
+#include "sql/expr/parsed_expr.h"
 
 class FieldMeta;
 class FilterStmt;
@@ -39,6 +40,18 @@ class ApplyStmt;
 // 这里不应该叫“field”，应该是xx_stmt。但是我看按照他的方式，开stmt也不太合适，
 // 我们只是需要个中间态的数据结构暂时保存下数据，索性就把数据放在Field这个文件里了
 using SelectExprField = std::variant<FieldsWithGroupBy, FieldWithFunction, FieldWithCul, FieldWithAlias>;
+
+struct SelectColumnInfo
+{
+  std::unique_ptr<Expression> expr_;  // 一个列就是一个表达式
+  std::vector<AggExprInfo> agg_infos_;  // 该表达式中的所有聚集函数
+
+  // 该列的虚拟列名对应的identifier，应该同时被添加到Proj和计算此表达式的FieldCulPhy中
+  // 由于FieldCulPhy使用FieldMeta表示新字段的名字，需使用tuple_cell_spec_.field_name()初始化FieldMeta的name字段
+  FieldIdentifier tuple_cell_spec_;
+
+  std::string output_name_;  // 该列用于输出的名字
+};
 
 /**
  * @brief 表示select语句
@@ -66,7 +79,7 @@ public:
   {
     return tables_;
   }
-  std::vector<SelectExprField> &select_expr_fields()
+  std::vector<SelectColumnInfo> &select_expr_fields()
   {
     return select_expr_fields_;
   }
@@ -78,11 +91,12 @@ public:
   const std::vector<FieldWithOrder>& order_fields() const{
     return order_fields_;
   }
-  const std::vector<Field> get_group_by_fields() const{
+  const std::vector<FieldIdentifier> get_group_by_fields() const{
     return group_by_field_;
   }
   bool has_having_clause() const { return has_having_; }
   std::unique_ptr<ConjunctionExpr> fetch_having_exprs();
+  std::vector<AggExprInfo> &fetch_having_agg_infos() { return having_agg_infos_; }
 
 private:
   RC resolve_select_expr_sql_node(const SelectExprSqlNode& sesn, SelectExprField& sef);
@@ -95,10 +109,10 @@ private:
   std::unique_ptr<ConjunctionExpr> where_exprs_;
   std::vector<std::unique_ptr<ApplyStmt>> sub_querys_in_where_;
 
-  std::vector<SelectExprField> select_expr_fields_;
-  std::vector<Field> group_by_field_;
-  std::vector<Field> resolved_query_field_;
+  std::vector<SelectColumnInfo> select_expr_fields_;
+  std::vector<FieldIdentifier> group_by_field_;
 
   bool has_having_ = false;
   std::unique_ptr<ConjunctionExpr> having_exprs_;
+  std::vector<AggExprInfo> having_agg_infos_;  // having中的聚集函数
 };

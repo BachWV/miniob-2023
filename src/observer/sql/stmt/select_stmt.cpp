@@ -41,105 +41,140 @@ std::unique_ptr<ConjunctionExpr> SelectStmt::fetch_having_exprs()
   return std::move(having_exprs_);
 }
 
-static void wildcard_fields(Table *table, std::vector<SelectExprField>& select_expr_fields)
+// 如果有表别名，则table_name里是别名，否则是表原名，内部不再使用从Table对象中拿到的名字
+static void wildcard_fields(Table *table, const std::string &table_name, std::vector<std::string>& column_names)
 {
   const TableMeta &table_meta = table->table_meta();
   const int field_num = table_meta.field_num();
   for (int i = table_meta.sys_field_num(); i < field_num; i++) {
-    auto fwa = FieldWithAlias(Field(table, table_meta.field(i)), "");
-    select_expr_fields.push_back(fwa);
+    const FieldMeta *field_meta = table_meta.field(i);
+    column_names.emplace_back(field_meta->name());
+    // SelectColumnInfo column_info;
+    // FieldIdentifier col_id(table_name, field_meta->name());
+    // column_info.expr_ = std::make_unique<IdentifierExpr>(col_id);
+    // column_info.col_id_ = col_id;
+    // // 使用*的列不可能有列别名
+    // column_infos.emplace_back(std::move(column_info));
   }
 }
 
 // @param order_fields[out]
-RC check_order_by_field(Db *db, const std::unordered_map<std::string, Table *>& table_map, const std::vector<Table *>& tables,
-  const std::vector<OrderByAttrSqlNode>& order_sql_nodes, std::vector<FieldWithOrder>& order_fields)
-{
-  for(auto& node : order_sql_nodes){
-    const RelAttrSqlNode &relation_attr = node.attr;
+// RC check_order_by_field(Db *db, const std::unordered_map<std::string, Table *>& table_map, const std::vector<Table *>& tables,
+//   const std::vector<OrderByAttrSqlNode>& order_sql_nodes, std::vector<FieldWithOrder>& order_fields)
+// {
+//   for(auto& node : order_sql_nodes){
+//     const RelAttrSqlNode &relation_attr = node.attr;
 
-    if (!common::is_blank(relation_attr.relation_name.c_str())) {
-      // 表名非空
-      const char *table_name = relation_attr.relation_name.c_str();
-      const char *field_name = relation_attr.attribute_name.c_str();
+//     if (!common::is_blank(relation_attr.relation_name.c_str())) {
+//       // 表名非空
+//       const char *table_name = relation_attr.relation_name.c_str();
+//       const char *field_name = relation_attr.attribute_name.c_str();
       
-      // 常规情况，table.field
-      auto iter = table_map.find(table_name);
-      if (iter == table_map.end()) {
-        LOG_WARN("no such table in from list: %s", table_name);
-        return RC::SCHEMA_FIELD_MISSING;
-      }
+//       // 常规情况，table.field
+//       auto iter = table_map.find(table_name);
+//       if (iter == table_map.end()) {
+//         LOG_WARN("no such table in from list: %s", table_name);
+//         return RC::SCHEMA_FIELD_MISSING;
+//       }
       
-      Table *table = iter->second;
-        const FieldMeta *field_meta = table->table_meta().field(field_name);
-        if (nullptr == field_meta) {
-          // 进行field合法性检查
-          LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
-          return RC::SCHEMA_FIELD_MISSING;
-        }
-        order_fields.push_back(FieldWithOrder(table, field_meta, node.is_asc));
-    } else {
-      // 没写table名，默认从第一个table中找
-      if (tables.size() != 1) {
-        LOG_WARN("invalid. I do not know the attr's table. attr=%s", relation_attr.attribute_name.c_str());
-        return RC::SCHEMA_FIELD_MISSING;
-      }
+//       Table *table = iter->second;
+//         const FieldMeta *field_meta = table->table_meta().field(field_name);
+//         if (nullptr == field_meta) {
+//           // 进行field合法性检查
+//           LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
+//           return RC::SCHEMA_FIELD_MISSING;
+//         }
+//         order_fields.push_back(FieldWithOrder(table, field_meta, node.is_asc));
+//     } else {
+//       // 没写table名，默认从第一个table中找
+//       if (tables.size() != 1) {
+//         LOG_WARN("invalid. I do not know the attr's table. attr=%s", relation_attr.attribute_name.c_str());
+//         return RC::SCHEMA_FIELD_MISSING;
+//       }
 
-      Table *table = tables[0];
-      const FieldMeta *field_meta = table->table_meta().field(relation_attr.attribute_name.c_str());
-      if (nullptr == field_meta) {
-        LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr.attribute_name.c_str());
-        return RC::SCHEMA_FIELD_MISSING;
-      }
-      order_fields.push_back(FieldWithOrder(table, field_meta, node.is_asc));
-    }
-  }
-  return RC::SUCCESS;
-}
+//       Table *table = tables[0];
+//       const FieldMeta *field_meta = table->table_meta().field(relation_attr.attribute_name.c_str());
+//       if (nullptr == field_meta) {
+//         LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr.attribute_name.c_str());
+//         return RC::SCHEMA_FIELD_MISSING;
+//       }
+//       order_fields.push_back(FieldWithOrder(table, field_meta, node.is_asc));
+//     }
+//   }
+//   return RC::SUCCESS;
+// }
 
 // 只检查具名的字段(如id，name等)，带有"*"不会通过check。RelAttrNode -> Field
 // 成功返回RC::success，并返回构建好的field；失败返回RC::SCHEMA_FIELD_MISSING
-RC resolve_common_field(Db *db, const std::unordered_map<std::string, Table *>& table_map, const std::vector<Table *>& tables,
-  const RelAttrSqlNode& relation_attr, Field& field){
+RC resolve_common_field(Db *db, const std::unordered_map<std::string, Table *>& table_map, 
+  const RelAttrSqlNode& relation_attr, FieldIdentifier& field)
+{
+  if (!common::is_blank(relation_attr.relation_name.c_str())) {
+    // 表名非空
+    const char *table_name = relation_attr.relation_name.c_str();
+    const char *field_name = relation_attr.attribute_name.c_str();
     
-    if (!common::is_blank(relation_attr.relation_name.c_str())) {
-      // 表名非空
-      const char *table_name = relation_attr.relation_name.c_str();
-      const char *field_name = relation_attr.attribute_name.c_str();
-      
-      // 常规情况，table.field
-      auto iter = table_map.find(table_name);
-      if (iter == table_map.end()) {
-        LOG_WARN("no such table in from list: %s", table_name);
-        return RC::SCHEMA_FIELD_MISSING;
-      }
-      
-      Table *table = iter->second;
-        const FieldMeta *field_meta = table->table_meta().field(field_name);
-        if (nullptr == field_meta) {
-          // 进行field合法性检查
-          LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
-          return RC::SCHEMA_FIELD_MISSING;
+    // 常规情况，table.field
+    auto iter = table_map.find(table_name);
+    if (iter == table_map.end()) {
+      LOG_WARN("no such table in from list: %s", table_name);
+      return RC::SCHEMA_FIELD_MISSING;
+    }
+    
+    Table *table = iter->second;
+    const FieldMeta *field_meta = table->table_meta().field(field_name);
+    if (nullptr == field_meta) {
+      // 进行field合法性检查
+      LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
+      return RC::SCHEMA_FIELD_MISSING;
+    }
+    field = FieldIdentifier(table_name, field_name);
+    return RC::SUCCESS;
+  } 
+  // 只有列名，则遍历所有的表
+  else {
+    const std::string &field_name = relation_attr.attribute_name;
+    std::string target_table_name;
+    const FieldMeta *target_field = nullptr;
+    for (const auto &[ele_table_name, table]: table_map) 
+    {
+        const FieldMeta *field_meta = table->table_meta().field(field_name.c_str());
+        if (field_meta != nullptr)
+        {
+            if (target_field != nullptr)  // 多个表都有field_name这个字段，返回解析失败，而不是找不到
+            {
+                LOG_WARN("field name %s is ambiguous", field_name.c_str());
+                return RC::SCHEMA_FIELD_AMBIGUOUS;
+            }
+            target_table_name = ele_table_name;
+            target_field = field_meta;
         }
-        field = Field(table, field_meta);
-        return RC::SUCCESS;
-    } else {
-      // 没写table名，默认从第一个table中找
-      if (tables.size() != 1) {
-        LOG_WARN("invalid. I do not know the attr's table. attr=%s", relation_attr.attribute_name.c_str());
-        return RC::SCHEMA_FIELD_MISSING;
-      }
-
-      Table *table = tables[0];
-      const FieldMeta *field_meta = table->table_meta().field(relation_attr.attribute_name.c_str());
-      if (nullptr == field_meta) {
-        LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr.attribute_name.c_str());
-        return RC::SCHEMA_FIELD_MISSING;
-      }
-      field = Field(table, field_meta);
+    }
+    if (target_field != nullptr) {
+      field = FieldIdentifier(target_table_name, field_name);
       return RC::SUCCESS;
     }
-  return RC::SCHEMA_FIELD_MISSING;
+    return RC::SCHEMA_FIELD_MISSING;
+  }
+}
+
+static bool is_star_identifier(ExprSqlNode *expr)
+{
+  if (expr->get_type() == ExprSqlNodeType::Identifier)
+  {
+    IdentifierExprSqlNode *id = static_cast<IdentifierExprSqlNode *>(expr);
+    if (id->get_field_name() == "*")
+      return true;
+  }
+  return false;
+}
+
+static std::string gen_output_name_for_field_id(bool need_table_name, const std::string &table_name, const std::string &field_name)
+{
+  if (need_table_name)
+    return table_name + "." + field_name;
+  else
+    return field_name;
 }
 
 RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &select_sql, Stmt *&stmt, 
@@ -183,52 +218,67 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
   }
 
   // collect fields in `group by` statement
-  std::vector<Field> group_fields;
+  // std::vector<Field> group_fields;
+  std::vector<FieldIdentifier> group_fields;
   for(const auto& rel_attr: select_sql.group_by_attrs){
-    Field group_by_field;
-    auto rc = resolve_common_field(db, table_map, tables, rel_attr, group_by_field);
+    FieldIdentifier group_by_field;
+    auto rc = resolve_common_field(db, table_map, rel_attr, group_by_field);
     if(rc != RC::SUCCESS){
       return rc;
     }
-    group_fields.push_back(group_by_field);
+    group_fields.emplace_back(std::move(group_by_field));
   }
 
   // collect select_expr in `select` statement
-  // std::visit只能重载()传递单参数，重载lambda对参数捕获又太麻烦，怕环境编译器不支持太高级的特性，选择直接if else
-  std::vector<std::string> agg_functions_names;
-  std::vector<SelectExprField> select_expr_fields;
-  std::unordered_set<FieldIdentifier, FieldIdentifierHash> common_fields_set;
+  std::vector<SelectColumnInfo> select_columns;
   bool has_agg = false;
+  std::unordered_multiset<FieldIdentifier, FieldIdentifierHash> common_fields_set;  // 非agg的字段
 
-  for(auto& select_expr_field: select_sql.select_exprs){
-    if(auto relation_attr = get_if<RelAttrSqlNode>(&select_expr_field)){
+  for (auto &select_expr_with_alias: select_sql.select_exprs)
+  {
+    std::unique_ptr<ExprSqlNode> &select_expr = select_expr_with_alias.expr_;
+    const std::string &expr_alias = select_expr_with_alias.alias_;
 
-      // 这里的代码Copy之前的验证Field字段的代码
-      if (common::is_blank(relation_attr->relation_name.c_str()) &&
-          0 == strcmp(relation_attr->attribute_name.c_str(), "*")) {
+    // 如果表达式包含'*'
+    if (is_star_identifier(select_expr.get()))
+    {
+      IdentifierExprSqlNode *id = static_cast<IdentifierExprSqlNode *>(select_expr.get());
 
+      if (common::is_blank(id->get_table_name().c_str())) 
+      {
         // 空.*
-        for (Table *table : tables) {
-          wildcard_fields(table, select_expr_fields);
-        }// next loop
+        for (Table *table : tables) 
+        {
+          std::string table_name = table->name();  // 有表别名时需要在这改
 
-      } else if (!common::is_blank(relation_attr->relation_name.c_str())) {
+          std::vector<std::string> col_names;
+          wildcard_fields(table, table_name, col_names);
+          for (auto &col_name: col_names)
+          {
+            SelectColumnInfo col_info;
+            col_info.expr_ = std::make_unique<IdentifierExpr>(FieldIdentifier(table_name, col_name));
+            col_info.tuple_cell_spec_ = glob_ctx->get_col_id_generator().generate_identifier();
+            col_info.output_name_ = gen_output_name_for_field_id(table_map.size() > 1, table_name, col_name);
+            select_columns.emplace_back(std::move(col_info));
 
+            /* 生成一个表名.列名，用于group by的校验 */
+            common_fields_set.emplace(table_name, col_name);
+          }
+        }
+      } 
+      else
+      {
         // 表名非空
-        const char *table_name = relation_attr->relation_name.c_str();
-        const char *field_name = relation_attr->attribute_name.c_str();
+        const char *table_name = id->get_table_name().c_str();
+        const char *field_name = id->get_field_name().c_str();
         
         if (0 == strcmp(table_name, "*")) {
-          // 只能是*.*
-          if (0 != strcmp(field_name, "*")) {
-            LOG_WARN("invalid field name while table is *. attr=%s", field_name);
-            return RC::SCHEMA_FIELD_MISSING;
-          }
-          for (Table *table : tables) {
-            wildcard_fields(table, select_expr_fields);
-          }// next loop
-
-        } else {
+          // *.*，不合法
+          return RC::SCHEMA_FIELD_MISSING;
+        } 
+        
+        // table.*
+        else {
           auto iter = table_map.find(table_name);
           if (iter == table_map.end()) {
             LOG_WARN("no such table in from list: %s", table_name);
@@ -236,112 +286,90 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
           }
 
           Table *table = iter->second;
-          if (0 == strcmp(field_name, "*")) {
-            // table.*
-            wildcard_fields(table, select_expr_fields);
-            // next loop
+          std::vector<std::string> col_names;
+          wildcard_fields(table, id->get_table_name(), col_names);
+          for (auto &col_name: col_names)
+          {
+            SelectColumnInfo col_info;
+            col_info.expr_ = std::make_unique<IdentifierExpr>(FieldIdentifier(table_name, col_name));
+            col_info.tuple_cell_spec_ = glob_ctx->get_col_id_generator().generate_identifier();
+            col_info.output_name_ = gen_output_name_for_field_id(true, table_name, col_name);
+            select_columns.emplace_back(std::move(col_info));
 
-          } else {
-            // 常规情况，table.field
-            const FieldMeta *field_meta = table->table_meta().field(field_name);
-            if (nullptr == field_meta) {
-              LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
-              return RC::SCHEMA_FIELD_MISSING;
-            }
-
-            auto common_field = Field(table, field_meta);
-            // select_expr_fields.push_back(common_field);
-            common_fields_set.insert(FieldIdentifier(table->name(), field_meta->name()));
-            auto fwa = FieldWithAlias(common_field, relation_attr->alias_);
-            select_expr_fields.push_back(fwa);
+            /* 生成一个表名.列名，用于group by的校验 */
+            common_fields_set.emplace(table_name, col_name);
           }
         }
-
-      } else {
-        // 没写table名，默认从第一个table中找
-        if (tables.size() != 1) {
-          LOG_WARN("invalid. I do not know the attr's table. attr=%s", relation_attr->attribute_name.c_str());
-          return RC::SCHEMA_FIELD_MISSING;
-        }
-
-        Table *table = tables[0];
-        const FieldMeta *field_meta = table->table_meta().field(relation_attr->attribute_name.c_str());
-        if (nullptr == field_meta) {
-          LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr->attribute_name.c_str());
-          return RC::SCHEMA_FIELD_MISSING;
-        }
-
-        auto common_field = Field(table, field_meta);
-        // select_expr_fields.push_back(common_field);
-        common_fields_set.insert(FieldIdentifier(table->name(), field_meta->name()));
-        auto fwa = FieldWithAlias(common_field, relation_attr->alias_);
-        select_expr_fields.push_back(fwa);
       }
+    }
 
-    }else if(auto agg_sql_node = get_if<AggregateFuncSqlNode>(&select_expr_field)){
-      has_agg = true;
-      agg_functions_names.push_back(agg_sql_node->name);
-      Field agg_field;
-      auto rc = resolve_common_field(db, table_map, tables, agg_sql_node->attr, agg_field);
-      if(rc != RC::SUCCESS){
-        // 若为COUNT(*)的处理。AGG算子中要手动释放agg_field的内存
-        if(agg_sql_node->agg_op == AGG_COUNT && 0 == strcmp(agg_sql_node->attr.attribute_name.c_str(), "*") ){
-          FieldMeta* meta =  new FieldMeta("*", INTS, 1,1,false, false);
-          assert(tables[0]);
-          agg_field = Field(tables[0], meta);
-        }else{
-          return rc;
-        }
-      }
-      bool with_table_name = tables.size() > 1;
-      auto fwgb = FieldsWithGroupBy(agg_field, group_fields, agg_sql_node->agg_op, with_table_name, true);
-      fwgb.alias_ = agg_sql_node->alias_;
-      select_expr_fields.push_back(std::move(fwgb));
-    }else if(auto func_sql_node = get_if<FunctionSqlNode>(&select_expr_field)){
-      if(func_sql_node->is_const){
-        auto fwf = FieldWithFunction(func_sql_node->virtual_field_name, Field(), std::move(func_sql_node->function_kernel));
-        fwf.alias_ = func_sql_node->alias_;        
-        select_expr_fields.push_back(std::move(fwf));
-      }else{
-        Field func_field;
-        auto rc = resolve_common_field(db, table_map, tables, func_sql_node->rel_attr, func_field);
-        HANDLE_RC(rc);
-        auto fwf = FieldWithFunction(func_sql_node->virtual_field_name, func_field, std::move(func_sql_node->function_kernel));
-        fwf.alias_ = func_sql_node->alias_;
-        select_expr_fields.push_back(std::move(fwf));
-      }
-    }else if(auto field_cul_sql_node = get_if<FieldCulSqlNode>(&select_expr_field)){
+    // 表达式不包含'*'
+    else
+    {
+      ExprResolveResult select_expr_resolve_result;
       glob_ctx->push_stmt_ctx(&current_expr_ctx);
-      ExprResolveResult field_cul_resolve_result;
-      auto rc = field_cul_sql_node->cul_expr_->resolve(glob_ctx, &field_cul_resolve_result);
+      auto rc = select_expr->resolve(glob_ctx, &select_expr_resolve_result);
       HANDLE_RC(rc);
       glob_ctx->pop_stmt_ctx();
 
-      assert(field_cul_resolve_result.get_subquerys_in_expr().empty());
-      assert(field_cul_resolve_result.get_correlate_exprs().empty());
-      assert(field_cul_resolve_result.get_agg_expr_infos().empty());
+      // 目前不支持select列中的子查询，要支持在这改
+      assert(select_expr_resolve_result.get_subquerys_in_expr().empty());
+      assert(select_expr_resolve_result.get_correlate_exprs().empty());
 
-      auto fwc = FieldWithCul(field_cul_sql_node->virtual_field_name_, field_cul_resolve_result.owns_result_expr_tree());
-      fwc.alias_ = field_cul_sql_node->alias_;
-      select_expr_fields.push_back(std::move(fwc));
-    }else{
-      // 出问题了，debug模式下直接kill
-      assert(0);
-      return RC::UNIMPLENMENT;
+      SelectColumnInfo col_info;
+      col_info.expr_ = select_expr_resolve_result.owns_result_expr_tree();
+      col_info.agg_infos_ = std::move(select_expr_resolve_result.get_agg_expr_infos());
+      col_info.tuple_cell_spec_ = glob_ctx->get_col_id_generator().generate_identifier();
+      if (select_expr->get_type() == ExprSqlNodeType::Identifier)
+      {
+        IdentifierExpr *id = static_cast<IdentifierExpr *>(col_info.expr_.get());
+        const std::string &table_name = id->field().table_name();
+        const std::string &field_name = id->field().field_name();
+        col_info.output_name_ = gen_output_name_for_field_id(table_map.size() > 1, table_name, field_name);
+        common_fields_set.emplace(table_name, field_name);  // 用于group by校验
+      }
+      else
+        col_info.output_name_ = select_expr->expr_name();
+
+      if (!col_info.agg_infos_.empty())
+        has_agg = true;
+
+      select_columns.emplace_back(std::move(col_info));
     }
   }
+
+    // }else if(auto agg_sql_node = get_if<AggregateFuncSqlNode>(&select_expr_field)){
+    //   has_agg = true;
+    //   agg_functions_names.push_back(agg_sql_node->name);
+    //   Field agg_field;
+    //   auto rc = resolve_common_field(db, table_map, tables, agg_sql_node->attr, agg_field);
+    //   if(rc != RC::SUCCESS){
+    //     // 若为COUNT(*)的处理。AGG算子中要手动释放agg_field的内存
+    //     if(agg_sql_node->agg_op == AGG_COUNT && 0 == strcmp(agg_sql_node->attr.attribute_name.c_str(), "*") ){
+    //       FieldMeta* meta =  new FieldMeta("*", INTS, 1,1,false, false);
+    //       assert(tables[0]);
+    //       agg_field = Field(tables[0], meta);
+    //     }else{
+    //       return rc;
+    //     }
+    //   }
+    //   bool with_table_name = tables.size() > 1;
+    //   auto fwgb = FieldsWithGroupBy(agg_field, group_fields, agg_sql_node->agg_op, with_table_name, true);
+    //   fwgb.alias_ = agg_sql_node->alias_;
+    //   select_expr_fields.push_back(std::move(fwgb));
+    // }
 
   // check aggregation validate: 如果存在agg，那么非agg的字段（common_fields_set）一定在gb中出现
   if(has_agg){
     // 非agg的字段和group by字段数一定相等，要不都是0。
-    if(common_fields_set.size() != group_fields.size()){
-      return RC::SQL_SYNTAX;
-    }
+    // 注：此处注释掉，不一定相等！group by中可以出现更多字段。非agg字段是group by字段的子集。
+    // if(common_fields_set.size() != group_fields.size()){
+    //   return RC::SQL_SYNTAX;
+    // }
 
     // 若gf的字段在cfs中不存在，那么一定有错
-    for(auto const& field: group_fields){
-      auto fi = FieldIdentifier(field.table_name(), field.field_name());
-      if(auto it = common_fields_set.find(fi); it == common_fields_set.end()){
+    for(auto const& fi: group_fields){
+      if(common_fields_set.count(fi) == 0){
         return RC::SQL_SYNTAX;
       }
     }
@@ -350,13 +378,15 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
 
   RC rc = RC::SUCCESS;
   /* 开始解析HAVING子句
-   * 把Having里可能出现的列名，调用having_resolve_ctx.add_other_column_name传入
+   * 把Having里可能出现的列名，调用having_resolve_ctx.add_other_column_name传入，目前后续处理中没有考虑having的聚集是否出现在select列中
+   * 这里先省略了
    */
-  for(auto& str: agg_functions_names){
-    having_resolve_ctx.add_other_column_name(str);
-  }
+  // for(auto& str: agg_functions_names){
+  //   having_resolve_ctx.add_other_column_name(str);
+  // }
 
   std::vector<std::unique_ptr<Expression>> having_exprs;
+  std::vector<AggExprInfo> aggs_in_having;
   glob_ctx->push_stmt_ctx(&having_resolve_ctx);
 
   bool has_having = false;
@@ -378,27 +408,29 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
 
     having_exprs.emplace_back(having_resolve_result.owns_result_expr_tree());
 
-    /*  处理HAVING子句中，不存在于select的列中的聚集函数，使用having_resolve_result.get_agg_expr_infos()接口 */
-    std::vector<AggExprInfo> agg_infos = having_resolve_result.get_agg_expr_infos();
-    for(auto& agg_info: agg_infos){
-      Field agg_field;
-      RelAttrSqlNode attr;
-      attr.relation_name = agg_info.agg_field().table_name();
-      attr.attribute_name = agg_info.agg_field().field_name();
-      auto rc = resolve_common_field(db, table_map, tables, attr, agg_field);
-      if(rc != RC::SUCCESS){
-        // 若为COUNT(*)的处理。AGG算子中要手动释放agg_field的内存
-        if(agg_info.agg_op() == AGG_COUNT && 0 == strcmp(attr.attribute_name.c_str(), "*") ){
-          FieldMeta* meta =  new FieldMeta("*", INTS, 1,1,false, false);
-          assert(tables[0]);
-          agg_field = Field(tables[0], meta);
-        }else{
-          return rc;
-        }
-      }
-      bool with_table_name = tables.size() > 1;
-      select_expr_fields.push_back(FieldsWithGroupBy(agg_field, group_fields, agg_info.agg_op(), with_table_name, false));
-    }
+    // 将所有having中的聚集推到logic oper处理
+    // 处理时不用再校验了，expr的resolve保证AggExprInfo里的东西是有效的
+    aggs_in_having.swap(having_resolve_result.get_agg_expr_infos());
+
+    // for(auto& agg_info: agg_infos){
+    //   Field agg_field;
+    //   RelAttrSqlNode attr;
+    //   attr.relation_name = agg_info.agg_field().table_name();
+    //   attr.attribute_name = agg_info.agg_field().field_name();
+    //   auto rc = resolve_common_field(db, table_map, tables, attr, agg_field);
+    //   if(rc != RC::SUCCESS){
+    //     // 若为COUNT(*)的处理。AGG算子中要手动释放agg_field的内存
+    //     if(agg_info.agg_op() == AGG_COUNT && 0 == strcmp(attr.attribute_name.c_str(), "*") ){
+    //       FieldMeta* meta =  new FieldMeta("*", INTS, 1,1,false, false);
+    //       assert(tables[0]);
+    //       agg_field = Field(tables[0], meta);
+    //     }else{
+    //       return rc;
+    //     }
+    //   }
+    //   bool with_table_name = tables.size() > 1;
+    //   select_expr_fields.push_back(FieldsWithGroupBy(agg_field, group_fields, agg_info.agg_op(), with_table_name, false));
+    // }
   }
   glob_ctx->pop_stmt_ctx();
 
@@ -407,7 +439,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
   std::vector<std::unique_ptr<Expression>> where_exprs;
   glob_ctx->push_stmt_ctx(&current_expr_ctx);
 
-  // 解析每一个where条件(目前所有条件用AND连接)
+  // 解析每一个where条件
   bool has_where = false;
   if (select_sql.conditions.exprs.size() > 0)
     has_where = true;
@@ -446,16 +478,24 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
 
   // collect query fields in `order by` statement
   std::vector<FieldWithOrder> order_fields;
-  rc = check_order_by_field(db, table_map, tables, select_sql.order_by_attrs, order_fields);
-  if(rc != RC::SUCCESS){
-    // log在check_order_by_field中打过了
-    return rc;
+  for (auto &orderby_sql_node: select_sql.order_by_attrs)
+  {
+    FieldIdentifier field;
+    rc = resolve_common_field(db, table_map, orderby_sql_node.attr, field);
+    HANDLE_RC(rc);
+    order_fields.emplace_back(field, orderby_sql_node.is_asc);
   }
+
+  // rc = check_order_by_field(db, table_map, tables, select_sql.order_by_attrs, order_fields);
+  // if(rc != RC::SUCCESS){
+  //   // log在check_order_by_field中打过了
+  //   return rc;
+  // }
 
   // everything alright
   SelectStmt *select_stmt = new SelectStmt();
   select_stmt->tables_.swap(tables);
-  select_stmt->select_expr_fields_.swap(select_expr_fields);
+  select_stmt->select_expr_fields_.swap(select_columns);
   select_stmt->group_by_field_.swap(group_fields);
   select_stmt->order_fields_ = order_fields;
   select_stmt->has_where_ = has_where;
@@ -464,6 +504,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
   select_stmt->sub_querys_in_where_.swap(apply_stmts);
   select_stmt->having_exprs_ = std::make_unique<ConjunctionExpr>(convert_to_conjunction_type(select_sql.having_attrs.type), 
     having_exprs);
+  select_stmt->having_agg_infos_.swap(aggs_in_having);
   select_stmt->has_having_ = has_having;
   stmt = select_stmt;
   return RC::SUCCESS;
