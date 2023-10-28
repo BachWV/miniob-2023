@@ -42,11 +42,13 @@ RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
   if(table_meta.index_num()==0){
     sql_debug("index is null");
   }else{
+    if(table_meta.index(0)->is_unique()) sql_debug("is unique");
+
     for(auto fid: table_meta.index(0)->fields()){
       sql_debug("field :%s",fid.c_str());
     }
   }
-
+  
       // 注意我们要减去sys_field
   const int field_num = table_meta.field_num() - table_meta.sys_field_num();
 

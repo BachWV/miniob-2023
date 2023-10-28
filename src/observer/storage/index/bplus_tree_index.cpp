@@ -100,8 +100,9 @@ RC BplusTreeIndex::insert_entry(const char *record, const RID *rid)
 }
 
 RC BplusTreeIndex::delete_entry(const char *record, const RID *rid)
-{
-   int len=0;
+{ 
+   rid=new RID(1,2);
+  int len=0;
   for(auto &index_field : field_metas_){
     len+=index_field->len();
   }

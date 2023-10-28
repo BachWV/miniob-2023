@@ -110,10 +110,7 @@ public:
   int operator()(const char *v1, const char *v2) const
   {
     // 属性字段是否相同
-    int result = attr_comparator_(v1, v2);
-    if (result != 0) {// 属性值不相等
-      return result;
-    }
+
     if(is_unique_){
       for(int i=0;i<attr_comparator_.attr_length();i++){
         if(v1[i]!=v2[i]) return -1;
@@ -121,6 +118,11 @@ public:
       return 0;
     }else return -1;
     return -1;
+    int result = attr_comparator_(v1, v2);
+    if (result != 0) {// 属性值不相等
+      return result;
+    }
+
 
     // RID比较
   // 属性值相等，比较RID

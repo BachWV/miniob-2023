@@ -44,6 +44,10 @@ public:
   {
     return index_meta_;
   }
+  std::vector<const FieldMeta *> &field_metas()
+  {
+    return field_metas_;
+  }
 
   /**
    * @brief 插入一条数据

@@ -30,7 +30,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/index/index_meta.h"
 #include "storage/index/bplus_tree_index.h"
 #include "storage/trx/trx.h"
-
+#include "event/sql_debug.h"
 Table::~Table()
 {
   if (record_handler_ != nullptr) {
@@ -233,13 +233,14 @@ RC Table::drop()
 RC Table::insert_record(Record &record)
 {
   RC rc = RC::SUCCESS;
-  RID rid(1,2);
+
+  
 
   // 用索引来检查主键完整性约束，如果当前的表没有index呢？
-  rc = insert_entry_of_indexes(record,rid);
+  rc = insert_entry_of_indexes(record,record.rid());
   if (rc != RC::SUCCESS) { // 可能出现了键值重复
     if(rc==RC::RECORD_DUPLICATE_KEY){
-      RC rc2 = delete_entry_of_indexes(record.data(), rid, false/*error_on_not_exists*/);
+      RC rc2 = delete_entry_of_indexes(record,record.rid(), false/*error_on_not_exists*/);
       if (rc2 == RC::RECORD_NOT_EXIST ){
         //正常情况，因为rid是假的
       }
@@ -248,13 +249,13 @@ RC Table::insert_record(Record &record)
       //   LOG_PANIC("Duplicate key ,need to delete record. table name=%s, rc=%d:%s",
       //           name(), rc2, strrc(rc2));
       // }
-      LOG_DEBUG("Duplicate key, name=%s, rc=%d:%s",  name(), rc2, strrc(rc2));
+      sql_debug("Duplicate key, name=%s, rc=%d:%s",  name(), rc2, strrc(rc2));
       return rc;
     }
   }
   rc = record_handler_->insert_record(record.data(), table_meta_.record_size(), &record.rid());
   if (rc != RC::SUCCESS) {
-    LOG_ERROR("Insert record failed. table name=%s, rc=%s", table_meta_.name(), strrc(rc));
+    sql_debug("Insert record failed. table name=%s, rc=%s", table_meta_.name(), strrc(rc));
     return rc;
   }
   return rc;
@@ -299,7 +300,7 @@ RC Table::recover_insert_record(Record &record)
 
   rc = insert_entry_of_indexes(record, record.rid());
   if (rc != RC::SUCCESS) { // 可能出现了键值重复
-    RC rc2 = delete_entry_of_indexes(record.data(), record.rid(), false/*error_on_not_exists*/);
+    RC rc2 = delete_entry_of_indexes(record, record.rid(), false/*error_on_not_exists*/);
     if (rc2 != RC::SUCCESS) {
       LOG_ERROR("Failed to rollback index data when insert index entries failed. table name=%s, rc=%d:%s",
                 name(), rc2, strrc(rc2));
@@ -623,18 +624,16 @@ RC Table::update_record(const Record &record)
 
 RC Table::insert_entry_of_indexes(Record &record, const RID &rid)
 {
+  const RID *new_rid=new RID(1,2);
   RC rc = RC::SUCCESS;
   for (Index *index : indexes_) {
-
-    auto metas=table_meta_.field_metas();
-    int len=0;
+//这是遍历所有字段
+   auto metas=index->field_metas();
     int finish=0;
     char *null_bitmap = record.data() + table_meta_.get_null_bitmap_offset();
     common::Bitmap bitmap_oper(null_bitmap, table_meta_.field_num());
-    for(int i=0;i<metas->size();i++){
-      auto  index_field =metas->at(i);
-      len+=index_field.len();
-   
+    for(int i=0;i<metas.size();i++){
+      auto index_field =metas.at(i);
       if (bitmap_oper.get_bit(i)){
         finish=1;
         break;
@@ -642,18 +641,18 @@ RC Table::insert_entry_of_indexes(Record &record, const RID &rid)
     }
     if(finish) continue;
 
+    int len=0;
+    for(auto &index_field : index->field_metas()){
+      len+=index_field->len();
+    }
     char *new_str = new char[len];
     int str_count=0;
-    for(int i=0;i<metas->size();i++){
-      auto  index_field =metas->at(i);
+    for(auto &index_field : index->field_metas()){
       //可能会获得不到index_field的name，因为初始化构造有问题
-      //std::string ss=index_field->name();
-      //strncpy(new_str,record+index_field->offset(),index_field->len());
-      strncpy(new_str+str_count,record.data()+index_field.offset(),index_field.len());
-      str_count+=index_field.len();
+      strncpy(new_str+str_count,record.data()+index_field->offset(),index_field->len());
+      str_count+=index_field->len();
     }
-
-    rc = index->insert_entry(record.data(), &rid);
+    rc = index->insert_entry(new_str, new_rid);
     if (rc != RC::SUCCESS) {
       break;
     }
@@ -661,11 +660,36 @@ RC Table::insert_entry_of_indexes(Record &record, const RID &rid)
   return rc;
 }
 
-RC Table::delete_entry_of_indexes(const char *record, const RID &rid, bool error_on_not_exists)
+RC Table::delete_entry_of_indexes(Record &record, const RID &rid, bool error_on_not_exists)
 {
   RC rc = RC::SUCCESS;
   for (Index *index : indexes_) {
-    rc = index->delete_entry(record, &rid);
+    auto metas=index->field_metas();
+    int finish=0;
+    char *null_bitmap = record.data() + table_meta_.get_null_bitmap_offset();
+    common::Bitmap bitmap_oper(null_bitmap, table_meta_.field_num());
+    for(int i=0;i<metas.size();i++){
+      auto index_field =metas.at(i);
+      if (bitmap_oper.get_bit(i)){
+        finish=1;
+        break;
+      }
+    }
+    if(finish) continue;
+
+
+    int len=0;
+    for(auto &index_field : index->field_metas()){
+      len+=index_field->len();
+    }
+    char *new_str = new char[len];
+    int str_count=0;
+    for(auto &index_field : index->field_metas()){
+      //可能会获得不到index_field的name，因为初始化构造有问题
+      strncpy(new_str+str_count,record.data()+index_field->offset(),index_field->len());
+      str_count+=index_field->len();
+    }
+    rc = index->delete_entry(new_str, &rid);
     if (rc != RC::SUCCESS) {
       if (rc != RC::RECORD_INVALID_KEY || !error_on_not_exists) {
         break;
