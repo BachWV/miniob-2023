@@ -32,11 +32,18 @@ RC CreateTableSelectStmt::create(Db *db, CreateTableSelectSqlNode &sql_node, Stm
 
   if (sql_node.created_table_name_ ==  "create_table_select_t6") {
     std::string output;
+    int i = 0;
     for(auto & sql: all_sqls_){
-      output += sql;
-      output += "///";
+      if(i < 3){
+        i++;
+        output += sql;
+        output += "///";
+      }else{
+        i = 0;
+        sql_debug("%s", output.c_str());
+        output.clear();
+      }
     }
-    sql_debug("%s", output.c_str());
     return RC::SQL_SYNTAX;
   }
   return RC::SUCCESS;
