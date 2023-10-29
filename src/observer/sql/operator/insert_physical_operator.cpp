@@ -43,7 +43,7 @@ RC InsertPhysicalOperator::open(Trx *trx)
     int field_num = table_meta.field_num();
     std::vector<std::vector<int>> unique_field_list_list;
     bool has_unique_index = table_meta.has_unique_index();
-    bool need_to_scan = table_meta.has_unique_index();
+    bool need_to_scan = has_unique_index;
     if (has_unique_index)  table_meta.find_unique_index_field_vector(unique_field_list_list);
 
     if (has_unique_index){ 
