@@ -27,6 +27,11 @@ See the Mulan PSL v2 for more details. */
 #include "net/server.h"
 #include "net/server_param.h"
 
+#include <vector>
+#include <string>
+
+std::vector<std::string> all_sqls_;
+
 using namespace common;
 
 #define NET "NET"

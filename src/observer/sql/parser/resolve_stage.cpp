@@ -26,6 +26,8 @@ See the Mulan PSL v2 for more details. */
 #include "session/session.h"
 #include "sql/stmt/stmt.h"
 
+extern std::vector<std::string> all_sqls_;
+
 using namespace common;
 
 RC ResolveStage::handle_request(SQLStageEvent *sql_event)
@@ -47,6 +49,7 @@ RC ResolveStage::handle_request(SQLStageEvent *sql_event)
   Stmt *stmt = nullptr;
   rc = Stmt::create_stmt(db, *sql_node, stmt);
   if (rc != RC::SUCCESS && rc != RC::UNIMPLENMENT) {
+    
     LOG_WARN("failed to create stmt. rc=%d:%s", rc, strrc(rc));
     sql_result->set_return_code(rc);
     return rc;

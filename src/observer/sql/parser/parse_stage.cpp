@@ -25,6 +25,8 @@ See the Mulan PSL v2 for more details. */
 #include "event/sql_event.h"
 #include "sql/parser/parse.h"
 
+extern std::vector<std::string> all_sqls_;
+
 using namespace common;
 
 RC ParseStage::handle_request(SQLStageEvent *sql_event)
@@ -36,7 +38,7 @@ RC ParseStage::handle_request(SQLStageEvent *sql_event)
 
   ParsedSqlResult parsed_sql_result;
 
-  sql_event->add_sql(sql);
+
   parse(sql.c_str(), &parsed_sql_result);
   if (parsed_sql_result.sql_nodes().empty()) {
     sql_result->set_return_code(RC::SUCCESS);

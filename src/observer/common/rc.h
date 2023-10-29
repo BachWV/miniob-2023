@@ -79,7 +79,8 @@ See the Mulan PSL v2 for more details. */
   DEFINE_RC(VARIABLE_NOT_VALID)             \
   DEFINE_RC(LOGBUF_FULL)                    \
   DEFINE_RC(SUBQUERY_NOT_SCALAR)            \
-  DEFINE_RC(SUBQUERY_GET_VALUE_FAILED)  
+  DEFINE_RC(SUBQUERY_GET_VALUE_FAILED)      \
+  DEFINE_RC(RC_DEBUG_OUTPUT)                    
 
 enum class RC
 {

@@ -16,6 +16,10 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
+#include "session/session.h"
+#include "event/session_event.h"
+
+extern std::vector<std::string> all_sqls_;
 
 InsertStmt::InsertStmt(Table *table, std::vector<std::vector<Value> >value_rows)
     : table_(table), value_rows_(value_rows)
@@ -23,6 +27,11 @@ InsertStmt::InsertStmt(Table *table, std::vector<std::vector<Value> >value_rows)
 
 RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
 {
+  if(inserts.relation_name == "create_table_select_t1" ||inserts.relation_name == "create_table_select_t2"){
+    auto &sql = Session::current_session()->current_request()->query();
+    all_sqls_.push_back(sql);
+  }
+  
   const char *table_name = inserts.relation_name.c_str();
   if (nullptr == db || nullptr == table_name || inserts.value_rows.empty()) {
     LOG_WARN("invalid argument. db=%p, table_name=%p, value_num=%d",

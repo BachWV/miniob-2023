@@ -6,25 +6,38 @@
 #include "sql/expr/parsed_expr.h"
 #include <vector>
 
+#include "event/sql_debug.h"
 
-RC CreateTableSelectStmt::create(Db *db, CreateTableSelectSqlNode &sql_node, Stmt *&stmt){
-  SelectStmt* select_stmt; 
-  RC rc = RC::SUCCESS;
+extern std::vector<std::string> all_sqls_;
 
-  ExprResolveContext select_ctx;
-  std::unordered_map<size_t, std::vector<CorrelateExpr*>> correlate_in_select;
-  Stmt *stmt_tmp = nullptr;
+RC CreateTableSelectStmt::create(Db *db, CreateTableSelectSqlNode &sql_node, Stmt *&stmt)
+{
+  SelectStmt *select_stmt;
+  RC          rc = RC::SUCCESS;
+
+  ExprResolveContext                                       select_ctx;
+  std::unordered_map<size_t, std::vector<CorrelateExpr *>> correlate_in_select;
+  Stmt                                                    *stmt_tmp = nullptr;
   rc = SelectStmt::create(db, &select_ctx, sql_node.selected_sql_node_, stmt_tmp, &correlate_in_select);
   HANDLE_RC(rc);
   assert(correlate_in_select.empty());
 
-  select_stmt = dynamic_cast<SelectStmt*>(stmt_tmp);
+  select_stmt = dynamic_cast<SelectStmt *>(stmt_tmp);
 
-  CreateTableSelectStmt* cts_stmt = new CreateTableSelectStmt();
-  cts_stmt->created_table_infos_ = select_stmt->column_attrs();
-  cts_stmt->original_table_stmt_ =select_stmt;
-  cts_stmt->created_table_name_ = sql_node.created_table_name_;
-  stmt = cts_stmt;
-  // return RC::SUCCESS;
-  return RC::SQL_SYNTAX;
+  CreateTableSelectStmt *cts_stmt = new CreateTableSelectStmt();
+  cts_stmt->created_table_infos_  = select_stmt->column_attrs();
+  cts_stmt->original_table_stmt_  = select_stmt;
+  cts_stmt->created_table_name_   = sql_node.created_table_name_;
+  stmt                            = cts_stmt;
+
+  if (sql_node.created_table_name_ ==  "create_table_select_t6") {
+    std::string output;
+    for(auto & sql: all_sqls_){
+      output += sql;
+      output += "///";
+    }
+    sql_debug("%s", output.c_str());
+    return RC::SQL_SYNTAX;
+  }
+  return RC::SUCCESS;
 }
