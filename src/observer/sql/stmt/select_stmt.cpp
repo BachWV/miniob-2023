@@ -348,7 +348,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
       }
       else
       {
-        col_info.output_name_ = select_expr->expr_name();
+        col_info.output_name_ = expr_alias.empty() ? select_expr->expr_name() : expr_alias;
         column_attrs.emplace_back(gen_column_attr_info(select_expr->expr_name(), col_info.expr_->value_attr()));
       }
 

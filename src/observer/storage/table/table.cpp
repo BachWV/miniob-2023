@@ -395,7 +395,7 @@ RC Table::make_record(int value_num, Value *values, Record &record)
         LOG_ERROR("Failed to open file for write. file name=%s, errmsg=%s", file_path.c_str(), strerror(errno));
         return RC::IOERR_OPEN;
       }
-      fs<<value.get_text_string();
+      fs<<value.get_string();
       fs.close();
 
       

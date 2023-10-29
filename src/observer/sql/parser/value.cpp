@@ -163,7 +163,7 @@ void Value::set_value(const Value &value)
       set_date(value.get_int());
     } break;
     case TEXTS: {
-      set_text_string(value.get_string().c_str());
+      set_text_string(value.get_text_string().c_str());
     } break;
     case NULL_TYPE:{
       attr_type_ = NULL_TYPE;
@@ -252,16 +252,7 @@ std::string Value::to_string() const
       os << "NULL";
     } break;
     case TEXTS: {
-       std::string file_path = "miniob/db/sys/"+ str_value_;
-       std::ifstream fs(file_path);  // 打开文件 example.txt
-       if (!fs.is_open()) {
-        LOG_ERROR("Failed to open file for read. file name=%s, errmsg=%s", file_path.c_str(), strerror(errno));
-        return os.str();
-      }
-      os << fs.rdbuf();  // 将文件内容读取到字符串流中
-
-      fs.close();  // 关闭文件
-
+      os << str_value_;
     } break;
     default: {
       LOG_WARN("unsupported attr type: %d", attr_type_);
@@ -410,9 +401,18 @@ std::string Value::get_string() const
 }
 std::string Value::get_text_string() const
 {
+  std::stringstream os;
+  std::string file_path = "miniob/db/sys/"+ str_value_;
+  std::ifstream fs(file_path);  // 打开文件 example.txt
+  if (!fs.is_open()) {
+    LOG_ERROR("Failed to open file for read. file name=%s, errmsg=%s", file_path.c_str(), strerror(errno));
+    return os.str();
+  }
+  os << fs.rdbuf();  // 将文件内容读取到字符串流中
+
+  fs.close();  // 关闭文件
   
-  
-  return this->to_string();
+  return os.str();
 }
 
 bool Value::get_boolean() const
