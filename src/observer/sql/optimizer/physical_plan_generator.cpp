@@ -597,10 +597,11 @@ RC PhysicalPlanGenerator::create_plan(FieldCulLogicalOperator& logical_oper, std
       LOG_WARN("failed to create field cul logical operator's child physical operator. rc=%s", strrc(rc));
       return rc;
     }
+    oper = make_unique<FieldCulPhysicalOperator>(logical_oper.field_identifier_, std::move(logical_oper.cul_expr_));
+    oper->add_child(std::move(child_phy_oper));
+  }else{
+    oper =  make_unique<FieldCulPhysicalOperator>(logical_oper.field_identifier_, std::move(logical_oper.cul_expr_));
   }
-
-  oper = make_unique<FieldCulPhysicalOperator>(logical_oper.field_identifier_, std::move(logical_oper.cul_expr_));
-  oper->add_child(std::move(child_phy_oper));
 
   return rc;
 }

@@ -6,6 +6,7 @@
 
 RC SortPhysicalOperator::open(Trx *trx)
 {
+  curr_index_ = -1;
   RC                rc   = RC::SUCCESS;
   PhysicalOperator *oper = children_.front().get();
   rc = oper->open(trx);
@@ -21,15 +22,14 @@ RC SortPhysicalOperator::open(Trx *trx)
   auto cmp_func = std::bind(&SortPhysicalOperator::cmp_function, this, std::placeholders::_1, std::placeholders::_2);
   // std::sort(std::execution::par_unseq, tuples_.begin(), tuples_.end(), cmp_func);
   std::sort(tuples_.begin(), tuples_.end(), cmp_func);
-  it = --tuples_.begin();  // 未定义行为！
   return RC::SUCCESS;
 }
 
 // 因为算子是先next再current_tuple，所以和迭代器的逻辑错开了一位，不然第一个元素不会被遍历
 RC SortPhysicalOperator::next()
 {
-  it++;
-  if (it == tuples_.end()) {
+  curr_index_++;
+  if(curr_index_ >= tuples_.size()){
     return RC::RECORD_EOF;
   }
   return RC::SUCCESS;
@@ -47,7 +47,7 @@ RC SortPhysicalOperator::close() {
 
 Tuple *SortPhysicalOperator::current_tuple()
 {
-  return *it;
+  return tuples_[curr_index_];
 }
 
 bool SortPhysicalOperator::cmp_function(const Tuple *l_tuple, const Tuple *r_tuple)
