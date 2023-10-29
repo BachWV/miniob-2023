@@ -40,10 +40,10 @@ public:
 private:
   Trx *trx_ = nullptr;
 
-  int                            current_tuple_index_{0};
-  std::vector<Tuple *>::iterator it;
+  long long                            curr_index_;
   std::vector<Tuple *>           tuples_;  // 子算子的所有tuple
   std::vector<FieldWithOrder>    order_fields_;
   std::vector<std::function<bool(const Tuple *, const Tuple *, bool &equal)>>
       cmp_functions_;  // 根据order_fields_生成的比较函数
+  
 };
