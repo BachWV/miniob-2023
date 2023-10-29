@@ -36,53 +36,44 @@ RC InsertPhysicalOperator::open(Trx *trx)
     }
     records.push_back(record);
   }
+  //make_record结束
   for(auto &record : records){
+
+    TableMeta table_meta = table_->table_meta();
+    int field_num = table_meta.field_num();
+    std::vector<std::vector<int>> unique_field_list_list;
+    bool has_unique_index = table_meta.has_unique_index();
+    bool need_to_scan = table_meta.has_unique_index();
+    if (has_unique_index)  table_meta.find_unique_index_field_vector(unique_field_list_list);
+
+    if (has_unique_index){ 
+      //对null进行特判
+      for(std::vector<int> unique_field_list : unique_field_list_list){
+        for(int unique_field : unique_field_list){
+          if(record.is_null_value(unique_field)){
+            need_to_scan=false;//如果有一个是null，就不需要去重了，直接插入
+            break;
+          }
+        }
+        if(need_to_scan==false) break;
+      }
+    }
+
+    if(need_to_scan){
+    
       RecordFileScanner scanner;
       Record record_tmp;
-      
-
-
-      TableMeta table_meta = table_->table_meta();
-      int field_num=table_meta.field_num();
-      std::vector<std::vector<int>> field_need_to_cmp_list_list;
-      if(table_meta.index_num()==0){ //不进表扫描
-        goto insert_it;
-      } 
       rc = table_->get_record_scanner(scanner, trx, true/*readonly*/);
       if (rc != RC::SUCCESS) {
         LOG_WARN("failed to create scanner . table=%s,, rc=%s", name(), strrc(rc));
         return rc;
       }
-
-
-      for(int i=0;i<table_meta.index_num();i++){
-        //第i个索引，该索引可以包括多个col
-        std::vector<int> field_need_to_cmp_list;
-        std::vector<std::string> index_field_name_list = table_meta.index(i)->fields();//在哪几个列建立了索引
-        if(table_meta.index(i)->is_unique()==false){
-          continue;//对于非unique的索引，不需要去重
-        }
-        for(int j=0;j<field_num;j++){
-
-          for(int jj=0;jj<index_field_name_list.size();jj++){
-            if(strcmp(table_meta.field(j)->name(),index_field_name_list[jj].c_str())==0){
-              field_need_to_cmp_list.push_back(j);
-              break;
-            }
-          }//O(nm)的列名匹配
-    
-        }
-          if(field_need_to_cmp_list.size()>0) field_need_to_cmp_list_list.push_back(field_need_to_cmp_list);
-      }
-      if(field_need_to_cmp_list_list.size()==0) goto insert_it;
-
-
       while (scanner.has_next()) {
         rc = scanner.next(record_tmp);
         RowTuple tuple_origin ;
         RowTuple tuple_tmp;
-        tuple_origin.set_schema(table_, table_->table_meta().field_metas());
-        tuple_tmp.set_schema(table_, table_->table_meta().field_metas());
+        tuple_origin.set_schema(table_, table_meta.field_metas());
+        tuple_tmp.set_schema(table_, table_meta.field_metas());
         tuple_tmp.set_record(&record_tmp);
         tuple_origin.set_record(&record);
         if (rc != RC::SUCCESS) {
@@ -90,41 +81,36 @@ RC InsertPhysicalOperator::open(Trx *trx)
           return rc;
         }
 
-        for(std::vector<int> field_need_to_cmp_list:field_need_to_cmp_list_list){
-          bool flag=true;
-          for(int field_need_to_cmp:field_need_to_cmp_list){
+        for(std::vector<int> unique_field_list : unique_field_list_list){
+          bool flag = true;
+          for(int unique_field : unique_field_list){
             Value value1;
             Value value2;
-            tuple_tmp.cell_at(field_need_to_cmp,value1);
-            tuple_origin.cell_at(field_need_to_cmp,value2);
+            tuple_tmp.cell_at(unique_field,value1);
+            tuple_origin.cell_at(unique_field,value2);
             if(value1.compare(value2)!=0){
               flag=false;
               break;
             }
           }
-          if(flag){//全部相等,跳过插入
-            goto skip_insert;
+          if(flag){//全部相等,跳过插入,之后record也跳过
+            LOG_DEBUG("skip insert record by transaction. rc=%s", strrc(rc));
+            return RC::RECORD_DUPLICATE_KEY;
           }
-        } 
+        }//双层for结束
       }
       scanner.close_scan();
+    }
 
-
-
-insert_it:
+    //结束判断，没有重复，插入
     rc = trx->insert_record(table_, record);
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to insert record by transaction. rc=%s", strrc(rc));
       return rc;
     }
-    break;
-    
+      
+  } //完成该record的插入
 
-skip_insert:
-    LOG_DEBUG("skip insert record by transaction. rc=%s", strrc(rc));
-    return RC::RECORD_DUPLICATE_KEY;
-  }
-  
   return rc;
 }
 
