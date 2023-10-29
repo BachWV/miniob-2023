@@ -298,12 +298,14 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
         const std::string &field_name = id->field().field_name();
         col_info.output_name_ = gen_output_name_for_field_id(table_map.size() > 1, table_name, field_name, expr_alias);
         common_fields_set.emplace(table_name, field_name);  // 用于group by校验
-        column_attrs.emplace_back(gen_column_attr_info(field_name, col_info.expr_->value_attr()));
+
+        const std::string &column_outer_name = expr_alias.empty() ? field_name : expr_alias;
+        column_attrs.emplace_back(gen_column_attr_info(column_outer_name, col_info.expr_->value_attr()));
       }
       else
       {
         col_info.output_name_ = expr_alias.empty() ? select_expr->expr_name() : expr_alias;
-        column_attrs.emplace_back(gen_column_attr_info(select_expr->expr_name(), col_info.expr_->value_attr()));
+        column_attrs.emplace_back(gen_column_attr_info(col_info.output_name_, col_info.expr_->value_attr()));
       }
 
       std::vector<AggExprInfo> &agg_in_expr = select_expr_resolve_result.get_agg_expr_infos();

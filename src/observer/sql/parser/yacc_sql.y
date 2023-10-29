@@ -1297,14 +1297,15 @@ create_table_select_stmt:
       create_table_select.created_table_name_ = $3;
       free($3);
     }
-    | CREATE TABLE ID LBRACE rel_list RBRACE as select_stmt {
+    | CREATE TABLE ID LBRACE attr_def attr_def_list RBRACE as select_stmt {
       $$ = new ParsedSqlNode(SCF_CREATE_TABLE_SELECT);
       CreateTableSelectSqlNode &create_table_select = $$->create_table_select;
-      create_table_select.selected_sql_node_ = std::move($8->selection);
-      delete $8;
+      create_table_select.selected_sql_node_ = std::move($9->selection);
+      delete $9;
       create_table_select.created_table_name_ = $3;
       free($3);
       delete $5;
+      delete $6;
     }
     ;
 
