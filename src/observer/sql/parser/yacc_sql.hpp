@@ -107,24 +107,24 @@ extern int yydebug;
     SYM_NOT_IN = 313,
     SYM_EXISTS = 314,
     SYM_NOT_EXISTS = 315,
-    MIN = 316,
-    MAX = 317,
-    AVG = 318,
-    COUNT = 319,
-    SUM = 320,
-    GROUP_BY = 321,
-    HAVING = 322,
-    SYM_LIKE = 323,
-    SYM_NOT_LIKE = 324,
-    ROUND = 325,
-    LENGTH = 326,
-    DATE_FORMAT = 327,
-    AS = 328,
-    DATE_STR = 329,
-    NUMBER = 330,
-    FLOAT = 331,
-    ID = 332,
-    SSS = 333,
+    GROUP_BY = 316,
+    HAVING = 317,
+    SYM_LIKE = 318,
+    SYM_NOT_LIKE = 319,
+    AS = 320,
+    DATE_STR = 321,
+    NUMBER = 322,
+    FLOAT = 323,
+    ID = 324,
+    SSS = 325,
+    MIN = 326,
+    MAX = 327,
+    AVG = 328,
+    COUNT = 329,
+    SUM = 330,
+    ROUND = 331,
+    LENGTH = 332,
+    DATE_FORMAT = 333,
     UMINUS = 334
   };
 #endif
@@ -133,7 +133,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 133 "yacc_sql.y"
+#line 125 "yacc_sql.y"
 
   ParsedSqlNode *                   sql_node;
   Value *                           value;

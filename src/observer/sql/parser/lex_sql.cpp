@@ -1346,42 +1346,42 @@ RETURN_TOKEN(ORDER_BY);
 case 44:
 YY_RULE_SETUP
 #line 122 "lex_sql.l"
-RETURN_TOKEN(MIN);
+yylval->string=strdup(yytext); RETURN_TOKEN(MIN);
 	YY_BREAK
 case 45:
 YY_RULE_SETUP
 #line 123 "lex_sql.l"
-RETURN_TOKEN(MAX);
+yylval->string=strdup(yytext); RETURN_TOKEN(MAX);
 	YY_BREAK
 case 46:
 YY_RULE_SETUP
 #line 124 "lex_sql.l"
-RETURN_TOKEN(AVG);
+yylval->string=strdup(yytext); RETURN_TOKEN(AVG);
 	YY_BREAK
 case 47:
 YY_RULE_SETUP
 #line 125 "lex_sql.l"
-RETURN_TOKEN(COUNT);
+yylval->string=strdup(yytext); RETURN_TOKEN(COUNT);
 	YY_BREAK
 case 48:
 YY_RULE_SETUP
 #line 126 "lex_sql.l"
-RETURN_TOKEN(SUM);
+yylval->string=strdup(yytext); RETURN_TOKEN(SUM);
 	YY_BREAK
 case 49:
 YY_RULE_SETUP
 #line 127 "lex_sql.l"
-RETURN_TOKEN(ROUND);
+yylval->string=strdup(yytext); RETURN_TOKEN(ROUND);
 	YY_BREAK
 case 50:
 YY_RULE_SETUP
 #line 128 "lex_sql.l"
-RETURN_TOKEN(DATE_FORMAT);
+yylval->string=strdup(yytext); RETURN_TOKEN(DATE_FORMAT);
 	YY_BREAK
 case 51:
 YY_RULE_SETUP
 #line 129 "lex_sql.l"
-RETURN_TOKEN(LENGTH);
+yylval->string=strdup(yytext); RETURN_TOKEN(LENGTH);
 	YY_BREAK
 case 52:
 YY_RULE_SETUP
