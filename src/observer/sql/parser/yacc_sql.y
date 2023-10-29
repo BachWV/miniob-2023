@@ -337,23 +337,21 @@ desc_table_stmt:
     ;
 
 create_index_stmt:    /*create index 语句的语法解析树*/
-    CREATE INDEX ID ON ID LBRACE ID rel_list RBRACE
+    CREATE INDEX ID ON ID LBRACE rel_list RBRACE
     {
       $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
       CreateIndexSqlNode &create_index = $$->create_index;
       create_index.index_name = $3;
       create_index.relation_name = $5;
-      if ($8 != nullptr) {
+      if ($7 != nullptr) {
         std::vector<std::string> old_list;
-        for(auto& [ori_name, alias]: *$8){
+        for(auto& [ori_name, alias]: *$7){
           create_index.attribute_names.push_back(ori_name);
         }
-        delete $8;
+        delete $7;
       }
-      $$->create_index.attribute_names.push_back($7);
       free($3);
       free($5);
-      free($7);
     }
     ;
 
@@ -634,11 +632,12 @@ select_stmt:        /*  select 语句的语法解析树*/
       if ($5 != nullptr) {
         for (auto &inner_join: *$5)
         {
-          $$->selection.relations.emplace_back(inner_join.join_relation);
+          std::string join_rel_name = inner_join->join_relation;
+          $$->selection.relations.push_back(std::make_pair(join_rel_name, join_rel_name));
 
           $$->selection.conditions.exprs.insert($$->selection.conditions.exprs.end(), 
-            std::make_move_iterator(inner_join.join_conditions.exprs.begin()), 
-            std::make_move_iterator(inner_join.join_conditions.exprs.end()));
+            std::make_move_iterator(inner_join->join_conditions.exprs.begin()), 
+            std::make_move_iterator(inner_join->join_conditions.exprs.end()));
         }
         delete $5;
       }
@@ -992,11 +991,11 @@ identifier:
     }
     | '*'
     {
-      $$ = new IdentifierExprSqlNode(token_name(sql_string, &@$), std::string(), std::string("*"));
+      $$ = new IdentifierExprSqlNode(token_name(sql_string, &@$), std::string(), "*");
     }
     | ID DOT '*'
     {
-      $$ = new IdentifierExprSqlNode(token_name(sql_string, &@$), $1, std::string("*"));
+      $$ = new IdentifierExprSqlNode(token_name(sql_string, &@$), $1, "*");
       free($1);
     }
     ;
@@ -1173,8 +1172,11 @@ select_expr:
     expr alias {
       $$ = new SelectExprWithAlias();
       $$->expr_.reset($1);
-      $$->alias_ = std::move(*$2);
-      delete $2;
+      if ($2 != nullptr)
+      {
+        $$->alias_ = std::move(*$2);
+        delete $2;
+      }
     }
     ;
 
@@ -1305,6 +1307,7 @@ opt_semicolon: /*empty*/
 extern void scan_string(const char *str, yyscan_t scanner);
 
 int sql_parse(const char *s, ParsedSqlResult *sql_result) {
+  /* yydebug = 1; */
   yyscan_t scanner;
   yylex_init(&scanner);
   scan_string(s, scanner);

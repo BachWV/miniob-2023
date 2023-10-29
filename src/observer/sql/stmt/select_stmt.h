@@ -44,7 +44,6 @@ using SelectExprField = std::variant<FieldsWithGroupBy, FieldWithFunction, Field
 struct SelectColumnInfo
 {
   std::unique_ptr<Expression> expr_;  // 一个列就是一个表达式
-  std::vector<AggExprInfo> agg_infos_;  // 该表达式中的所有聚集函数
 
   // 该列的虚拟列名对应的identifier，应该同时被添加到Proj和计算此表达式的FieldCulPhy中
   // 由于FieldCulPhy使用FieldMeta表示新字段的名字，需使用tuple_cell_spec_.field_name()初始化FieldMeta的name字段
@@ -97,7 +96,7 @@ public:
   bool has_having_clause() const { return has_having_; }
   bool has_agg() const {return has_agg_;}
   std::unique_ptr<ConjunctionExpr> fetch_having_exprs();
-  std::vector<AggExprInfo> &fetch_having_agg_infos() { return having_agg_infos_; }
+  std::vector<AggExprInfo> &fetch_all_agg_infos() { return all_agg_infos_; }
   std::vector<AttrInfoSqlNode> column_attrs(){
     return column_attrs_;
   }
@@ -123,6 +122,9 @@ private:
 
   bool has_having_ = false;
   std::unique_ptr<ConjunctionExpr> having_exprs_;
-  std::vector<AggExprInfo> having_agg_infos_;  // having中的聚集函数
-  std::vector<AttrInfoSqlNode> column_attrs_;
+  
+  std::vector<AggExprInfo> all_agg_infos_;  // select expr和having中的所有聚集函数
+
+  // select t1.id new_id, t2.name new_name, t1.score + t2.score as total_score from t1, t2 where t1.id = t2.id;
+  std::vector<AttrInfoSqlNode> column_attrs_;  // 列的值属性
 };

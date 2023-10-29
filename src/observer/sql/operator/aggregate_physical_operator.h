@@ -21,7 +21,7 @@ public:
 				cur_group_by_value_.resize(group_by_fids.size());
 			}
 		}
-	~AggregatePhysicalOperator();
+	~AggregatePhysicalOperator() = default;
 
 	PhysicalOperatorType type() const override{
 		return PhysicalOperatorType::AGGREGATE;

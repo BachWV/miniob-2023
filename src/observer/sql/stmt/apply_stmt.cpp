@@ -1,5 +1,5 @@
-#include "sql/stmt/apply_stmt.h"
 #include "sql/stmt/select_stmt.h"
+#include "sql/stmt/apply_stmt.h"
 #include "sql/expr/expression.h"
 #include "sql/operator/apply_logical_operator.h"
 #include "sql/optimizer/logical_plan_generator.h"

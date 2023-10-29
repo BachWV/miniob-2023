@@ -44,6 +44,8 @@ struct RelAttrSqlNode
   std::string alias_;
 };
 
+class FunctionKernel;
+
 struct FunctionSqlNode{
   // 没有has table的const
   bool has_table; // 算子生成的逻辑

@@ -186,6 +186,15 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
     return type == Conditions::ConjunctionType::AND ? ConjunctionExpr::Type::AND : ConjunctionExpr::Type::OR;
   };
 
+  auto gen_column_attr_info = [](const std::string &name, const ExprValueAttr &attr) {
+    AttrInfoSqlNode attr_info;
+    attr_info.name = name;
+    attr_info.type = attr.type;
+    attr_info.length = attr.length;
+    attr_info.nullable = attr.nullable;
+    return attr_info;
+  };
+
   if (nullptr == db) {
     LOG_WARN("invalid argument. db is null");
     return RC::INVALID_ARGUMENT;
@@ -196,6 +205,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
 
   // collect tables in `from` statement
   std::unordered_map<std::string, Table *> table_map;  // table的名字（有别名则是别名，否则是表原名），映射到Table对象
+  std::vector<std::string> tables_;  // 按from的顺序排列的表名
 
   for (size_t i = 0; i < select_sql.relations.size(); i++) {
     const char *table_name = select_sql.relations[i].first.c_str();
@@ -218,6 +228,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
       avail_table_name = table_name;
 
     table_map.emplace(avail_table_name, table);
+    tables_.emplace_back(avail_table_name);
 
     current_expr_ctx.add_table_to_namespace(avail_table_name, table);
     having_resolve_ctx.add_table_to_namespace(avail_table_name, table);
@@ -237,6 +248,8 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
 
   // collect select_expr in `select` statement
   std::vector<SelectColumnInfo> select_columns;
+  std::vector<AttrInfoSqlNode> column_attrs;  // 列的值属性
+  std::vector<AggExprInfo> all_agg_infos;  // select expr和having中的所有聚集函数
   bool has_agg = false;
   std::unordered_multiset<FieldIdentifier, FieldIdentifierHash> common_fields_set;  // 非agg的字段
 
@@ -253,8 +266,9 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
       if (common::is_blank(id->get_table_name().c_str())) 
       {
         // 空.*
-        for (auto &[table_name, table] : table_map) 
+        for (auto &table_name : tables_) 
         {
+          Table *table = table_map.at(table_name);
           std::vector<std::string> col_names;
           wildcard_fields(table, col_names);
           for (auto &col_name: col_names)
@@ -263,6 +277,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
             col_info.expr_ = std::make_unique<IdentifierExpr>(FieldIdentifier(table_name, col_name));
             col_info.tuple_cell_spec_ = glob_ctx->get_col_id_generator().generate_identifier();
             col_info.output_name_ = gen_output_name_for_field_id(table_map.size() > 1, table_name, col_name, expr_alias);
+            column_attrs.emplace_back(gen_column_attr_info(col_name, col_info.expr_->value_attr()));
             select_columns.emplace_back(std::move(col_info));
 
             /* 生成一个表名.列名，用于group by的校验 */
@@ -274,8 +289,6 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
       {
         // 表名非空
         const char *table_name = id->get_table_name().c_str();
-        const char *field_name = id->get_field_name().c_str();
-        
         if (0 == strcmp(table_name, "*")) {
           // *.*，不合法
           return RC::SCHEMA_FIELD_MISSING;
@@ -298,6 +311,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
             col_info.expr_ = std::make_unique<IdentifierExpr>(FieldIdentifier(table_name, col_name));
             col_info.tuple_cell_spec_ = glob_ctx->get_col_id_generator().generate_identifier();
             col_info.output_name_ = gen_output_name_for_field_id(true, table_name, col_name, expr_alias);
+            column_attrs.emplace_back(gen_column_attr_info(col_name, col_info.expr_->value_attr()));
             select_columns.emplace_back(std::move(col_info));
 
             /* 生成一个表名.列名，用于group by的校验 */
@@ -322,7 +336,6 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
 
       SelectColumnInfo col_info;
       col_info.expr_ = select_expr_resolve_result.owns_result_expr_tree();
-      col_info.agg_infos_ = std::move(select_expr_resolve_result.get_agg_expr_infos());
       col_info.tuple_cell_spec_ = glob_ctx->get_col_id_generator().generate_identifier();
       if (select_expr->get_type() == ExprSqlNodeType::Identifier)
       {
@@ -331,12 +344,19 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
         const std::string &field_name = id->field().field_name();
         col_info.output_name_ = gen_output_name_for_field_id(table_map.size() > 1, table_name, field_name, expr_alias);
         common_fields_set.emplace(table_name, field_name);  // 用于group by校验
+        column_attrs.emplace_back(gen_column_attr_info(field_name, col_info.expr_->value_attr()));
       }
       else
+      {
         col_info.output_name_ = select_expr->expr_name();
+        column_attrs.emplace_back(gen_column_attr_info(select_expr->expr_name(), col_info.expr_->value_attr()));
+      }
 
-      if (!col_info.agg_infos_.empty())
+      std::vector<AggExprInfo> &agg_in_expr = select_expr_resolve_result.get_agg_expr_infos();
+      if (!agg_in_expr.empty())
         has_agg = true;
+      all_agg_infos.insert(all_agg_infos.end(), std::make_move_iterator(agg_in_expr.begin()), 
+        std::make_move_iterator(agg_in_expr.end()));
 
       select_columns.emplace_back(std::move(col_info));
     }
@@ -344,6 +364,12 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
 
   // check aggregation validate: 如果存在agg，那么非agg的字段（common_fields_set）一定在gb中出现
   if(has_agg){
+    // 非agg的字段和group by字段数一定相等，要不都是0。
+    // 注：此处注释掉，不一定相等！group by中可以出现更多字段。非agg字段是group by字段的子集。
+    if(common_fields_set.size() > group_fields.size()){
+      return RC::SQL_SYNTAX;
+    }
+
     // 若gf的字段在cfs中不存在，那么一定有错
     for(auto const& fi: group_fields){
       if(common_fields_set.count(fi) == 0){
@@ -355,7 +381,6 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
   RC rc = RC::SUCCESS;
 
   std::vector<std::unique_ptr<Expression>> having_exprs;
-  std::vector<AggExprInfo> aggs_in_having;
   glob_ctx->push_stmt_ctx(&having_resolve_ctx);
 
   bool has_having = false;
@@ -381,7 +406,8 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
     // 处理时不用再校验了，expr的resolve保证AggExprInfo里的东西是有效的
     auto &agg_infos_in_having = having_resolve_result.get_agg_expr_infos();
     has_agg = agg_infos_in_having.empty() ? has_agg : true;
-    aggs_in_having.swap(agg_infos_in_having);
+    all_agg_infos.insert(all_agg_infos.end(), std::make_move_iterator(agg_infos_in_having.begin()), 
+      std::make_move_iterator(agg_infos_in_having.end()));
 
     // for(auto& agg_info: agg_infos){
     //   Field agg_field;
@@ -467,6 +493,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
   SelectStmt *select_stmt = new SelectStmt();
   select_stmt->table_map_.swap(table_map);
   select_stmt->select_expr_fields_.swap(select_columns);
+  select_stmt->column_attrs_.swap(column_attrs);
   select_stmt->group_by_field_.swap(group_fields);
   select_stmt->order_fields_ = order_fields;
   select_stmt->has_where_ = has_where;
@@ -475,7 +502,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
   select_stmt->sub_querys_in_where_.swap(apply_stmts);
   select_stmt->having_exprs_ = std::make_unique<ConjunctionExpr>(convert_to_conjunction_type(select_sql.having_attrs.type), 
     having_exprs);
-  select_stmt->having_agg_infos_.swap(aggs_in_having);
+  select_stmt->all_agg_infos_.swap(all_agg_infos);
   select_stmt->has_having_ = has_having;
   select_stmt->has_agg_ = has_agg;
   stmt = select_stmt;

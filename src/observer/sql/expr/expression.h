@@ -21,6 +21,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/field/field.h"
 #include "sql/parser/value.h"
 #include "common/log/log.h"
+#include "sql/expr/expr_attr.h"
 
 class PhysicalOperator;
 class Tuple;
@@ -98,6 +99,11 @@ public:
    */
   virtual AttrType value_type() const = 0;
 
+  /*
+   * 表达式的完整值属性，弃用value_type()，但保持兼容性，不删
+   */
+  virtual ExprValueAttr value_attr() const = 0;
+
   /**
    * @brief 表达式的名字，比如是字段名称，或者用户在执行SQL语句时输入的内容
    */
@@ -125,6 +131,9 @@ public:
 
   ExprType type() const override { return ExprType::FIELD; }
   AttrType value_type() const override { return field_.attr_type(); }
+
+  /* DON'T USE!! */
+  ExprValueAttr value_attr() const override { return ExprValueAttr(); }
 
   Field &field() { return field_; }
 
@@ -160,6 +169,14 @@ public:
 
   AttrType value_type() const override { return value_.attr_type(); }
 
+  ExprValueAttr value_attr() const override { 
+    ExprValueAttr attr;
+    attr.type = value_.attr_type();
+    attr.length = value_.length();
+    attr.nullable = true;
+    return attr;
+  }
+
   void get_value(Value &value) const { value = value_; }
 
   const Value &get_value() const { return value_; }
@@ -188,6 +205,15 @@ public:
 
   AttrType value_type() const override { return cast_type_; }
 
+  /* DON'T USE!!! */
+  ExprValueAttr value_attr() const override { 
+    ExprValueAttr attr;
+    attr.type = cast_type_;
+    attr.length = 4;
+    attr.nullable = true;
+    return attr;
+  }
+
   std::unique_ptr<Expression> &child() { return child_; }
 
 private:
@@ -213,6 +239,14 @@ public:
   RC get_value(const Tuple &tuple, Value &value) const override;
 
   AttrType value_type() const override { return BOOLEANS; }
+
+  ExprValueAttr value_attr() const override { 
+    ExprValueAttr attr;
+    attr.type = BOOLEANS;
+    attr.length = 1;
+    attr.nullable = false;
+    return attr;
+  }
 
   CompOp comp() const { return comp_; }
 
@@ -259,6 +293,14 @@ public:
 
   AttrType value_type() const override { return BOOLEANS; }
 
+  ExprValueAttr value_attr() const override { 
+    ExprValueAttr attr;
+    attr.type = BOOLEANS;
+    attr.length = 1;
+    attr.nullable = false;
+    return attr;
+  }
+
   RC get_value(const Tuple &tuple, Value &value) const override;
 
   Type conjunction_type() const { return conjunction_type_; }
@@ -294,6 +336,8 @@ public:
 
   AttrType value_type() const override;
 
+  ExprValueAttr value_attr() const override;
+
   RC get_value(const Tuple &tuple, Value &value) const override;
   RC try_get_value(Value &value) const override;
 
@@ -326,16 +370,21 @@ public:
 
   ExprType type() const override { return ExprType::CORRELATE; }
 
-  AttrType value_type() const override{ return value_.attr_type(); }
+  AttrType value_type() const override{ return value_attr_.type; }
+
+  ExprValueAttr value_attr() const override { return value_attr_; }
 
   // 外层子查询在调用内层子查询之前，设置内层子查询里的相关表达式值，tuple是外层子查询的当前行。
   RC set_value_from_tuple(const Tuple &tuple);
 
   std::string identifier_name() const { return correlate_field_.table_name() + correlate_field_.field_name(); }
 
+  void set_value_attr(const ExprValueAttr &attr) { value_attr_ = attr; }
+
 private:
   FieldIdentifier correlate_field_;
   Value value_;
+  ExprValueAttr value_attr_;
 };
 
 /* 字段名表达式。FieldExpr和Field对象耦合，涉及到别名、虚拟列名时不好用，这里额外写一个 */
@@ -349,12 +398,17 @@ public:
   ExprType type() const override{ return ExprType::IDENTIFIER; }
 
   /* 在FieldIdentifier内维护类型代价高，直接通过get_value返回的value就能拿到类型了，不应该用这个接口 */
-  AttrType value_type() const override{ return AttrType::UNDEFINED; }
+  AttrType value_type() const override{ return value_attr_.type; }
+
+  ExprValueAttr value_attr() const override { return value_attr_; }
 
   const FieldIdentifier &field() const { return field_; }
 
+  void set_value_attr(const ExprValueAttr &attr) { value_attr_ = attr; }
+
 private:
   FieldIdentifier field_;
+  ExprValueAttr value_attr_;
 };
 
 /* expr is null / expr is not null表达式 */
@@ -368,6 +422,14 @@ public:
   ExprType type() const override { return ExprType::PREDNULL; }
 
   AttrType value_type() const override { return BOOLEANS; }
+
+  ExprValueAttr value_attr() const override { 
+    ExprValueAttr attr;
+    attr.type = BOOLEANS;
+    attr.length = 1;
+    attr.nullable = false;
+    return attr;
+  }
 
 private:
   PredNullOp op_;
@@ -385,6 +447,15 @@ public:
   ExprType type() const override { return ExprType::LIKE; }
 
   AttrType value_type() const override { return BOOLEANS; }
+
+  ExprValueAttr value_attr() const override { 
+    ExprValueAttr attr;
+    attr.type = BOOLEANS;
+    attr.length = 1;
+    attr.nullable = false;
+    return attr;
+  }
+
 private:
   RC regex_value(const std::string &string, const std::string &pattern, bool &value) const;
 
@@ -405,6 +476,14 @@ public:
   ExprType type() const override { return ExprType::QUANTIFIED_COMP_EXPR_SET; }
 
   AttrType value_type() const override { return BOOLEANS; }
+
+  ExprValueAttr value_attr() const override { 
+    ExprValueAttr attr;
+    attr.type = BOOLEANS;
+    attr.length = 1;
+    attr.nullable = false;
+    return attr;
+  }
 
 private:
   std::unique_ptr<Expression> child_;
@@ -427,8 +506,10 @@ public:
 
   AttrType value_type() const override { return UNDEFINED; }
 
+  ExprValueAttr value_attr() const override;
+
 private:
-  std::unique_ptr<FunctionKernel> kernel_;
+  std::unique_ptr<FunctionKernel> kernel_;  // 从kernel中获取值属性
   FieldIdentifier func_arg_;
   bool is_const_;
 };
