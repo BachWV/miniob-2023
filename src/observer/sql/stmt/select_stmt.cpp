@@ -209,6 +209,9 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
     // 如果表达式包含'*'
     if (is_star_identifier(select_expr.get()))
     {
+      if (!expr_alias.empty()) 
+        return RC::SCHEMA_FIELD_AMBIGUOUS;
+        
       IdentifierExprSqlNode *id = static_cast<IdentifierExprSqlNode *>(select_expr.get());
 
       if (common::is_blank(id->get_table_name().c_str())) 
