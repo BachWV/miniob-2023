@@ -342,35 +342,8 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
     }
   }
 
-    // }else if(auto agg_sql_node = get_if<AggregateFuncSqlNode>(&select_expr_field)){
-    //   has_agg = true;
-    //   agg_functions_names.push_back(agg_sql_node->name);
-    //   Field agg_field;
-    //   auto rc = resolve_common_field(db, table_map, tables, agg_sql_node->attr, agg_field);
-    //   if(rc != RC::SUCCESS){
-    //     // 若为COUNT(*)的处理。AGG算子中要手动释放agg_field的内存
-    //     if(agg_sql_node->agg_op == AGG_COUNT && 0 == strcmp(agg_sql_node->attr.attribute_name.c_str(), "*") ){
-    //       FieldMeta* meta =  new FieldMeta("*", INTS, 1,1,false, false);
-    //       assert(tables[0]);
-    //       agg_field = Field(tables[0], meta);
-    //     }else{
-    //       return rc;
-    //     }
-    //   }
-    //   bool with_table_name = tables.size() > 1;
-    //   auto fwgb = FieldsWithGroupBy(agg_field, group_fields, agg_sql_node->agg_op, with_table_name, true);
-    //   fwgb.alias_ = agg_sql_node->alias_;
-    //   select_expr_fields.push_back(std::move(fwgb));
-    // }
-
   // check aggregation validate: 如果存在agg，那么非agg的字段（common_fields_set）一定在gb中出现
   if(has_agg){
-    // 非agg的字段和group by字段数一定相等，要不都是0。
-    // 注：此处注释掉，不一定相等！group by中可以出现更多字段。非agg字段是group by字段的子集。
-    // if(common_fields_set.size() != group_fields.size()){
-    //   return RC::SQL_SYNTAX;
-    // }
-
     // 若gf的字段在cfs中不存在，那么一定有错
     for(auto const& fi: group_fields){
       if(common_fields_set.count(fi) == 0){
@@ -379,15 +352,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
     }
   }
 
-
   RC rc = RC::SUCCESS;
-  /* 开始解析HAVING子句
-   * 把Having里可能出现的列名，调用having_resolve_ctx.add_other_column_name传入，目前后续处理中没有考虑having的聚集是否出现在select列中
-   * 这里先省略了
-   */
-  // for(auto& str: agg_functions_names){
-  //   having_resolve_ctx.add_other_column_name(str);
-  // }
 
   std::vector<std::unique_ptr<Expression>> having_exprs;
   std::vector<AggExprInfo> aggs_in_having;
