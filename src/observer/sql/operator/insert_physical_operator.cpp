@@ -37,13 +37,81 @@ RC InsertPhysicalOperator::open(Trx *trx)
     }
     records.push_back(record);
   }
+  //make_record结束
   for(auto &record : records){
-     rc = trx->insert_record(table_, record);
+
+    TableMeta table_meta = table_->table_meta();
+    int field_num = table_meta.field_num();
+    std::vector<std::vector<int>> unique_field_list_list;
+    bool has_unique_index = table_meta.has_unique_index();
+    bool need_to_scan = has_unique_index;
+    if (has_unique_index)  table_meta.find_unique_index_field_vector(unique_field_list_list);
+
+    if (has_unique_index){ 
+      //对null进行特判
+      for(std::vector<int> unique_field_list : unique_field_list_list){
+        for(int unique_field : unique_field_list){
+          if(record.is_null_value(unique_field)){
+            need_to_scan=false;//如果有一个是null，就不需要去重了，直接插入
+            break;
+          }
+        }
+        if(need_to_scan==false) break;
+      }
+    }
+
+    if(need_to_scan){
+    
+      RecordFileScanner scanner;
+      Record record_tmp;
+      rc = table_->get_record_scanner(scanner, trx, true/*readonly*/);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("failed to create scanner . table=%s,, rc=%s", name(), strrc(rc));
+        return rc;
+      }
+      while (scanner.has_next()) {
+        rc = scanner.next(record_tmp);
+        RowTuple tuple_origin ;
+        RowTuple tuple_tmp;
+        tuple_origin.set_schema(table_, table_meta.field_metas());
+        tuple_tmp.set_schema(table_, table_meta.field_metas());
+        tuple_tmp.set_record(&record_tmp);
+        tuple_origin.set_record(&record);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("failed to scan records . table=%s,, rc=%s",name(), strrc(rc));
+          return rc;
+        }
+
+        for(std::vector<int> unique_field_list : unique_field_list_list){
+          bool flag = true;
+          for(int unique_field : unique_field_list){
+            Value value1;
+            Value value2;
+            tuple_tmp.cell_at(unique_field,value1);
+            tuple_origin.cell_at(unique_field,value2);
+            if(value1.compare(value2)!=0){
+              flag=false;
+              break;
+            }
+          }
+          if(flag){//全部相等,跳过插入,之后record也跳过
+            LOG_DEBUG("skip insert record by transaction. rc=%s", strrc(rc));
+            return RC::RECORD_DUPLICATE_KEY;
+          }
+        }//双层for结束
+      }
+      scanner.close_scan();
+    }
+
+    //结束判断，没有重复，插入
+    rc = trx->insert_record(table_, record);
     if (rc != RC::SUCCESS) {
       LOG_WARN("failed to insert record by transaction. rc=%s", strrc(rc));
+      return rc;
     }
-  }
-  
+      
+  } //完成该record的插入
+
   return rc;
 }
 

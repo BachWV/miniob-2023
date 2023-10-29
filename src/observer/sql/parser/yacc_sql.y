@@ -63,6 +63,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         TABLE
         TABLES
         INDEX
+        UNIQUE
         CALC
         SELECT
         DESC
@@ -350,8 +351,26 @@ create_index_stmt:    /*create index 语句的语法解析树*/
         }
         delete $7;
       }
+      create_index.is_unique = false;
       free($3);
       free($5);
+    }
+    | CREATE UNIQUE INDEX ID ON ID LBRACE rel_list RBRACE
+    {
+      $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
+      CreateIndexSqlNode &create_index = $$->create_index;
+      create_index.index_name = $4;
+      create_index.relation_name = $6;
+      create_index.is_unique = true;
+      if ($8 != nullptr) {
+        std::vector<std::string> old_list;
+        for(auto& [ori_name, alias]: *$8){
+          create_index.attribute_names.push_back(ori_name);
+        }
+        delete $8;
+      }
+      free($4);
+      free($6);
     }
     ;
 

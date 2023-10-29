@@ -96,9 +96,10 @@ private:
 class KeyComparator 
 {
 public:
-  void init(AttrType type, int length)
+  void init(AttrType type, int length, bool is_unique)
   {
     attr_comparator_.init(type, length);
+    is_unique_ = is_unique;
   }
 
   const AttrComparator &attr_comparator() const
@@ -113,6 +114,12 @@ public:
     if (result != 0) {// 属性值不相等
       return result;
     }
+    if(is_unique_){
+      for(int i=0;i<attr_comparator_.attr_length();i++){
+        if(v1[i]!=v2[i]) return -1;
+      }
+      return 0;
+    }
 
     // RID比较
   // 属性值相等，比较RID
@@ -123,6 +130,7 @@ public:
 
 private:
   AttrComparator attr_comparator_;
+  bool is_unique_ ;
 };
 
 /**
@@ -225,6 +233,7 @@ struct IndexFileHeader
   int32_t attr_length;        ///< 键值的长度
   int32_t key_length;         ///< attr length + sizeof(RID)
   AttrType attr_type;         ///< 键值的类型
+  bool is_unique;             ///< 是否是唯一索引
 
   const std::string to_string()
   {
@@ -235,7 +244,8 @@ struct IndexFileHeader
        << "attr_type:" << attr_type << ","
        << "root_page:" << root_page << ","
        << "internal_max_size:" << internal_max_size << ","
-       << "leaf_max_size:" << leaf_max_size << ";";
+       << "leaf_max_size:" << leaf_max_size << ";"
+       << "is_unique:" << is_unique;
 
     return ss.str();
   }
@@ -470,6 +480,7 @@ public:
   RC create(const char *file_name, 
             AttrType attr_type, 
             int attr_length, 
+            bool is_unique,
             int internal_max_size = -1, 
             int leaf_max_size = -1);
 
