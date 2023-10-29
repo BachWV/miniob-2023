@@ -189,7 +189,7 @@ RC LogicalPlanGenerator::create_plan(
     }else{
       // 按第一个字段排序
       auto& [table_name, table] = *(table_map.begin());
-      auto fid = FieldIdentifier(table->name(), table->table_meta().field(0)->name());
+      auto fid = FieldIdentifier(table_name, table->table_meta().field(0)->name());
       fwo.push_back(FieldWithOrder(fid, true));
     }
 

@@ -50,20 +50,21 @@ RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
     }
 
     // check fields type
-    const int sys_field_num = table_meta.sys_field_num();
-    for (int i = 0; i < value_num; i++) {
-      // 找的时候要加上sys_field
-      const FieldMeta *field_meta = table_meta.field(i + sys_field_num);
-      const AttrType   field_type = field_meta->type();
-      const AttrType   value_type = values[i].attr_type();
-      if (field_type == TEXTS && value_type == CHARS)
-        continue;
-      if (field_type != value_type && value_type != NULL_TYPE) {  // TODO try to convert the value type to field type
-        LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
-          table_name, field_meta->name(), field_type, value_type);
-        return RC::SCHEMA_FIELD_TYPE_MISMATCH;
-      }
-    }
+    // make_record时check并进行类型转换
+  //   const int sys_field_num = table_meta.sys_field_num();
+  //   for (int i = 0; i < value_num; i++) {
+  //     // 找的时候要加上sys_field
+  //     const FieldMeta *field_meta = table_meta.field(i + sys_field_num);
+  //     const AttrType   field_type = field_meta->type();
+  //     const AttrType   value_type = values[i].attr_type();
+  //     if (field_type == TEXTS && value_type == CHARS)
+  //       continue;
+  //     if (field_type != value_type && value_type != NULL_TYPE) {  // TODO try to convert the value type to field type
+  //       LOG_WARN("field type mismatch. table=%s, field=%s, field type=%d, value_type=%d",
+  //         table_name, field_meta->name(), field_type, value_type);
+  //       return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+  //     }
+  //   }
   }
 
   // everything alright

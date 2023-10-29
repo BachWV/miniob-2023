@@ -33,7 +33,7 @@ public:
   Tuple *current_tuple() override;
 
   bool generate_cmp_functions();
-  bool cmp_function(const Tuple *, const Tuple *);
+  bool cmp_function(Tuple * const &l_tuple, Tuple * const &r_tuple);
 
   class CmpFunctor;
 

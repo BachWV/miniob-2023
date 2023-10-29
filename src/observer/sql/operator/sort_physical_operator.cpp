@@ -50,7 +50,7 @@ Tuple *SortPhysicalOperator::current_tuple()
   return tuples_[curr_index_];
 }
 
-bool SortPhysicalOperator::cmp_function(const Tuple *l_tuple, const Tuple *r_tuple)
+bool SortPhysicalOperator::cmp_function(Tuple * const &l_tuple, Tuple * const &r_tuple)
 {
   for (auto &func : cmp_functions_) {
     bool equal;
