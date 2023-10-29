@@ -175,6 +175,9 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
     else
       avail_table_name = table_name;
 
+    if (table_map.count(avail_table_name))
+      return RC::SCHEMA_TABLE_EXIST;
+
     table_map.emplace(avail_table_name, table);
     tables_.emplace_back(avail_table_name);
 
