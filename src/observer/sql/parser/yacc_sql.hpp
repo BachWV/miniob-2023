@@ -111,24 +111,24 @@ extern int yydebug;
     SYM_NOT_IN = 312,              /* SYM_NOT_IN  */
     SYM_EXISTS = 313,              /* SYM_EXISTS  */
     SYM_NOT_EXISTS = 314,          /* SYM_NOT_EXISTS  */
-    MIN = 315,                     /* MIN  */
-    MAX = 316,                     /* MAX  */
-    AVG = 317,                     /* AVG  */
-    COUNT = 318,                   /* COUNT  */
-    SUM = 319,                     /* SUM  */
-    GROUP_BY = 320,                /* GROUP_BY  */
-    HAVING = 321,                  /* HAVING  */
-    SYM_LIKE = 322,                /* SYM_LIKE  */
-    SYM_NOT_LIKE = 323,            /* SYM_NOT_LIKE  */
-    ROUND = 324,                   /* ROUND  */
-    LENGTH = 325,                  /* LENGTH  */
-    DATE_FORMAT = 326,             /* DATE_FORMAT  */
-    AS = 327,                      /* AS  */
-    DATE_STR = 328,                /* DATE_STR  */
-    NUMBER = 329,                  /* NUMBER  */
-    FLOAT = 330,                   /* FLOAT  */
-    ID = 331,                      /* ID  */
-    SSS = 332,                     /* SSS  */
+    GROUP_BY = 315,                /* GROUP_BY  */
+    HAVING = 316,                  /* HAVING  */
+    SYM_LIKE = 317,                /* SYM_LIKE  */
+    SYM_NOT_LIKE = 318,            /* SYM_NOT_LIKE  */
+    AS = 319,                      /* AS  */
+    DATE_STR = 320,                /* DATE_STR  */
+    NUMBER = 321,                  /* NUMBER  */
+    FLOAT = 322,                   /* FLOAT  */
+    ID = 323,                      /* ID  */
+    SSS = 324,                     /* SSS  */
+    MIN = 325,                     /* MIN  */
+    MAX = 326,                     /* MAX  */
+    AVG = 327,                     /* AVG  */
+    COUNT = 328,                   /* COUNT  */
+    SUM = 329,                     /* SUM  */
+    ROUND = 330,                   /* ROUND  */
+    LENGTH = 331,                  /* LENGTH  */
+    DATE_FORMAT = 332,             /* DATE_FORMAT  */
     UMINUS = 333                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
@@ -138,7 +138,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 132 "yacc_sql.y"
+#line 124 "yacc_sql.y"
 
   ParsedSqlNode *                   sql_node;
   Value *                           value;

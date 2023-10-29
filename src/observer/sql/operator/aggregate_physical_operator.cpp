@@ -221,7 +221,7 @@ void AggregatePhysicalOperator::do_single_aggregate(const Value& curr_value){
 				curr_group_agg_value_.set_int(0);
 			}
 
-			if( (common::str_equal(virtual_name_.c_str(), "COUNT(*)") != 0) && curr_value.is_null_value()){	//忽视NULL
+			if((!common::str_equal(virtual_name_.c_str(), "COUNT(*)")) && curr_value.is_null_value()){	//忽视NULL
 				return;
 			}
 

@@ -114,18 +114,10 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         SYM_NOT_IN
         SYM_EXISTS
         SYM_NOT_EXISTS
-        MIN
-        MAX
-        AVG
-        COUNT
-        SUM
         GROUP_BY
         HAVING
         SYM_LIKE
         SYM_NOT_LIKE
-        ROUND
-        LENGTH
-        DATE_FORMAT
         AS
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
@@ -173,6 +165,8 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %token <floats> FLOAT
 %token <string> ID
 %token <string> SSS
+%token <string> MIN MAX AVG COUNT SUM ROUND LENGTH DATE_FORMAT
+
 //非终结符
 
 /** type 定义了各种解析后的结果输出的是什么类型。类型对应了 union 中的定义的成员变量名称 **/
@@ -232,7 +226,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 // function
 %type <function_node>       function_node
 %type <std_string>          alias
-
+%type <string>              all_id
 
 // expr
 %type <expr_node>           expr identifier
@@ -1126,6 +1120,7 @@ agg_func:
       $$->agg_op = AggregateOp::AGG_SUM;
       $$->attr = *$3;
       $$->name = token_name(sql_string, &@$);
+      free($1);
       delete $3;
     }
     | MAX LBRACE rel_attr RBRACE{
@@ -1133,6 +1128,7 @@ agg_func:
       $$->agg_op = AggregateOp::AGG_MAX;
       $$->attr = *$3;
       $$->name = token_name(sql_string, &@$);
+      free($1);
       delete $3;
     }
     | MIN LBRACE rel_attr RBRACE{
@@ -1140,6 +1136,7 @@ agg_func:
       $$->agg_op = AggregateOp::AGG_MIN;
       $$->attr = *$3;
       $$->name = token_name(sql_string, &@$);
+      free($1);
       delete $3;
     }
     | AVG LBRACE rel_attr RBRACE{
@@ -1147,6 +1144,7 @@ agg_func:
       $$->agg_op = AggregateOp::AGG_AVG;
       $$->attr = *$3;
       $$->name = token_name(sql_string, &@$);
+      free($1);
       delete $3;
     }
     | COUNT LBRACE rel_attr RBRACE{
@@ -1154,6 +1152,7 @@ agg_func:
       $$->agg_op = AggregateOp::AGG_COUNT;
       $$->attr = *$3;
       $$->name = token_name(sql_string, &@$);
+      free($1);
       delete $3;
     }
     | COUNT LBRACE '*' RBRACE{
@@ -1164,6 +1163,7 @@ agg_func:
       $$->attr.relation_name  = "";
       $$->attr.attribute_name = "*";
       $$->name = token_name(sql_string, &@$);
+      free($1);
     }
     ;
 
@@ -1210,6 +1210,7 @@ function_node:
       $$->function_kernel = make_unique<RoundFunctionKernel>(true, true, 0, $3);
       $$->is_const = true;
       $$->virtual_field_name = token_name(sql_string, &@$);
+      free($1);
     }
     | ROUND LBRACE FLOAT COMMA NUMBER RBRACE{
       // round(3.1415, 2)
@@ -1217,6 +1218,7 @@ function_node:
       $$->function_kernel = make_unique<RoundFunctionKernel>(true, false, $5, $3);
       $$->is_const = true;
       $$->virtual_field_name = token_name(sql_string, &@$);
+      free($1);
     }
     | LENGTH LBRACE SSS RBRACE{
       // length('str')  // bug: length('date') error 
@@ -1225,6 +1227,7 @@ function_node:
       $$->function_kernel = make_unique<LengthFunctionKernel>(true, s);
       $$->is_const = true;
       $$->virtual_field_name = token_name(sql_string, &@$);
+      free($1);
     }
     | DATE_FORMAT LBRACE DATE_STR COMMA SSS RBRACE{
       // date_format("2017-06-15", "%y")
@@ -1234,6 +1237,7 @@ function_node:
       $$->function_kernel = make_unique<FormatFunctionKernel>(true, format_without_quotation, s);
       $$->is_const = true;
       $$->virtual_field_name = token_name(sql_string, &@$);
+      free($1);
     }
     | ROUND LBRACE rel_attr RBRACE{
       // round(score)
@@ -1242,6 +1246,7 @@ function_node:
       $$->is_const = false;
       $$->virtual_field_name = token_name(sql_string, &@$);
       $$->rel_attr = *$3;
+      free($1);
       delete $3;
     }
     | ROUND LBRACE rel_attr COMMA NUMBER RBRACE{
@@ -1251,6 +1256,7 @@ function_node:
       $$->is_const = false;
       $$->virtual_field_name = token_name(sql_string, &@$);
       $$->rel_attr = *$3;
+      free($1);
       delete $3;
     }
     | LENGTH LBRACE rel_attr RBRACE{
@@ -1260,6 +1266,7 @@ function_node:
       $$->is_const = false;
       $$->virtual_field_name = token_name(sql_string, &@$);
       $$->rel_attr = *$3;
+      free($1);
       delete $3;
     }
     | DATE_FORMAT LBRACE rel_attr COMMA SSS RBRACE{
@@ -1270,6 +1277,7 @@ function_node:
       $$->is_const = false;
       $$->virtual_field_name = token_name(sql_string, &@$);
       $$->rel_attr = *$3;
+      free($1);
       delete $3;
     }
     ;
@@ -1279,11 +1287,11 @@ alias:
     {
       $$ = nullptr;
     }
-    | ID{
+    | all_id{
       $$ = new std::string($1);
       free($1);
     }
-    | AS ID{
+    | AS all_id{
       $$ = new std::string($2);
       free($2);
     }
@@ -1316,6 +1324,36 @@ as:
     | AS{
     }
     ;
+
+// 如果出现聚集函数名，内置函数名和ID冲突，将文法中ID换成all_id
+all_id:
+  ID {
+    $$ = $1;
+  }
+  | SUM {
+    $$ = $1;
+  }
+  | MAX {
+    $$ = $1;
+  }
+  | MIN {
+    $$ = $1;
+  }
+  | AVG {
+    $$ = $1;
+  }
+  | COUNT {
+    $$ = $1;
+  }
+  | ROUND {
+    $$ = $1;
+  }
+  | LENGTH {
+    $$ = $1;
+  }
+  | DATE_FORMAT {
+    $$ = $1;
+  }
 
 opt_semicolon: /*empty*/
     | SEMICOLON
