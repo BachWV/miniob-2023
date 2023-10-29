@@ -175,6 +175,9 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
     else
       avail_table_name = table_name;
 
+    if (table_map.count(avail_table_name))
+      return RC::SCHEMA_TABLE_EXIST;
+
     table_map.emplace(avail_table_name, table);
     tables_.emplace_back(avail_table_name);
 
@@ -211,7 +214,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
     {
       if (!expr_alias.empty()) 
         return RC::SCHEMA_FIELD_AMBIGUOUS;
-        
+
       IdentifierExprSqlNode *id = static_cast<IdentifierExprSqlNode *>(select_expr.get());
 
       if (common::is_blank(id->get_table_name().c_str())) 

@@ -19,6 +19,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/seda/stage_event.h"
 #include "sql/operator/physical_operator.h"
 #include "sql/expr/parsed_expr.h"
+#include "event/sql_debug.h"
 
 class SessionEvent;
 class Stmt;
@@ -76,10 +77,23 @@ public:
     operator_ = std::move(oper);
   }
 
+  void print_all_sql()
+  {
+    for (auto &sql: sql_v_)
+      sql_debug("%s", sql.c_str());
+  }
+
+  void add_sql(const std::string &sql)
+  {
+    sql_v_.emplace_back(sql);
+  }
+
 private:
   SessionEvent *session_event_ = nullptr;
   std::string sql_;  ///< 处理的SQL语句
   std::unique_ptr<ParsedSqlNode> sql_node_;  ///< 语法解析后的SQL命令
   Stmt *stmt_ = nullptr;  ///< Resolver之后生成的数据结构
   std::unique_ptr<PhysicalOperator> operator_; ///< 生成的执行计划，也可能没有
+
+  std::vector<std::string> sql_v_;
 };

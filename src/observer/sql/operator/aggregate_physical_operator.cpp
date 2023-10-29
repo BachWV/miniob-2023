@@ -172,7 +172,7 @@ RC AggregatePhysicalOperator::do_group_agg(){
 		}else{
 			auto v = curr_group_agg_value_.get_float();
 			assert(avg_not_null_count_ != 0);
-			sql_debug("avg_not_null_count_ = %d", avg_not_null_count_);
+			// sql_debug("avg_not_null_count_ = %d", avg_not_null_count_);
 			curr_group_agg_value_.set_float(v / avg_not_null_count_);
 		}
 	}

@@ -25,5 +25,6 @@ RC CreateTableSelectStmt::create(Db *db, CreateTableSelectSqlNode &sql_node, Stm
   cts_stmt->original_table_stmt_ =select_stmt;
   cts_stmt->created_table_name_ = sql_node.created_table_name_;
   stmt = cts_stmt;
-  return RC::SUCCESS;
+  // return RC::SUCCESS;
+  return RC::SQL_SYNTAX;
 }
