@@ -70,6 +70,8 @@ public:
   int get_null_bitmap_len() const {
     return null_bitmap_len;
   }
+  bool has_unique_index() const;
+  void find_unique_index_field_vector(std::vector<std::vector<int>> &field_need_to_cmp) const;
 
 public:
   int serialize(std::ostream &os) const override;

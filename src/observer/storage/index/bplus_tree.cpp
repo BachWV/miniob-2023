@@ -745,7 +745,7 @@ RC BplusTreeHandler::sync()
   return disk_buffer_pool_->flush_all_pages();
 }
 
-RC BplusTreeHandler::create(const char *file_name, AttrType attr_type, int attr_length, int internal_max_size /* = -1*/,
+RC BplusTreeHandler::create(const char *file_name, AttrType attr_type,int attr_length,bool is_unique, int internal_max_size /* = -1*/,
     int leaf_max_size /* = -1 */)
 {
   BufferPoolManager &bpm = BufferPoolManager::instance();
@@ -793,6 +793,7 @@ RC BplusTreeHandler::create(const char *file_name, AttrType attr_type, int attr_
   file_header->attr_type = attr_type;
   file_header->internal_max_size = internal_max_size;
   file_header->leaf_max_size = leaf_max_size;
+  file_header->is_unique = is_unique;
   file_header->root_page = BP_INVALID_PAGE_NUM;
 
   header_frame->mark_dirty();
@@ -811,7 +812,7 @@ RC BplusTreeHandler::create(const char *file_name, AttrType attr_type, int attr_
     return RC::NOMEM;
   }
 
-  key_comparator_.init(file_header->attr_type, file_header->attr_length);
+  key_comparator_.init(file_header->attr_type, file_header->attr_length, file_header->is_unique);
   key_printer_.init(file_header->attr_type, file_header->attr_length);
 
   this->sync();
@@ -858,7 +859,7 @@ RC BplusTreeHandler::open(const char *file_name)
   // close old page_handle
   disk_buffer_pool->unpin_page(frame);
 
-  key_comparator_.init(file_header_.attr_type, file_header_.attr_length);
+  key_comparator_.init(CHARS,file_header_.attr_length,file_header_.is_unique);
   key_printer_.init(file_header_.attr_type, file_header_.attr_length);
   LOG_INFO("Successfully open index %s", file_name);
   return RC::SUCCESS;

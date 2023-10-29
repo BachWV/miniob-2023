@@ -31,10 +31,6 @@ RC UpdatePhysicalOperator::open(Trx *trx)
 
 RC UpdatePhysicalOperator::next()
 {
-  Record record;
-  
-  //----------------
-  //delete
   RC rc = RC::SUCCESS;
   if (children_.empty()) {
     return RC::RECORD_EOF;
@@ -51,16 +47,20 @@ RC UpdatePhysicalOperator::next()
     RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
     Record &record = row_tuple->record();
     //tuple已经拿到数据了，tuple存有record的指针
-  
+    Record record_need_delete;
     Record record_new;
 
+    TableMeta table_meta = table_->table_meta();
     int cell_num=row_tuple->cell_num();
     vector<Value> values_new;
+    vector<Value> values_need_delete;
     values_new.resize(cell_num);
+    values_need_delete.resize(cell_num);
     for(int i=0;i<cell_num;i++){
       Value value;
       row_tuple->cell_at(i,value);
       values_new.at(i)=value;
+      values_need_delete.at(i)=value;
     }
     for(auto &value:value_list_)
     {
@@ -98,11 +98,100 @@ RC UpdatePhysicalOperator::next()
       return rc;
     }
 
+
+
+
+    std::vector<std::vector<int>> unique_field_list_list;
+    bool has_unique_index = table_meta.has_unique_index();
+    bool need_to_scan = has_unique_index;
+    bool need_to_roll_back = false;
+
+    if (has_unique_index)  table_meta.find_unique_index_field_vector(unique_field_list_list);
+
+    if (has_unique_index){ 
+      //对null进行特判
+      for(std::vector<int> unique_field_list : unique_field_list_list){
+        for(int unique_field : unique_field_list){
+          if(record.is_null_value(unique_field)){
+            need_to_scan=false;//如果有一个是null，就不需要去重了，直接插入
+            break;
+          }
+        }
+        if(need_to_scan==false) break;
+      }
+    }
+
+    if(need_to_scan){
+      RecordFileScanner scanner;
+      Record record_tmp;
+      rc = table_->get_record_scanner(scanner, trx_, true/*readonly*/);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("failed to create scanner . table=%s,, rc=%s", name(), strrc(rc));
+        return rc;
+      }
+      while (scanner.has_next()) {
+        rc = scanner.next(record_tmp);
+        RowTuple tuple_origin ;
+        RowTuple tuple_tmp;
+        tuple_tmp.set_schema(table_, table_meta.field_metas());
+        tuple_tmp.set_record(&record_tmp);
+        tuple_origin.set_schema(table_, table_meta.field_metas());
+        tuple_origin.set_record(&record_new);
+        if (rc != RC::SUCCESS) {
+          LOG_WARN("failed to scan records . table=%s,, rc=%s",name(), strrc(rc));
+          return rc;
+        }
+
+        for(std::vector<int> unique_field_list : unique_field_list_list){
+          bool flag = true;
+          for(int unique_field : unique_field_list){
+            Value value1;
+            Value value2;
+            tuple_tmp.cell_at(unique_field,value1);
+            tuple_origin.cell_at(unique_field,value2);
+            if(value1.compare(value2)!=0){
+              flag=false;
+              break;
+            }
+          }
+          if(flag){//全部相等,跳过插入,update failure,回滚
+            need_to_roll_back=true;
+            break;
+          }
+        }//比较结束
+        if(need_to_roll_back) break;
+      }//扫描结束
+    
+    }//need_to_scan结束
+
+
+    if(need_to_roll_back){
+      LOG_WARN("update fail: duplicate key ,failed to insert record: %s", strrc(rc));
+      RC rc2 = table_->make_record(static_cast<int>(values_need_delete.size()),values_need_delete.data(),record_need_delete);
+      if(rc2!=RC::SUCCESS)
+      {
+        LOG_WARN("update rollback :failed to make deteled record. rc=%s", strrc(rc2));
+        return rc2;
+      }
+      RC rc3 = trx_->insert_record(table_, record_need_delete);
+      if(rc3!=RC::SUCCESS)
+      {
+        LOG_WARN("update rollback :failed to insert deteled record. rc=%s", strrc(rc2));
+        return rc3;
+      }
+      LOG_WARN("update rollback :SUCCESS,Deleted record insert success. rc=%s", strrc(rc));
+      return RC::RECORD_DUPLICATE_KEY;
+    }
+
+
     rc = trx_->insert_record(table_, record_new);
     if (rc != RC::SUCCESS) {
-      LOG_WARN("failed to update record: %s", strrc(rc));
-      return rc;
+      LOG_WARN("failed to insert record by transaction. rc=%s", strrc(rc));
+    }else{
+      LOG_DEBUG("update success: insert new record success. rc=%s", strrc(rc));
+      continue;
     }
+
   }
   return RC::RECORD_EOF;
 }

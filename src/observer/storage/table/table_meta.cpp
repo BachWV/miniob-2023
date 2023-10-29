@@ -35,7 +35,9 @@ TableMeta::TableMeta(const TableMeta &other)
     name_(other.name_),
     fields_(other.fields_),
     indexes_(other.indexes_),
-    record_size_(other.record_size_)
+    record_size_(other.record_size_),
+    null_bitmap_offset(other.null_bitmap_offset),
+    null_bitmap_len(other.null_bitmap_len)
 {}
 
 void TableMeta::swap(TableMeta &other) noexcept
@@ -370,4 +372,39 @@ void TableMeta::desc(std::ostream &os) const
     os << std::endl;
   }
   os << ')' << std::endl;
+}
+
+
+bool TableMeta::has_unique_index() const
+{
+  for (const auto &index : indexes_) {
+    if (index.is_unique()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void TableMeta::find_unique_index_field_vector(std::vector<std::vector<int>> &field_need_to_cmp_list_list) const
+{
+  for(const auto &index : indexes_){
+    if(index.is_unique()==false){
+      continue;//对于非unique的索引，不需要去重
+    }
+    //第i个索引，该索引可以包括多个col
+    std::vector<int> field_need_to_cmp_list;
+    std::vector<std::string> index_field_name_list = index.fields();//在哪几个列建立了索引
+    assert(index_field_name_list.size()>0);//理论上必须得有index的列名
+    for(int i = 0 ; i < field_num() ; i++){
+      auto field_name = fields_[i].name();
+      auto it = std::find_if(index_field_name_list.begin(),index_field_name_list.end(),[&field_name](const std::string &s){return strcmp(s.c_str(),field_name)==0;});//O(nm)的列名匹配
+
+      if(it != index_field_name_list.end()){
+        field_need_to_cmp_list.push_back(i);
+      }
+    }
+    //理论上必须找到，否则说明索引的列名有问题
+    assert(field_need_to_cmp_list.size()>0);
+    field_need_to_cmp_list_list.push_back(field_need_to_cmp_list);
+  }
 }
