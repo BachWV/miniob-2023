@@ -196,25 +196,12 @@ RC LogicalPlanGenerator::create_plan(
     unique_ptr<LogicalOperator> sort_oper = make_unique<SortLogicalOperator>(fwo);
     opers.push_back(std::move(sort_oper));
   }
+  
 
-  for(auto &column_info : select_expr_fields){
-    for(auto& agg_info: column_info.agg_infos_){
-      unique_ptr<LogicalOperator> agg_oper = make_unique<AggregateLogicalOperator>(agg_info.agg_field(), agg_info.full_name(), select_stmt->get_group_by_fields(), agg_info.agg_op());
-      opers.push_back(std::move(agg_oper));
-    }
-
-    unique_ptr<LogicalOperator> fwc_oper = make_unique<FieldCulLogicalOperator>(column_info.tuple_cell_spec_, std::move(column_info.expr_));
-    opers.push_back(std::move(fwc_oper));
-    all_field_identifiers.push_back(column_info.tuple_cell_spec_);
-    all_output_names.push_back(column_info.output_name_);
-  }
-
-  // having
-  if (select_stmt->has_having_clause()) {
-    unique_ptr<LogicalOperator> having_pred_oper(nullptr);
-    rc = create_plan(select_stmt->fetch_having_exprs(), having_pred_oper);
-    HANDLE_RC(rc);
-    opers.push_back(std::move(having_pred_oper));
+  auto& agg_infos = select_stmt->fetch_all_agg_infos();
+  for(auto&  agg_info: agg_infos){
+    unique_ptr<LogicalOperator> agg_oper = make_unique<AggregateLogicalOperator>(agg_info.agg_field(), agg_info.full_name(), select_stmt->get_group_by_fields(), agg_info.agg_op());
+    opers.push_back(std::move(agg_oper));
   }
 
   // deduplicate
@@ -227,6 +214,21 @@ RC LogicalPlanGenerator::create_plan(
       unique_ptr<LogicalOperator> deduplicate_oper = make_unique<DeduplicateLogicalOperator>(select_stmt->get_group_by_fields(), false);
       opers.push_back(std::move(deduplicate_oper));
     }
+  }
+
+  for(auto &column_info : select_expr_fields){
+    unique_ptr<LogicalOperator> fwc_oper = make_unique<FieldCulLogicalOperator>(column_info.tuple_cell_spec_, std::move(column_info.expr_));
+    opers.push_back(std::move(fwc_oper));
+    all_field_identifiers.push_back(column_info.tuple_cell_spec_);
+    all_output_names.push_back(column_info.output_name_);
+  }
+
+  // having
+  if (select_stmt->has_having_clause()) {
+    unique_ptr<LogicalOperator> having_pred_oper(nullptr);
+    rc = create_plan(select_stmt->fetch_having_exprs(), having_pred_oper);
+    HANDLE_RC(rc);
+    opers.push_back(std::move(having_pred_oper));
   }
 
   // order by

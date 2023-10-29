@@ -10,7 +10,7 @@ public:
       : cul_expr_(std::move(cul_expr)){
         virtual_meta_ = FieldMeta(fi.field_name().c_str(),INTS, 1, 1, true, false);
       }
-  ~FieldCulPhysicalOperator();
+  ~FieldCulPhysicalOperator() = default;
   PhysicalOperatorType type() const override { return PhysicalOperatorType::FIELD_CUL; }
 
   RC open(Trx *trx) override;

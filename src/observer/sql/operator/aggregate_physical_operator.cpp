@@ -95,7 +95,7 @@ RC AggregatePhysicalOperator::set_group_by_value(const Tuple* tuple, std::vector
 
 RC AggregatePhysicalOperator::get_value(Tuple* tuple, Value& v){
 	RC rc;
-	if(0 == common::str_equal("COUNT(*)", virtual_name_.c_str())){
+	if(true == common::str_equal("COUNT(*)", virtual_name_.c_str())){
 		rc = tuple->cell_at(0, v);
 	}else{
 		auto spec = TupleCellSpec(agg_fid_.table_name(), agg_fid_.field_name());

@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/db/db.h"
 #include "storage/table/table.h"
 #include "sql/expr/parsed_expr.h"
+#include "sql/stmt/select_stmt.h"
 #include "sql/stmt/apply_stmt.h"
 
 DeleteStmt::DeleteStmt(Table *table, std::unique_ptr<ConjunctionExpr> cond_exprs) 

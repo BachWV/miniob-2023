@@ -7,6 +7,7 @@ class SubqueryExprEvaluator
 public:
     virtual RC evaluate(Tuple *current_outer_tuple, const std::vector<std::unique_ptr<Tuple>> &subquery_tuples, 
         Value &value) = 0;
+    virtual ~SubqueryExprEvaluator() = default;
 };
 
 /* 标量子查询表达式，返回的值取决于子查询的值 */

@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/filter_stmt.h"
 #include "sql/expr/parsed_expr.h"
 #include "sql/stmt/apply_stmt.h"
+#include "sql/stmt/select_stmt.h"
 #include "sql/expr/expression.h"
 
 UpdateStmt::UpdateStmt(Table *table, std::unordered_map<int, std::unique_ptr<Expression>> &&value_list,

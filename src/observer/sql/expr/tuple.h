@@ -169,6 +169,7 @@ public:
   virtual Tuple* get_replica() override{
     auto replica = new RowTuple(table_, speces_);
 
+    replica->table_name_ = table_name_;
     replica->record_ = record_->get_replica(table_->table_meta().record_size());
     replica->is_data_owner_ = true;
     return replica;
