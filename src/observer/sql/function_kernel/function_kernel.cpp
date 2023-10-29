@@ -139,6 +139,8 @@ RC FormatFunctionKernel::format(const std::string &input, const std::string &for
   // Replace %d with the day without suffix
   output = std::regex_replace(output, std::regex("%d"), input.substr(8, 2));
 
+  output = std::regex_replace(output, std::regex("%"), "");
+
   return RC::SUCCESS;
 }
 
@@ -178,6 +180,8 @@ RC FormatFunctionKernel::format(int input_int, const std::string &formatText, st
 
   // Replace %d with the day without suffix
   output = std::regex_replace(output, std::regex("%d"), inputStr.substr(6, 2));
+
+  output = std::regex_replace(output, std::regex("%"), "");
 
   return RC::SUCCESS;
 }

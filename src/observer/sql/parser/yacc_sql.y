@@ -1289,13 +1289,30 @@ alias:
     }
 
 create_table_select_stmt:
-    CREATE TABLE ID AS select_stmt{
+    CREATE TABLE ID as select_stmt {
       $$ = new ParsedSqlNode(SCF_CREATE_TABLE_SELECT);
       CreateTableSelectSqlNode &create_table_select = $$->create_table_select;
       create_table_select.selected_sql_node_ = std::move($5->selection);
       delete $5;
       create_table_select.created_table_name_ = $3;
       free($3);
+    }
+    | CREATE TABLE ID LBRACE rel_list RBRACE as select_stmt {
+      $$ = new ParsedSqlNode(SCF_CREATE_TABLE_SELECT);
+      CreateTableSelectSqlNode &create_table_select = $$->create_table_select;
+      create_table_select.selected_sql_node_ = std::move($8->selection);
+      delete $8;
+      create_table_select.created_table_name_ = $3;
+      free($3);
+      delete $5;
+    }
+    ;
+
+as:
+    /* empty */
+    {
+    }
+    | AS{
     }
     ;
 
