@@ -41,67 +41,15 @@ std::unique_ptr<ConjunctionExpr> SelectStmt::fetch_having_exprs()
   return std::move(having_exprs_);
 }
 
-static void wildcard_fields(Table *table, std::vector<std::string>& column_names)
+static void wildcard_fields(Table *table, std::vector<const FieldMeta *>& column_metas)
 {
   const TableMeta &table_meta = table->table_meta();
   const int field_num = table_meta.field_num();
   for (int i = table_meta.sys_field_num(); i < field_num; i++) {
     const FieldMeta *field_meta = table_meta.field(i);
-    column_names.emplace_back(field_meta->name());
-    // SelectColumnInfo column_info;
-    // FieldIdentifier col_id(table_name, field_meta->name());
-    // column_info.expr_ = std::make_unique<IdentifierExpr>(col_id);
-    // column_info.col_id_ = col_id;
-    // // 使用*的列不可能有列别名
-    // column_infos.emplace_back(std::move(column_info));
+    column_metas.push_back(field_meta);
   }
 }
-
-// @param order_fields[out]
-// RC check_order_by_field(Db *db, const std::unordered_map<std::string, Table *>& table_map, const std::vector<Table *>& tables,
-//   const std::vector<OrderByAttrSqlNode>& order_sql_nodes, std::vector<FieldWithOrder>& order_fields)
-// {
-//   for(auto& node : order_sql_nodes){
-//     const RelAttrSqlNode &relation_attr = node.attr;
-
-//     if (!common::is_blank(relation_attr.relation_name.c_str())) {
-//       // 表名非空
-//       const char *table_name = relation_attr.relation_name.c_str();
-//       const char *field_name = relation_attr.attribute_name.c_str();
-      
-//       // 常规情况，table.field
-//       auto iter = table_map.find(table_name);
-//       if (iter == table_map.end()) {
-//         LOG_WARN("no such table in from list: %s", table_name);
-//         return RC::SCHEMA_FIELD_MISSING;
-//       }
-      
-//       Table *table = iter->second;
-//         const FieldMeta *field_meta = table->table_meta().field(field_name);
-//         if (nullptr == field_meta) {
-//           // 进行field合法性检查
-//           LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), field_name);
-//           return RC::SCHEMA_FIELD_MISSING;
-//         }
-//         order_fields.push_back(FieldWithOrder(table, field_meta, node.is_asc));
-//     } else {
-//       // 没写table名，默认从第一个table中找
-//       if (tables.size() != 1) {
-//         LOG_WARN("invalid. I do not know the attr's table. attr=%s", relation_attr.attribute_name.c_str());
-//         return RC::SCHEMA_FIELD_MISSING;
-//       }
-
-//       Table *table = tables[0];
-//       const FieldMeta *field_meta = table->table_meta().field(relation_attr.attribute_name.c_str());
-//       if (nullptr == field_meta) {
-//         LOG_WARN("no such field. field=%s.%s.%s", db->name(), table->name(), relation_attr.attribute_name.c_str());
-//         return RC::SCHEMA_FIELD_MISSING;
-//       }
-//       order_fields.push_back(FieldWithOrder(table, field_meta, node.is_asc));
-//     }
-//   }
-//   return RC::SUCCESS;
-// }
 
 // 只检查具名的字段(如id，name等)，带有"*"不会通过check。RelAttrNode -> Field
 // 成功返回RC::success，并返回构建好的field；失败返回RC::SCHEMA_FIELD_MISSING
@@ -269,19 +217,22 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
         for (auto &table_name : tables_) 
         {
           Table *table = table_map.at(table_name);
-          std::vector<std::string> col_names;
-          wildcard_fields(table, col_names);
-          for (auto &col_name: col_names)
+          std::vector<const FieldMeta *> col_metas;
+          wildcard_fields(table, col_metas);
+          for (auto col_meta: col_metas)
           {
+            const std::string &col_name = col_meta->name();
             SelectColumnInfo col_info;
-            col_info.expr_ = std::make_unique<IdentifierExpr>(FieldIdentifier(table_name, col_name));
+            auto id_expr = std::make_unique<IdentifierExpr>(FieldIdentifier(table_name, col_name));
             col_info.tuple_cell_spec_ = glob_ctx->get_col_id_generator().generate_identifier();
             col_info.output_name_ = gen_output_name_for_field_id(table_map.size() > 1, table_name, col_name, expr_alias);
-            column_attrs.emplace_back(gen_column_attr_info(col_name, col_info.expr_->value_attr()));
+            ExprValueAttr col_attr = {.type = col_meta->type(), .length = static_cast<size_t>(col_meta->len()), 
+              .nullable = col_meta->nullable()};
+            id_expr->set_value_attr(col_attr);
+            col_info.expr_ = std::move(id_expr);
             select_columns.emplace_back(std::move(col_info));
-
-            /* 生成一个表名.列名，用于group by的校验 */
-            common_fields_set.emplace(table_name, col_name);
+            column_attrs.emplace_back(gen_column_attr_info(col_name, col_attr));
+            common_fields_set.emplace(table_name, col_name);  /* 生成一个表名.列名，用于group by的校验 */
           }
         }
       } 
@@ -303,19 +254,22 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
           }
 
           Table *table = iter->second;
-          std::vector<std::string> col_names;
-          wildcard_fields(table, col_names);
-          for (auto &col_name: col_names)
+          std::vector<const FieldMeta *> col_metas;
+          wildcard_fields(table, col_metas);
+          for (auto &col_meta: col_metas)
           {
+            const std::string &col_name = col_meta->name();
             SelectColumnInfo col_info;
-            col_info.expr_ = std::make_unique<IdentifierExpr>(FieldIdentifier(table_name, col_name));
+            auto id_expr = std::make_unique<IdentifierExpr>(FieldIdentifier(table_name, col_name));
             col_info.tuple_cell_spec_ = glob_ctx->get_col_id_generator().generate_identifier();
             col_info.output_name_ = gen_output_name_for_field_id(true, table_name, col_name, expr_alias);
-            column_attrs.emplace_back(gen_column_attr_info(col_name, col_info.expr_->value_attr()));
+            ExprValueAttr col_attr = {.type = col_meta->type(), .length = static_cast<size_t>(col_meta->len()), 
+              .nullable = col_meta->nullable()};
+            id_expr->set_value_attr(col_attr);
+            col_info.expr_ = std::move(id_expr);
             select_columns.emplace_back(std::move(col_info));
-
-            /* 生成一个表名.列名，用于group by的校验 */
-            common_fields_set.emplace(table_name, col_name);
+            column_attrs.emplace_back(gen_column_attr_info(col_name, col_attr));
+            common_fields_set.emplace(table_name, col_name);  /* 生成一个表名.列名，用于group by的校验 */
           }
         }
       }
@@ -408,26 +362,6 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
     has_agg = agg_infos_in_having.empty() ? has_agg : true;
     all_agg_infos.insert(all_agg_infos.end(), std::make_move_iterator(agg_infos_in_having.begin()), 
       std::make_move_iterator(agg_infos_in_having.end()));
-
-    // for(auto& agg_info: agg_infos){
-    //   Field agg_field;
-    //   RelAttrSqlNode attr;
-    //   attr.relation_name = agg_info.agg_field().table_name();
-    //   attr.attribute_name = agg_info.agg_field().field_name();
-    //   auto rc = resolve_common_field(db, table_map, tables, attr, agg_field);
-    //   if(rc != RC::SUCCESS){
-    //     // 若为COUNT(*)的处理。AGG算子中要手动释放agg_field的内存
-    //     if(agg_info.agg_op() == AGG_COUNT && 0 == strcmp(attr.attribute_name.c_str(), "*") ){
-    //       FieldMeta* meta =  new FieldMeta("*", INTS, 1,1,false, false);
-    //       assert(tables[0]);
-    //       agg_field = Field(tables[0], meta);
-    //     }else{
-    //       return rc;
-    //     }
-    //   }
-    //   bool with_table_name = tables.size() > 1;
-    //   select_expr_fields.push_back(FieldsWithGroupBy(agg_field, group_fields, agg_info.agg_op(), with_table_name, false));
-    // }
   }
   glob_ctx->pop_stmt_ctx();
 
@@ -482,12 +416,6 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
     HANDLE_RC(rc);
     order_fields.emplace_back(field, orderby_sql_node.is_asc);
   }
-
-  // rc = check_order_by_field(db, table_map, tables, select_sql.order_by_attrs, order_fields);
-  // if(rc != RC::SUCCESS){
-  //   // log在check_order_by_field中打过了
-  //   return rc;
-  // }
 
   // everything alright
   SelectStmt *select_stmt = new SelectStmt();
