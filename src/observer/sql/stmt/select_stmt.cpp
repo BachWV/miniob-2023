@@ -387,9 +387,9 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
   if(has_agg){
     // 非agg的字段和group by字段数一定相等，要不都是0。
     // 注：此处注释掉，不一定相等！group by中可以出现更多字段。非agg字段是group by字段的子集。
-    // if(common_fields_set.size() != group_fields.size()){
-    //   return RC::SQL_SYNTAX;
-    // }
+    if(common_fields_set.size() > group_fields.size()){
+      return RC::SQL_SYNTAX;
+    }
 
     // 若gf的字段在cfs中不存在，那么一定有错
     for(auto const& fi: group_fields){
