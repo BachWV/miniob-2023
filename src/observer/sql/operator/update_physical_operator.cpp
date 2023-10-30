@@ -186,7 +186,7 @@ RC UpdatePhysicalOperator::next()
     int data_len=table_meta.record_size();
     auto record_updater = [&record_new,&data_len](Record &record_rid) {
         char *field_data = record_rid.data();//这是record.rid传入的record
-        memcpy(field_data, record_new.data(), sizeof(data_len));
+        memcpy(field_data, record_new.data(), data_len);
     };
 
     rc = table_->visit_record(record.rid(), false/*readonly*/, record_updater);
