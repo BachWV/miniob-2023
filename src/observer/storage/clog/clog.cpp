@@ -212,7 +212,7 @@ RC CLogBuffer::append_log_record(CLogRecord *log_record)
 
   /// total_size_ 的计算没有考虑日志头
   if (total_size_ + log_record->logrec_len() >= CLOG_BUFFER_SIZE) {
-    return RC::LOGBUF_FULL;
+  //  return RC::LOGBUF_FULL;
   }
 
   lock_guard<Mutex> lock_guard(lock_);

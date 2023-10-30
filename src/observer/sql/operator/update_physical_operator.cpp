@@ -51,16 +51,17 @@ RC UpdatePhysicalOperator::next()
     Record record_new;
 
     TableMeta table_meta = table_->table_meta();
-    int cell_num=row_tuple->cell_num();
+    int cell_num= table_meta.field_num()-table_meta.sys_field_num();
+    //int cell_num=row_tuple->cell_num();
     vector<Value> values_new;
     vector<Value> values_need_delete;
     values_new.resize(cell_num);
     values_need_delete.resize(cell_num);
-    for(int i=0;i<cell_num;i++){
+    for(int i = 0;i < cell_num ; i++){
       Value value;
-      row_tuple->cell_at(i,value);
-      values_new.at(i)=value;
-      values_need_delete.at(i)=value;
+      row_tuple->cell_at(i + table_meta.sys_field_num(),value);
+      values_new.at(i) = value;
+      values_need_delete.at(i) = value;
     }
     for(auto &value:value_list_)
     {
@@ -82,8 +83,12 @@ RC UpdatePhysicalOperator::next()
         LOG_WARN("failed to calculate expr in set stmt, rc=%s", strrc(rc));
         return rc;
       }
+      // const FieldMeta *fm = table_meta.field(value.first);
+      // char *field_data = record.data() + fm->offset(); 
+     // memcpy(field_data, expr_value.data(), fm->len());
 
-      values_new.at(value.first) = expr_value;
+
+      values_new.at(value.first - table_meta.sys_field_num()) = expr_value;
     }
 
     RC rc = table_->make_record(static_cast<int>(values_new.size()), values_new.data(), record_new);
@@ -92,14 +97,12 @@ RC UpdatePhysicalOperator::next()
       return rc;
     } 
 
-    rc = trx_->delete_record(table_, record);
+    rc = trx_->visit_record(table_, record, true);
     if (rc != RC::SUCCESS) {
-      LOG_WARN("failed to delete record: %s", strrc(rc));
+      LOG_WARN("failed to visit record: %s", strrc(rc));
+      //说明其他正在修改，直接返回
       return rc;
     }
-
-
-
 
     std::vector<std::vector<int>> unique_field_list_list;
     bool has_unique_index = table_meta.has_unique_index();
@@ -131,12 +134,10 @@ RC UpdatePhysicalOperator::next()
       }
       while (scanner.has_next()) {
         rc = scanner.next(record_tmp);
-        RowTuple tuple_origin ;
         RowTuple tuple_tmp;
         tuple_tmp.set_schema(table_, table_meta.field_metas());
         tuple_tmp.set_record(&record_tmp);
-        tuple_origin.set_schema(table_, table_meta.field_metas());
-        tuple_origin.set_record(&record_new);
+       
         if (rc != RC::SUCCESS) {
           LOG_WARN("failed to scan records . table=%s,, rc=%s",name(), strrc(rc));
           return rc;
@@ -146,9 +147,8 @@ RC UpdatePhysicalOperator::next()
           bool flag = true;
           for(int unique_field : unique_field_list){
             Value value1;
-            Value value2;
+            Value value2=values_new.at(unique_field);
             tuple_tmp.cell_at(unique_field,value1);
-            tuple_origin.cell_at(unique_field,value2);
             if(value1.compare(value2)!=0){
               flag=false;
               break;
@@ -167,30 +167,37 @@ RC UpdatePhysicalOperator::next()
 
     if(need_to_roll_back){
       LOG_WARN("update fail: duplicate key ,failed to insert record: %s", strrc(rc));
-      RC rc2 = table_->make_record(static_cast<int>(values_need_delete.size()),values_need_delete.data(),record_need_delete);
-      if(rc2!=RC::SUCCESS)
-      {
-        LOG_WARN("update rollback :failed to make deteled record. rc=%s", strrc(rc2));
-        return rc2;
-      }
-      RC rc3 = trx_->insert_record(table_, record_need_delete);
-      if(rc3!=RC::SUCCESS)
-      {
-        LOG_WARN("update rollback :failed to insert deteled record. rc=%s", strrc(rc2));
-        return rc3;
-      }
-      LOG_WARN("update rollback :SUCCESS,Deleted record insert success. rc=%s", strrc(rc));
+      // RC rc2 = table_->make_record(static_cast<int>(values_need_delete.size()),values_need_delete.data(),record_need_delete);
+      // if(rc2!=RC::SUCCESS)
+      // {
+      //   LOG_WARN("update rollback :failed to make deteled record. rc=%s", strrc(rc2));
+      //   return rc2;
+      // }
+      // RC rc3 = trx_->insert_record(table_, record_need_delete);
+      // if(rc3!=RC::SUCCESS)
+      // {
+      //   LOG_WARN("update rollback :failed to insert deteled record. rc=%s", strrc(rc2));
+      //   return rc3;
+      // }
+      // LOG_WARN("update rollback :SUCCESS,Deleted record insert success. rc=%s", strrc(rc));
       return RC::RECORD_DUPLICATE_KEY;
     }
 
+    int data_len=table_meta.record_size();
+    auto record_updater = [&record_new,&data_len](Record &record_rid) {
+        char *field_data = record_rid.data();//这是record.rid传入的record
+        memcpy(field_data, record_new.data(), sizeof(data_len));
+    };
 
-    rc = trx_->insert_record(table_, record_new);
-    if (rc != RC::SUCCESS) {
-      LOG_WARN("failed to insert record by transaction. rc=%s", strrc(rc));
-    }else{
-      LOG_DEBUG("update success: insert new record success. rc=%s", strrc(rc));
-      continue;
-    }
+    rc = table_->visit_record(record.rid(), false/*readonly*/, record_updater);
+
+    // rc = trx_->insert_record(table_, record_new);
+    // if (rc != RC::SUCCESS) {
+    //   LOG_WARN("failed to insert record by transaction. rc=%s", strrc(rc));
+    // }else{
+    //   LOG_DEBUG("update success: insert new record success. rc=%s", strrc(rc));
+    //   continue;
+    // }
 
   }
   return RC::RECORD_EOF;
