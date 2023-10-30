@@ -194,6 +194,10 @@ public:
    */
   PageNum get_page_num() const;
 
+  void make_dirty(){
+    frame_->mark_dirty();
+  };
+
   /**
    * @brief 当前页面是否已经没有空闲位置插入新的记录
    */
@@ -214,6 +218,7 @@ protected:
       last_record_offset -= page_header_->record_size;
     }
   }
+ 
 
   /**
    * @brief 获取指定槽位的记录数据

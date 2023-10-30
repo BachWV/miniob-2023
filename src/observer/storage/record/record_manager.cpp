@@ -498,8 +498,15 @@ RC RecordFileHandler::visit_record(const RID &rid, bool readonly, std::function<
     return RC::RECORDFILEHANDLER_NO_TABLE;
   }
   table_->construct_null_info_in_record(&record);
+  
 
+  if(!readonly) {
+    visitor(record);
+    page_handler.make_dirty();
+    return rc;
+  }
   visitor(record);
+
   return rc;
 }
 
