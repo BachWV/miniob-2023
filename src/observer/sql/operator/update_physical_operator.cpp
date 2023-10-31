@@ -47,21 +47,16 @@ RC UpdatePhysicalOperator::next()
     RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
     Record &record = row_tuple->record();
     //tuple已经拿到数据了，tuple存有record的指针
-    Record record_need_delete;
     Record record_new;
 
     TableMeta table_meta = table_->table_meta();
     int cell_num= table_meta.field_num()-table_meta.sys_field_num();
-    //int cell_num=row_tuple->cell_num();
     vector<Value> values_new;
-    vector<Value> values_need_delete;
     values_new.resize(cell_num);
-    values_need_delete.resize(cell_num);
     for(int i = 0;i < cell_num ; i++){
       Value value;
       row_tuple->cell_at(i + table_meta.sys_field_num(),value);
       values_new.at(i) = value;
-      values_need_delete.at(i) = value;
     }
     for(auto &value:value_list_)
     {
@@ -83,11 +78,6 @@ RC UpdatePhysicalOperator::next()
         LOG_WARN("failed to calculate expr in set stmt, rc=%s", strrc(rc));
         return rc;
       }
-      // const FieldMeta *fm = table_meta.field(value.first);
-      // char *field_data = record.data() + fm->offset(); 
-     // memcpy(field_data, expr_value.data(), fm->len());
-
-
       values_new.at(value.first - table_meta.sys_field_num()) = expr_value;
     }
 
@@ -107,7 +97,7 @@ RC UpdatePhysicalOperator::next()
     std::vector<std::vector<int>> unique_field_list_list;
     bool has_unique_index = table_meta.has_unique_index();
     bool need_to_scan = has_unique_index;
-    bool need_to_roll_back = false;
+    bool unique_index_constraint_violation = false;
 
     if (has_unique_index)  table_meta.find_unique_index_field_vector(unique_field_list_list);
 
@@ -154,32 +144,19 @@ RC UpdatePhysicalOperator::next()
               break;
             }
           }
-          if(flag){//全部相等,跳过插入,update failure,回滚
-            need_to_roll_back=true;
+          if(flag){//全部相等,unique_index_constraint_violation,不允许插入
+            unique_index_constraint_violation=true;
             break;
           }
         }//比较结束
-        if(need_to_roll_back) break;
+        if(unique_index_constraint_violation) break;
       }//扫描结束
     
     }//need_to_scan结束
 
 
-    if(need_to_roll_back){
+    if(unique_index_constraint_violation){
       LOG_WARN("update fail: duplicate key ,failed to insert record: %s", strrc(rc));
-      // RC rc2 = table_->make_record(static_cast<int>(values_need_delete.size()),values_need_delete.data(),record_need_delete);
-      // if(rc2!=RC::SUCCESS)
-      // {
-      //   LOG_WARN("update rollback :failed to make deteled record. rc=%s", strrc(rc2));
-      //   return rc2;
-      // }
-      // RC rc3 = trx_->insert_record(table_, record_need_delete);
-      // if(rc3!=RC::SUCCESS)
-      // {
-      //   LOG_WARN("update rollback :failed to insert deteled record. rc=%s", strrc(rc2));
-      //   return rc3;
-      // }
-      // LOG_WARN("update rollback :SUCCESS,Deleted record insert success. rc=%s", strrc(rc));
       return RC::RECORD_DUPLICATE_KEY;
     }
 
@@ -190,14 +167,6 @@ RC UpdatePhysicalOperator::next()
     };
 
     rc = table_->visit_record(record.rid(), false/*readonly*/, record_updater);
-
-    // rc = trx_->insert_record(table_, record_new);
-    // if (rc != RC::SUCCESS) {
-    //   LOG_WARN("failed to insert record by transaction. rc=%s", strrc(rc));
-    // }else{
-    //   LOG_DEBUG("update success: insert new record success. rc=%s", strrc(rc));
-    //   continue;
-    // }
 
   }
   return RC::RECORD_EOF;
