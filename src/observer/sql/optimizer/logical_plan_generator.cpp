@@ -200,9 +200,15 @@ RC LogicalPlanGenerator::create_plan(
       }
     }else{
       // 按第一个字段排序
-      // auto& [table_name, table] = *(table_map.begin());
-      // auto fid = FieldIdentifier(table_name, table->table_meta().field(0)->name());
-      fwo.push_back(FieldWithOrder(select_expr_fields[0].tuple_cell_spec_, true));
+      auto& [table_name, table_src] = *(table_map.begin());
+      FieldIdentifier first_fid;
+      if (auto table = std::get_if<Table*>(&table_src))
+        first_fid = FieldIdentifier(table_name, (*table)->table_meta().field(0)->name());
+      else {
+        ResolvedView &resolved_view = std::get<ResolvedView>(table_src);
+        first_fid = resolved_view.select_->select_expr_fields()[0].tuple_cell_spec_;
+        fwo.push_back(FieldWithOrder(first_fid, true));
+      }
     }
 
     unique_ptr<LogicalOperator> sort_oper = make_unique<SortLogicalOperator>(fwo);
