@@ -26,6 +26,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/field/field.h"
 #include "sql/stmt/field_with_function.h"
 #include "sql/expr/parsed_expr.h"
+#include "sql/view/view.h"
 
 class FieldMeta;
 class FilterStmt;
@@ -37,10 +38,6 @@ class CorrelateExpr;
 class ExprResolveContext;
 class ApplyStmt;
 
-// 这里不应该叫“field”，应该是xx_stmt。但是我看按照他的方式，开stmt也不太合适，
-// 我们只是需要个中间态的数据结构暂时保存下数据，索性就把数据放在Field这个文件里了
-using SelectExprField = std::variant<FieldsWithGroupBy, FieldWithFunction, FieldWithCul, FieldWithAlias>;
-
 struct SelectColumnInfo
 {
   std::unique_ptr<Expression> expr_;  // 一个列就是一个表达式
@@ -51,6 +48,8 @@ struct SelectColumnInfo
 
   std::string output_name_;  // 该列用于输出的名字
 };
+
+using TableSrc = std::variant<Table*, ResolvedView>;
 
 /**
  * @brief 表示select语句
@@ -70,11 +69,11 @@ public:
 public:
   // glob_ctx: 用于解析表达式的全局环境
   // correlate_exprs：create中，需要构造本查询里引用外层查询的相关表达式，把层数和表达式包装为map
-  static RC create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &select_sql, Stmt *&stmt, 
+  static RC create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode &select_sql, Stmt *&stmt, 
     std::unordered_map<size_t, std::vector<CorrelateExpr*>> *correlate_exprs);
 
 public:
-  const std::unordered_map<std::string, Table *> &table_map() const
+  std::unordered_map<std::string, TableSrc> &table_map()
   {
     return table_map_;
   }
@@ -97,18 +96,14 @@ public:
   bool has_agg() const {return has_agg_;}
   std::unique_ptr<ConjunctionExpr> fetch_having_exprs();
   std::vector<AggExprInfo> &fetch_all_agg_infos() { return all_agg_infos_; }
-  std::vector<AttrInfoSqlNode> column_attrs(){
-    return column_attrs_;
-  }
+  std::vector<AttrInfoSqlNode> &column_attrs(){ return column_attrs_; }
+  const std::vector<std::pair<bool, std::string>> &is_simple_field_ident_vec() const { return simple_field_ident_infos_; }
 
 private:
-  RC resolve_select_expr_sql_node(const SelectExprSqlNode& sesn, SelectExprField& sef);
-
-private:
-  // 查询的表的名字（有别名则是别名，否则是原名），映射到对应的Table对象
-  // 多个表名可能会映射到同一个Table对象，比如select * from table1 as t1, table1 as t2，
-  // 每一个表名都要建一个TableGet，所以用此结构代替原来的table_数组 
-  std::unordered_map<std::string, Table *> table_map_;
+  // 查询的表的名字（有别名则是别名，否则是原名），映射到对应的TableSrc对象
+  // 多个表名可能会映射到同一个TableSrc对象，比如select * from table1 as t1, table1 as t2，
+  // 每一个表名都对应一个算子树，所以用此结构代替原来的table_数组 
+  std::unordered_map<std::string, TableSrc> table_map_;
 
   std::vector<FieldWithOrder> order_fields_;
   
@@ -117,7 +112,6 @@ private:
   std::unique_ptr<ConjunctionExpr> where_exprs_;
   std::vector<std::unique_ptr<ApplyStmt>> sub_querys_in_where_;
 
-  std::vector<SelectColumnInfo> select_expr_fields_;
   std::vector<FieldIdentifier> group_by_field_;
 
   bool has_having_ = false;
@@ -125,6 +119,29 @@ private:
   
   std::vector<AggExprInfo> all_agg_infos_;  // select expr和having中的所有聚集函数
 
-  // select t1.id new_id, t2.name new_name, t1.score + t2.score as total_score from t1, t2 where t1.id = t2.id;
-  std::vector<AttrInfoSqlNode> column_attrs_;  // 列的值属性
+
+  /* 
+   * 以下的数据结构描述select的列的信息 
+   * 出于历史原因（懂的都懂），数据结构分开成了多个vector维护
+   */
+
+  std::vector<SelectColumnInfo> select_expr_fields_;
+
+  /*
+   * 列的值属性(不同于SelectColumnInfo，这里主要描述这个列的值类型、大小、名字)
+   * 其中name为列本身的名字。
+   * 如果该列就是对表中field的引用，那么name就是该field的名字(就算是多表查询，name中也不带表名前缀，就是列本身的名字)或别名
+   * 否则，列是其它表达式，则为表达式名或别名
+   */
+  std::vector<AttrInfoSqlNode> column_attrs_;
+
+  /*
+   * 使用select创建视图时需要此信息(对视图做更新时，如果更新被允许，则需要拿到视图的列所引用的基表名和列原名，所以需要解析select时传出这个信息)
+   * 
+   * pair的first表示：select中的每一个列，是不是到field的简单引用
+   * 如果是(first为true)，则second为field的原名(不是别名)，且它引用的field所属表，可以从对应SelectColumnInfo.expr_中获取
+   * 如果不是(first为false)，则second无效
+   * 
+   */
+  std::vector<std::pair<bool, std::string>> simple_field_ident_infos_;
 };

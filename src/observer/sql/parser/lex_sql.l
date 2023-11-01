@@ -143,6 +143,7 @@ LIKE                                    RETURN_TOKEN(SYM_LIKE);
 "not like"                              RETURN_TOKEN(SYM_NOT_LIKE);
 TEXT                                    RETURN_TOKEN(TEXT_T);
 "inner join"                            RETURN_TOKEN(SYM_INNER_JOIN);
+VIEW                                    RETURN_TOKEN(SYM_VIEW);
 {ID}                                    yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                     RETURN_TOKEN(LBRACE);
 ")"                                     RETURN_TOKEN(RBRACE);

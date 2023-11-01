@@ -82,7 +82,12 @@ RC CastExpr::try_get_value(Value &value) const
 
 ComparisonExpr::ComparisonExpr(CompOp comp, unique_ptr<Expression> left, unique_ptr<Expression> right)
     : comp_(comp), left_(std::move(left)), right_(std::move(right))
-{}
+{
+    referred_tables_ = left_->referred_tables();
+    std::vector<std::string> right_tables = right_->referred_tables();
+    referred_tables_.insert(referred_tables_.end(), std::make_move_iterator(right_tables.begin()), 
+      std::make_move_iterator(right_tables.end()));
+}
 
 ComparisonExpr::~ComparisonExpr()
 {}
@@ -175,7 +180,15 @@ RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
 ////////////////////////////////////////////////////////////////////////////////
 ConjunctionExpr::ConjunctionExpr(Type type, vector<unique_ptr<Expression>> &children)
     : conjunction_type_(type), children_(std::move(children))
-{}
+{
+  std::vector<std::string> tables;
+  for (const unique_ptr<Expression> &expr : children_) {
+    std::vector<std::string> child_tables = expr->referred_tables();
+    tables.insert(tables.end(), std::make_move_iterator(child_tables.begin()), 
+      std::make_move_iterator(child_tables.end()));
+  }
+  referred_tables_ = std::move(tables);
+}
 
 RC ConjunctionExpr::get_value(const Tuple &tuple, Value &value) const
 {
@@ -208,10 +221,37 @@ RC ConjunctionExpr::get_value(const Tuple &tuple, Value &value) const
 
 ArithmeticExpr::ArithmeticExpr(ArithmeticExpr::Type type, Expression *left, Expression *right)
     : arithmetic_type_(type), left_(left), right_(right)
-{}
+{
+  std::vector<std::string> tables;
+  if (left_ != nullptr) {
+  std::vector<std::string> left_tables = left_->referred_tables();
+  tables.insert(tables.end(), std::make_move_iterator(left_tables.begin()), 
+    std::make_move_iterator(left_tables.end()));
+  }
+  if (right_ != nullptr) {
+    std::vector<std::string> right_tables = right_->referred_tables();
+    tables.insert(tables.end(), std::make_move_iterator(right_tables.begin()), 
+      std::make_move_iterator(right_tables.end()));
+  }
+  referred_tables_ = std::move(tables);
+}
+
 ArithmeticExpr::ArithmeticExpr(ArithmeticExpr::Type type, unique_ptr<Expression> left, unique_ptr<Expression> right)
     : arithmetic_type_(type), left_(std::move(left)), right_(std::move(right))
-{}
+{
+  std::vector<std::string> tables;
+  if (left_ != nullptr) {
+  std::vector<std::string> left_tables = left_->referred_tables();
+  tables.insert(tables.end(), std::make_move_iterator(left_tables.begin()), 
+    std::make_move_iterator(left_tables.end()));
+  }
+  if (right_ != nullptr) {
+    std::vector<std::string> right_tables = right_->referred_tables();
+    tables.insert(tables.end(), std::make_move_iterator(right_tables.begin()), 
+      std::make_move_iterator(right_tables.end()));
+  }
+  referred_tables_ = std::move(tables);
+}
 
 AttrType ArithmeticExpr::value_type() const
 {

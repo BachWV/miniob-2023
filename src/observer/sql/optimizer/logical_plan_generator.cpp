@@ -141,14 +141,26 @@ RC LogicalPlanGenerator::create_plan(
   std::vector<SelectColumnInfo>& select_expr_fields = select_stmt->select_expr_fields();
 
   // table-get / join
-  for (auto& [table_name, table] : table_map) {
-    unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, table_name, true/*readonly*/));
+  for (auto& [table_name, table_src] : table_map) {  // 如果是单表，建一个table_get
+    unique_ptr<LogicalOperator> cur_oper;
+    if (auto table = std::get_if<Table*>(&table_src)) {
+      cur_oper = std::make_unique<TableGetLogicalOperator>(*table, table_name, true/*readonly*/);
+    }
+    else {  // 如果是视图，创建视图的子查询算子树
+      ResolvedView &resolved_view = std::get<ResolvedView>(table_src);
+      rc = create_plan(resolved_view.select_.get(), cur_oper);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("failed to create select logical plan for view. rc=%s", strrc(rc));
+        return rc;
+      }
+    }
+
     if (table_oper == nullptr) {
-      table_oper = std::move(table_get_oper);
+      table_oper = std::move(cur_oper);
     } else {
       JoinLogicalOperator *join_oper = new JoinLogicalOperator;
       join_oper->add_child(std::move(table_oper));
-      join_oper->add_child(std::move(table_get_oper));
+      join_oper->add_child(std::move(cur_oper));
       table_oper = unique_ptr<LogicalOperator>(join_oper);
     }
   }
@@ -188,9 +200,9 @@ RC LogicalPlanGenerator::create_plan(
       }
     }else{
       // 按第一个字段排序
-      auto& [table_name, table] = *(table_map.begin());
-      auto fid = FieldIdentifier(table_name, table->table_meta().field(0)->name());
-      fwo.push_back(FieldWithOrder(fid, true));
+      // auto& [table_name, table] = *(table_map.begin());
+      // auto fid = FieldIdentifier(table_name, table->table_meta().field(0)->name());
+      fwo.push_back(FieldWithOrder(select_expr_fields[0].tuple_cell_spec_, true));
     }
 
     unique_ptr<LogicalOperator> sort_oper = make_unique<SortLogicalOperator>(fwo);

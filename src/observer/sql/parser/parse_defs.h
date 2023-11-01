@@ -354,6 +354,16 @@ struct ExplainSqlNode
   std::unique_ptr<ParsedSqlNode> sql_node;
 };
 
+/*
+ * 创建视图语句
+ */
+struct CreateViewSqlNode
+{
+  std::string view_name;
+  std::vector<std::string> view_column_names;
+  std::unique_ptr<ParsedSqlNode> select_def;
+};
+
 /**
  * @brief 解析SQL语句出现了错误
  * @ingroup SQLParser
@@ -395,6 +405,7 @@ enum SqlCommandFlag
   SCF_EXPLAIN,
   SCF_SET_VARIABLE, ///< 设置变量
   SCF_CREATE_TABLE_SELECT,
+  SCF_CREATE_VIEW
 };
 /**
  * @brief 表示一个SQL语句
@@ -419,6 +430,7 @@ public:
   ExplainSqlNode            explain;
   SetVariableSqlNode        set_variable;
   CreateTableSelectSqlNode  create_table_select;  // 记得设置scf
+  CreateViewSqlNode         create_view;
 
 public:
   ParsedSqlNode();

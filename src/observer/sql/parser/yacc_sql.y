@@ -120,6 +120,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
         SYM_LIKE
         SYM_NOT_LIKE
         AS
+        SYM_VIEW
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -158,6 +159,9 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
   std::string*                       std_string;
   std::vector<std::unique_ptr<InnerJoinSqlNode>>*    inner_join_list;
   InnerJoinSqlNode*                 inner_join;
+
+  // view
+  std::vector<std::string> *        id_list;
 }
 
 /* %token <number> DATE */
@@ -208,6 +212,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <sql_node>            help_stmt
 %type <sql_node>            exit_stmt
 %type <sql_node>            create_table_select_stmt
+%type <sql_node>            create_view_stmt
 %type <sql_node>            command_wrapper
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
@@ -236,6 +241,9 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <expr_sql_set>        expr_set
 %type <inner_join>          inner_join
 %type <inner_join_list>     inner_join_list
+
+// view
+%type <id_list>             simple_identifier_list
 
 %nonassoc SYM_IS_NULL SYM_IS_NOT_NULL SYM_IN SYM_NOT_IN
 %left EQ LT GT LE GE NE
@@ -273,6 +281,7 @@ command_wrapper:
   | help_stmt
   | exit_stmt
   | create_table_select_stmt
+  | create_view_stmt
     ;
 
 exit_stmt:      
@@ -1373,6 +1382,47 @@ all_id:
   | DATE_FORMAT {
     $$ = $1;
   }
+
+create_view_stmt:
+  CREATE SYM_VIEW ID LBRACE simple_identifier_list RBRACE AS select_stmt
+  {
+    $$ = new ParsedSqlNode(SCF_CREATE_VIEW);
+    CreateViewSqlNode &create_view = $$->create_view;
+    create_view.view_name = $3;
+
+    if ($5 != nullptr) {
+      create_view.view_column_names.swap(*$5);
+      delete $5;
+    }
+
+    create_view.select_def.reset($8);
+
+    free($3);
+  }
+  | CREATE SYM_VIEW ID AS select_stmt
+  {
+    $$ = new ParsedSqlNode(SCF_CREATE_VIEW);
+    CreateViewSqlNode &create_view = $$->create_view;
+    create_view.view_name = $3;
+    create_view.select_def.reset($5);
+    free($3);
+  }
+  ;
+
+simple_identifier_list:
+  ID
+  {
+    $$ = new std::vector<std::string>;
+    $$->emplace_back($1);
+    free($1);
+  }
+  | simple_identifier_list COMMA ID
+  {
+    $$ = $1;
+    $$->emplace_back($3);
+    free($3);
+  }
+  ;
 
 opt_semicolon: /*empty*/
     | SEMICOLON

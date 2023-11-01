@@ -25,6 +25,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/common/condition_filter.h"
 #include "storage/clog/clog.h"
 #include "session/session.h"
+#include "sql/view/view.h"
 
 static DefaultHandler *default_handler = nullptr;
 

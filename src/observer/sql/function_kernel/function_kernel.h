@@ -12,7 +12,6 @@ class FunctionKernel{
 public:
 	virtual ~FunctionKernel() = default;
 	virtual RC do_func(const Value& in, Value& out) = 0;
-	void set_meta(const char* table_name, const char* field_name);
 	void set_is_const(bool b){
 		is_const_  = b;
 	}
@@ -26,6 +25,8 @@ public:
 
 	// virtual AttrInfoSqlNode get_attr_info() = 0;
 	virtual ExprValueAttr get_value_attr() const = 0;
+
+	virtual std::unique_ptr<FunctionKernel> copy() const = 0;
 
 protected:
 	// 不应该用FieldIdentifier，因为FieldIdentifier中的字段需要resolve校验，而FunctionKernel中的参数不需要和DB校验
@@ -48,6 +49,10 @@ public:
 		attr.type = AttrType::INTS;
 		attr.nullable = true;
 		return attr;
+	}
+
+	std::unique_ptr<FunctionKernel> copy() const override {
+		return std::make_unique<LengthFunctionKernel>(*this);
 	}
 
 private:
@@ -75,6 +80,10 @@ public:
 		return attr;
 	}
 
+	std::unique_ptr<FunctionKernel> copy() const override {
+		return std::make_unique<RoundFunctionKernel>(*this);
+	}
+
 private:
 	bool is_single_;
 	int decimals_;
@@ -97,6 +106,10 @@ public:
 		attr.type = AttrType::CHARS;
 		attr.nullable = true;
 		return attr;
+	}
+
+	std::unique_ptr<FunctionKernel> copy() const override {
+		return std::make_unique<FormatFunctionKernel>(*this);
 	}
 
 private:

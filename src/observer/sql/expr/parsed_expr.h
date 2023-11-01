@@ -70,13 +70,19 @@ public:
     table_namespace_.emplace(table_name, table);
   }
 
+  void add_view_column(const std::string &view_name, const std::string &column_name, 
+    const FieldIdentifier &field_id, const ExprValueAttr &value_attr) {
+    views_[view_name].emplace(column_name, std::make_pair(field_id, value_attr));
+  }
+
   void add_other_column_name(const std::string &field_name) {
     other_column_names_.emplace(field_name);
   }
 
   /* 解析引用表中某一列的名字。解析成功（找不到也算成功，都返回RC::SUCCESS）。解析中出现错误（如出现歧义），返回其错误码 */
+  /* 现在也会同时考虑视图 */
   RC resolve_table_field_identifier(const std::string &table_name, const std::string &field_name,
-    std::optional<FieldIdentifier> &result, ExprValueAttr &value_attr) const;
+    std::optional<FieldIdentifier> &result, ExprValueAttr *result_attr = nullptr) const;
   
   /* 解析聚集函数等虚拟字段的名字 */
   RC resolve_other_column_name(const std::string &col_name) const;
@@ -90,6 +96,12 @@ private:
    * 目前不考虑列别名
    */
   std::unordered_map<std::string, Table *> table_namespace_;
+
+  /*
+   * 视图名，映射到该视图包含的列名，以及在tuple中定位该列的FieldIdentifier、该列的值属性
+   * Identifier由视图查询resolve后的SelectColumnInfo中获取
+   */
+  std::unordered_map<std::string, std::unordered_map<std::string, std::pair<FieldIdentifier, ExprValueAttr>>> views_;
 
   /*
    * 表达式还可能引用虚拟字段名，如HAVING子句中：

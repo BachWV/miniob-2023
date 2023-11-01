@@ -168,7 +168,7 @@ RC Table::open(const char *meta_file, const char *base_dir)
       field_metas.push_back(field_meta);
       if (field_meta == nullptr) {
         LOG_ERROR("Found invalid index meta info which has a non-exists field. table=%s, index=%s, field=%s",
-                  name(), index_meta->name(), index_meta->fields()[0]);
+                  name(), index_meta->name(), index_meta->fields()[0].c_str());
         // skip cleanup
         //  do all cleanup action in destructive Table function
         return RC::INTERNAL;

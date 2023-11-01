@@ -8,7 +8,7 @@
 #include "common/log/log.h"
 
 RC StmtResolveContext::resolve_table_field_identifier(const std::string &table_name, const std::string &field_name,
-    std::optional<FieldIdentifier> &result, ExprValueAttr &value_attr) const
+    std::optional<FieldIdentifier> &result, ExprValueAttr *result_attr) const
 {
     auto field_meta_to_value_attr = [](const FieldMeta *field_meta) {
         ExprValueAttr value_attr;
@@ -19,50 +19,73 @@ RC StmtResolveContext::resolve_table_field_identifier(const std::string &table_n
     };
 
     result = std::nullopt;
+    ExprValueAttr value_attr;
 
     /* 给定了表名，则只查找该表 */
     if (!table_name.empty())
     {
-        if (table_namespace_.count(table_name) == 0)
-            return RC::SUCCESS;
-
-        Table *table = table_namespace_.at(table_name);
-        const FieldMeta *field_meta = table->table_meta().field(field_name.c_str());
-
-        if (field_meta != nullptr)
+        if (table_namespace_.count(table_name) != 0)
         {
-            result = FieldIdentifier(table_name, field_name);
-            value_attr = field_meta_to_value_attr(field_meta);
+            Table *table = table_namespace_.at(table_name);
+            const FieldMeta *field_meta = table->table_meta().field(field_name.c_str());
+            if (field_meta != nullptr)
+            {
+                result = FieldIdentifier(table_name, field_name);
+                value_attr = field_meta_to_value_attr(field_meta);
+            }
         }
-        
-        return RC::SUCCESS;
+        else if (views_.count(table_name) != 0)
+        {
+            auto &view_columns = views_.at(table_name);
+            if (view_columns.count(field_name) != 0)
+            {
+                auto &[field_id, field_attr] = view_columns.at(field_name);
+                result = field_id;
+                value_attr = field_attr;
+            }
+        }
     }
 
     /* 只给定了列名，则遍历所有的表，查看是否有该列名，并且不允许冲突 */
     else
     {
-        std::string target_table_name;
-        const FieldMeta *target_field = nullptr;
-        for (const auto &[ele_table_name, table]: table_namespace_) 
+        bool field_find = false;
+        for (auto &[table_name, table]: table_namespace_)  // 在表中查找
         {
             const FieldMeta *field_meta = table->table_meta().field(field_name.c_str());
             if (field_meta != nullptr)
             {
-                if (target_field != nullptr)  // 多个表都有field_name这个字段，返回解析失败，而不是找不到
+                if (field_find)  // 多个表都有field_name这个字段，返回解析失败，而不是找不到
                 {
                     LOG_WARN("field name %s is ambiguous", field_name.c_str());
                     return RC::SCHEMA_FIELD_AMBIGUOUS;
                 }
-                target_table_name = ele_table_name;
-                target_field = field_meta;
+                field_find = true;
+                result = FieldIdentifier(table_name, field_name);
                 value_attr = field_meta_to_value_attr(field_meta);
             }
         }
-
-        if (target_field != nullptr)
-            result = FieldIdentifier(target_table_name, field_name);
-        return RC::SUCCESS;
+        
+        for (auto &[view_name, view_columns]: views_)  // 在视图中查找
+        {
+            if (view_columns.count(field_name) != 0)
+            {
+                if (field_find)
+                {
+                    LOG_WARN("field name %s is ambiguous", field_name.c_str());
+                    return RC::SCHEMA_FIELD_AMBIGUOUS;
+                }
+                field_find = true;
+                auto &[field_id, field_attr] = view_columns.at(field_name);
+                result = field_id;
+                value_attr = field_attr;
+            }
+        }
     }
+
+    if (result_attr != nullptr)
+        *result_attr = value_attr;
+    return RC::SUCCESS;
 }
 
 RC StmtResolveContext::resolve_other_column_name(const std::string &col_name) const
@@ -134,7 +157,7 @@ RC IdentifierExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *re
         /* Identifier类型的表达式只能是引用表中列名的表达式，其它的名字引用用其它类型的表达式实现 */
         std::optional<FieldIdentifier> field_identifier;
         ExprValueAttr value_attr;
-        RC rc = stmt_ctx.resolve_table_field_identifier(table_name, field_name, field_identifier, value_attr);
+        RC rc = stmt_ctx.resolve_table_field_identifier(table_name, field_name, field_identifier, &value_attr);
         if (rc != RC::SUCCESS)
             return rc;
         
@@ -146,6 +169,7 @@ RC IdentifierExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *re
             {
                 auto id_expr = std::make_unique<IdentifierExpr>(field_identifier.value());
                 id_expr->set_value_attr(value_attr);
+                id_expr->set_referred_table(table_name);
                 expr.reset(id_expr.release());
             }
             // 否则，这个标识符是一个相关表达式，是第level层查询的相关子查询
@@ -153,6 +177,7 @@ RC IdentifierExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *re
             {
                 auto correlate_expr = std::make_unique<CorrelateExpr>(field_identifier.value());
                 correlate_expr->set_value_attr(value_attr);
+                correlate_expr->set_referred_table(table_name);
                 result->add_correlate_expr(level, correlate_expr.get());
                 expr.reset(correlate_expr.release());
                 LOG_DEBUG("add correlate expr : %s.%s . Correlate to level=%u, table=%s, field=%s", 
@@ -418,7 +443,7 @@ RC AggIdentifierExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult 
     else
     {
         rc = stmt_ctx.resolve_table_field_identifier(agg_field_.table_name(), agg_field_.field_name(), resolved_identifier,
-            agg_field_attr);
+            &agg_field_attr);
         if (rc != RC::SUCCESS || !resolved_identifier.has_value())
         {
             LOG_WARN("resolve agg field failed.");
@@ -512,23 +537,19 @@ RC FunctionExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *resu
         // 这里不考虑Function中的参数是相关表达式
         const StmtResolveContext& cur_ctx = ctx->get_ith_level_stmt_ctx(ctx->current_level());
         std::optional<FieldIdentifier> arg;
-        ExprValueAttr arg_attr;
-        RC rc = cur_ctx.resolve_table_field_identifier(func_sql_.rel_attr.relation_name, func_sql_.rel_attr.attribute_name, arg,
-            arg_attr);
+        RC rc = cur_ctx.resolve_table_field_identifier(func_sql_.rel_attr.relation_name, func_sql_.rel_attr.attribute_name, arg);
         if (rc != RC::SUCCESS || !arg.has_value())
         {
             LOG_WARN("resolve arg in function failed");
             return rc;
         }
 
-        // 这里需要move FunctionExprSqlNode里的东西，但接口是const!!!
-        FunctionExprSqlNode *non_const_this = const_cast<FunctionExprSqlNode*>(this);
-        expr = std::make_unique<FunctionExpr>(std::move(non_const_this->func_sql_.function_kernel), arg.value());
+        expr = std::make_unique<FunctionExpr>(func_sql_.function_kernel->copy(), arg.value());
+        expr->set_referred_tables(func_sql_.rel_attr.relation_name);
     }
     else
     {
-        FunctionExprSqlNode *non_const_this = const_cast<FunctionExprSqlNode*>(this);
-        expr = std::make_unique<FunctionExpr>(std::move(non_const_this->func_sql_.function_kernel));
+        expr = std::make_unique<FunctionExpr>(func_sql_.function_kernel->copy());
     }
     
     result->set_result_expr_tree(std::move(expr));

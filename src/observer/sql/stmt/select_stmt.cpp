@@ -27,6 +27,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/expr/parsed_expr.h"
 #include "sql/expr/expression.h"
 #include "sql/stmt/apply_stmt.h"
+#include "sql/view/view.h"
 #include <cstring>
 #include <functional>
 #include <unordered_set>
@@ -41,13 +42,32 @@ std::unique_ptr<ConjunctionExpr> SelectStmt::fetch_having_exprs()
   return std::move(having_exprs_);
 }
 
-static void wildcard_fields(Table *table, std::vector<const FieldMeta *>& column_metas)
+static void wildcard_fields(const TableSrc &table_src, std::vector<AttrInfoSqlNode>& column_metas)
 {
-  const TableMeta &table_meta = table->table_meta();
-  const int field_num = table_meta.field_num();
-  for (int i = table_meta.sys_field_num(); i < field_num; i++) {
-    const FieldMeta *field_meta = table_meta.field(i);
-    column_metas.push_back(field_meta);
+  if (auto p_table = std::get_if<Table*>(&table_src))
+  {
+    const Table *table = *p_table;
+    const TableMeta &table_meta = table->table_meta();
+    const int field_num = table_meta.field_num();
+    for (int i = table_meta.sys_field_num(); i < field_num; i++) {
+      const FieldMeta *field_meta = table_meta.field(i);
+      AttrInfoSqlNode attr_info = {.type = field_meta->type(), .name = field_meta->name(), 
+        .length = static_cast<size_t>(field_meta->len()), .nullable = field_meta->nullable()};
+      column_metas.emplace_back(std::move(attr_info));
+    }
+  }
+  else if (auto resolved_view = std::get_if<ResolvedView>(&table_src))
+  {
+    const std::vector<ViewColumnAttr> &col_name_infos = resolved_view->view_->view_columns();
+    SelectStmt *view_select = resolved_view->select_.get();
+    const std::vector<AttrInfoSqlNode> &col_attrs = view_select->column_attrs();
+
+    size_t col_num = col_name_infos.size();
+    for (size_t i = 0; i < col_num; ++i) {
+      AttrInfoSqlNode attr_info = {.type = col_attrs[i].type, .name = col_name_infos[i].column_name, 
+        .length = col_attrs[i].length, .nullable = col_attrs[i].nullable};
+      column_metas.emplace_back(std::move(attr_info));
+    }
   }
 }
 
@@ -127,7 +147,7 @@ static std::string gen_output_name_for_field_id(bool need_table_name, const std:
     return field_name;
 }
 
-RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &select_sql, Stmt *&stmt, 
+RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode &select_sql, Stmt *&stmt, 
     std::unordered_map<size_t, std::vector<CorrelateExpr*>> *correlate_exprs)
 {
   auto convert_to_conjunction_type = [](Conditions::ConjunctionType type) {
@@ -152,7 +172,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
   StmtResolveContext having_resolve_ctx;  // 解析having子句的上下文
 
   // collect tables in `from` statement
-  std::unordered_map<std::string, Table *> table_map;  // table的名字（有别名则是别名，否则是表原名），映射到Table对象
+  std::unordered_map<std::string, TableSrc> table_map;  // table或view的名字（有别名则是别名，否则是表原名），映射到TableSrc
   std::vector<std::string> tables_;  // 按from的顺序排列的表名
 
   for (size_t i = 0; i < select_sql.relations.size(); i++) {
@@ -162,51 +182,83 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
       LOG_WARN("invalid argument. relation name is null. index=%d", i);
       return RC::INVALID_ARGUMENT;
     }
-
-    Table *table = db->find_table(table_name);
-    if (nullptr == table) {
-      LOG_WARN("no such table. db=%s, table_name=%s", db->name(), table_name);
-      return RC::SCHEMA_TABLE_NOT_EXIST;
-    }
-
-    std::string avail_table_name;
-    if (alias_name.length() != 0)
-      avail_table_name = alias_name;
-    else
-      avail_table_name = table_name;
-
+    std::string avail_table_name = alias_name.empty() ? table_name : alias_name;
     if (table_map.count(avail_table_name))
       return RC::SCHEMA_TABLE_EXIST;
 
-    table_map.emplace(avail_table_name, table);
-    tables_.emplace_back(avail_table_name);
+    Table *table = db->find_table(table_name);
+    if (nullptr != table) 
+    {
+      table_map.emplace(avail_table_name, table);
+      tables_.emplace_back(avail_table_name);
 
-    current_expr_ctx.add_table_to_namespace(avail_table_name, table);
-    having_resolve_ctx.add_table_to_namespace(avail_table_name, table);
+      current_expr_ctx.add_table_to_namespace(avail_table_name, table);
+      having_resolve_ctx.add_table_to_namespace(avail_table_name, table);
+    }
+
+    else  // 表为空，再查找视图，如果视图也找不到，就报错
+    {
+      View *view = db->find_view(table_name);
+      if (view == nullptr)
+      {
+        LOG_WARN("no such table or view. db=%s, table_name=%s", db->name(), table_name);
+        return RC::SCHEMA_TABLE_NOT_EXIST;
+      }
+
+      std::unique_ptr<SelectStmt> view_select;
+      RC rc = view->resolve_select(db, glob_ctx, view_select);
+      if (rc != RC::SUCCESS)
+      {
+        LOG_WARN("resolve view in from clause failed. rc=%s", strrc(rc));
+        return rc;
+      }
+
+      /* 将view的元数据加入namespace */
+      std::vector<SelectColumnInfo> &view_col_infos = view_select->select_expr_fields();
+      std::vector<AttrInfoSqlNode> &view_col_value_attrs = view_select->column_attrs();
+      const std::vector<ViewColumnAttr> &view_col_name_attrs = view->view_columns();
+      size_t col_num = view_col_infos.size();
+      assert(view_col_value_attrs.size() == col_num);
+      assert(view_col_name_attrs.size() == col_num);
+
+      for (size_t i = 0; i < col_num; ++i)
+      {
+        const AttrInfoSqlNode &col_value_attr = view_col_value_attrs[i];
+        const FieldIdentifier &col_id = view_col_infos[i].tuple_cell_spec_;
+        const ExprValueAttr col_attr = {.type = col_value_attr.type, .length = col_value_attr.length, 
+          .nullable = col_value_attr.nullable};
+        current_expr_ctx.add_view_column(avail_table_name, view_col_name_attrs.at(i).column_name, col_id, col_attr);
+        having_resolve_ctx.add_view_column(avail_table_name, view_col_name_attrs.at(i).column_name, col_id, col_attr);
+      }
+
+      /* 将视图结构加入table_map_ */
+      table_map.emplace(avail_table_name, ResolvedView(view, std::move(view_select)));
+      tables_.emplace_back(avail_table_name);
+    }
   }
 
   // collect fields in `group by` statement
   // std::vector<Field> group_fields;
   std::vector<FieldIdentifier> group_fields;
   for(const auto& rel_attr: select_sql.group_by_attrs){
-    FieldIdentifier group_by_field;
-    auto rc = resolve_common_field(db, table_map, rel_attr, group_by_field);
-    if(rc != RC::SUCCESS){
-      return rc;
-    }
-    group_fields.emplace_back(std::move(group_by_field));
+    std::optional<FieldIdentifier> group_by_field;
+    RC rc = current_expr_ctx.resolve_table_field_identifier(rel_attr.relation_name, rel_attr.attribute_name, group_by_field);
+    if(rc != RC::SUCCESS || !group_by_field.has_value())
+      return RC::SCHEMA_FIELD_NOT_EXIST;
+    group_fields.emplace_back(std::move(group_by_field.value()));
   }
 
   // collect select_expr in `select` statement
   std::vector<SelectColumnInfo> select_columns;
   std::vector<AttrInfoSqlNode> column_attrs;  // 列的值属性
+  std::vector<std::pair<bool, std::string>> simple_field_ident_infos;  // 列的field引用信息
   std::vector<AggExprInfo> all_agg_infos;  // select expr和having中的所有聚集函数
   bool has_agg = false;
   std::unordered_multiset<FieldIdentifier, FieldIdentifierHash> common_fields_set;  // 非agg的字段
 
   for (auto &select_expr_with_alias: select_sql.select_exprs)
   {
-    std::unique_ptr<ExprSqlNode> &select_expr = select_expr_with_alias.expr_;
+    const std::unique_ptr<ExprSqlNode> &select_expr = select_expr_with_alias.expr_;
     const std::string &expr_alias = select_expr_with_alias.alias_;
 
     // 如果表达式包含'*'
@@ -222,22 +274,33 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
         // 空.*
         for (auto &table_name : tables_) 
         {
-          Table *table = table_map.at(table_name);
-          std::vector<const FieldMeta *> col_metas;
-          wildcard_fields(table, col_metas);
-          for (auto col_meta: col_metas)
+          const TableSrc &table_src = table_map.at(table_name);
+          std::vector<AttrInfoSqlNode> col_metas;
+          wildcard_fields(table_src, col_metas);
+          for (size_t i = 0; i < col_metas.size(); ++i)
           {
-            const std::string &col_name = col_meta->name();
+            const AttrInfoSqlNode &col_meta = col_metas[i];
+            const std::string &col_name = col_meta.name;
             SelectColumnInfo col_info;
-            auto id_expr = std::make_unique<IdentifierExpr>(FieldIdentifier(table_name, col_name));
             col_info.tuple_cell_spec_ = glob_ctx->get_col_id_generator().generate_identifier();
             col_info.output_name_ = gen_output_name_for_field_id(table_map.size() > 1, table_name, col_name, expr_alias);
-            ExprValueAttr col_attr = {.type = col_meta->type(), .length = static_cast<size_t>(col_meta->len()), 
-              .nullable = col_meta->nullable()};
+            ExprValueAttr col_attr = {.type = col_meta.type, .length = col_meta.length, .nullable = col_meta.nullable};
+
+            std::unique_ptr<IdentifierExpr> id_expr;
+            if (auto table = std::get_if<Table*>(&table_src))  // 如果是表，直接为该列建立到表列引用的FID
+              id_expr = std::make_unique<IdentifierExpr>(FieldIdentifier(table_name, col_name));
+            else {  // 否则是视图，需要拿到子查询中，能够引用视图该列的FID
+              const ResolvedView &resolved_view = std::get<ResolvedView>(table_src);
+              const FieldIdentifier &col_ident = resolved_view.select_->select_expr_fields()[i].tuple_cell_spec_;
+              id_expr = std::make_unique<IdentifierExpr>(col_ident);
+            }
             id_expr->set_value_attr(col_attr);
+            id_expr->set_referred_table(table_name);
             col_info.expr_ = std::move(id_expr);
+
             select_columns.emplace_back(std::move(col_info));
             column_attrs.emplace_back(gen_column_attr_info(col_name, col_attr));
+            simple_field_ident_infos.emplace_back(true, col_name);
             common_fields_set.emplace(table_name, col_name);  /* 生成一个表名.列名，用于group by的校验 */
           }
         }
@@ -259,22 +322,33 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
             return RC::SCHEMA_FIELD_MISSING;
           }
 
-          Table *table = iter->second;
-          std::vector<const FieldMeta *> col_metas;
-          wildcard_fields(table, col_metas);
-          for (auto &col_meta: col_metas)
+          TableSrc &table_src = iter->second;
+          std::vector<AttrInfoSqlNode> col_metas;
+          wildcard_fields(table_src, col_metas);
+          for (size_t i = 0; i < col_metas.size(); ++i)
           {
-            const std::string &col_name = col_meta->name();
+            const AttrInfoSqlNode &col_meta = col_metas[i];
+            const std::string &col_name = col_meta.name;
             SelectColumnInfo col_info;
-            auto id_expr = std::make_unique<IdentifierExpr>(FieldIdentifier(table_name, col_name));
             col_info.tuple_cell_spec_ = glob_ctx->get_col_id_generator().generate_identifier();
             col_info.output_name_ = gen_output_name_for_field_id(true, table_name, col_name, expr_alias);
-            ExprValueAttr col_attr = {.type = col_meta->type(), .length = static_cast<size_t>(col_meta->len()), 
-              .nullable = col_meta->nullable()};
+            ExprValueAttr col_attr = {.type = col_meta.type, .length = col_meta.length, .nullable = col_meta.nullable};
+
+            std::unique_ptr<IdentifierExpr> id_expr;
+            if (auto table = std::get_if<Table*>(&table_src))  // 如果是表，直接为该列建立到表列引用的FID
+              id_expr = std::make_unique<IdentifierExpr>(FieldIdentifier(table_name, col_name));
+            else {  // 否则是视图，需要拿到子查询中，能够引用视图该列的FID
+              const ResolvedView &resolved_view = std::get<ResolvedView>(table_src);
+              const FieldIdentifier &col_ident = resolved_view.select_->select_expr_fields()[i].tuple_cell_spec_;
+              id_expr = std::make_unique<IdentifierExpr>(col_ident);
+            }
             id_expr->set_value_attr(col_attr);
+            id_expr->set_referred_table(table_name);
             col_info.expr_ = std::move(id_expr);
+
             select_columns.emplace_back(std::move(col_info));
             column_attrs.emplace_back(gen_column_attr_info(col_name, col_attr));
+            simple_field_ident_infos.emplace_back(true, col_name);
             common_fields_set.emplace(table_name, col_name);  /* 生成一个表名.列名，用于group by的校验 */
           }
         }
@@ -299,19 +373,21 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
       col_info.tuple_cell_spec_ = glob_ctx->get_col_id_generator().generate_identifier();
       if (select_expr->get_type() == ExprSqlNodeType::Identifier)
       {
-        IdentifierExpr *id = static_cast<IdentifierExpr *>(col_info.expr_.get());
-        const std::string &table_name = id->field().table_name();
-        const std::string &field_name = id->field().field_name();
+        auto *id = static_cast<IdentifierExprSqlNode *>(select_expr.get());
+        const std::string &table_name = id->get_table_name();
+        const std::string &field_name = id->get_field_name();
         col_info.output_name_ = gen_output_name_for_field_id(table_map.size() > 1, table_name, field_name, expr_alias);
         common_fields_set.emplace(table_name, field_name);  // 用于group by校验
 
         const std::string &column_outer_name = expr_alias.empty() ? field_name : expr_alias;
         column_attrs.emplace_back(gen_column_attr_info(column_outer_name, col_info.expr_->value_attr()));
+        simple_field_ident_infos.emplace_back(true, field_name);
       }
       else
       {
         col_info.output_name_ = expr_alias.empty() ? select_expr->expr_name() : expr_alias;
         column_attrs.emplace_back(gen_column_attr_info(col_info.output_name_, col_info.expr_->value_attr()));
+        simple_field_ident_infos.emplace_back(false, "");
       }
 
       std::vector<AggExprInfo> &agg_in_expr = select_expr_resolve_result.get_agg_expr_infos();
@@ -419,10 +495,12 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
   std::vector<FieldWithOrder> order_fields;
   for (auto &orderby_sql_node: select_sql.order_by_attrs)
   {
-    FieldIdentifier field;
-    rc = resolve_common_field(db, table_map, orderby_sql_node.attr, field);
-    HANDLE_RC(rc);
-    order_fields.emplace_back(field, orderby_sql_node.is_asc);
+    std::optional<FieldIdentifier> field;
+    rc = current_expr_ctx.resolve_table_field_identifier(orderby_sql_node.attr.relation_name, orderby_sql_node.attr.attribute_name,
+      field);
+    if (rc != RC::SUCCESS || !field.has_value())
+      return RC::SCHEMA_FIELD_NOT_EXIST;
+    order_fields.emplace_back(field.value(), orderby_sql_node.is_asc);
   }
 
   // everything alright
@@ -430,6 +508,7 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, SelectSqlNode &selec
   select_stmt->table_map_.swap(table_map);
   select_stmt->select_expr_fields_.swap(select_columns);
   select_stmt->column_attrs_.swap(column_attrs);
+  select_stmt->simple_field_ident_infos_.swap(simple_field_ident_infos);
   select_stmt->group_by_field_.swap(group_fields);
   select_stmt->order_fields_ = order_fields;
   select_stmt->has_where_ = has_where;

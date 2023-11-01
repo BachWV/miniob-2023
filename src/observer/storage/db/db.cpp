@@ -26,6 +26,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/common/meta_util.h"
 #include "storage/trx/trx.h"
 #include "storage/clog/clog.h"
+#include "sql/view/view.h"
 
 Db::~Db()
 {
@@ -128,6 +129,19 @@ RC Db::drop_table(const char *table_name)
   return ret;
 }
 
+RC Db::create_view(std::unique_ptr<View> view)
+{
+  const std::string &view_name = view->name();
+  views_.emplace(view_name, std::move(view));
+  return RC::SUCCESS;
+}
+
+RC Db::drop_view(const std::string &view_name)
+{
+  views_.erase(view_name);
+  return RC::SUCCESS;
+}
+
 Table *Db::find_table(const char *table_name) const
 {
   std::unordered_map<std::string, Table *>::const_iterator iter = opened_tables_.find(table_name);
@@ -145,6 +159,13 @@ Table *Db::find_table(int32_t table_id) const
     }
   }
   return nullptr;
+}
+
+View *Db::find_view(const std::string &view_name) const
+{
+  if (!views_.count(view_name))
+    return nullptr;
+  return views_.at(view_name).get();
 }
 
 RC Db::open_all_tables()

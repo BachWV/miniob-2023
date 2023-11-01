@@ -117,20 +117,21 @@ extern int yydebug;
     SYM_LIKE = 318,                /* SYM_LIKE  */
     SYM_NOT_LIKE = 319,            /* SYM_NOT_LIKE  */
     AS = 320,                      /* AS  */
-    DATE_STR = 321,                /* DATE_STR  */
-    NUMBER = 322,                  /* NUMBER  */
-    FLOAT = 323,                   /* FLOAT  */
-    ID = 324,                      /* ID  */
-    SSS = 325,                     /* SSS  */
-    MIN = 326,                     /* MIN  */
-    MAX = 327,                     /* MAX  */
-    AVG = 328,                     /* AVG  */
-    COUNT = 329,                   /* COUNT  */
-    SUM = 330,                     /* SUM  */
-    ROUND = 331,                   /* ROUND  */
-    LENGTH = 332,                  /* LENGTH  */
-    DATE_FORMAT = 333,             /* DATE_FORMAT  */
-    UMINUS = 334                   /* UMINUS  */
+    SYM_VIEW = 321,                /* SYM_VIEW  */
+    DATE_STR = 322,                /* DATE_STR  */
+    NUMBER = 323,                  /* NUMBER  */
+    FLOAT = 324,                   /* FLOAT  */
+    ID = 325,                      /* ID  */
+    SSS = 326,                     /* SSS  */
+    MIN = 327,                     /* MIN  */
+    MAX = 328,                     /* MAX  */
+    AVG = 329,                     /* AVG  */
+    COUNT = 330,                   /* COUNT  */
+    SUM = 331,                     /* SUM  */
+    ROUND = 332,                   /* ROUND  */
+    LENGTH = 333,                  /* LENGTH  */
+    DATE_FORMAT = 334,             /* DATE_FORMAT  */
+    UMINUS = 335                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -139,7 +140,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 125 "yacc_sql.y"
+#line 126 "yacc_sql.y"
 
   ParsedSqlNode *                   sql_node;
   Value *                           value;
@@ -177,7 +178,10 @@ union YYSTYPE
   std::vector<std::unique_ptr<InnerJoinSqlNode>>*    inner_join_list;
   InnerJoinSqlNode*                 inner_join;
 
-#line 181 "yacc_sql.hpp"
+  // view
+  std::vector<std::string> *        id_list;
+
+#line 185 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

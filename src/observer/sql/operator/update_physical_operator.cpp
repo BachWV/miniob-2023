@@ -119,7 +119,7 @@ RC UpdatePhysicalOperator::next()
       Record record_tmp;
       rc = table_->get_record_scanner(scanner, trx_, true/*readonly*/);
       if (rc != RC::SUCCESS) {
-        LOG_WARN("failed to create scanner . table=%s,, rc=%s", name(), strrc(rc));
+        LOG_WARN("failed to create scanner . table=%s,, rc=%s", name().c_str(), strrc(rc));
         return rc;
       }
       while (scanner.has_next()) {
@@ -129,7 +129,7 @@ RC UpdatePhysicalOperator::next()
         tuple_tmp.set_record(&record_tmp);
        
         if (rc != RC::SUCCESS) {
-          LOG_WARN("failed to scan records . table=%s,, rc=%s",name(), strrc(rc));
+          LOG_WARN("failed to scan records . table=%s,, rc=%s",name().c_str(), strrc(rc));
           return rc;
         }
 

@@ -104,6 +104,11 @@ public:
    */
   virtual ExprValueAttr value_attr() const = 0;
 
+  /*
+   * 这个表达式中，引用了哪些表里的数据。这里的表可以是视图
+   */
+  virtual std::vector<std::string> referred_tables() const = 0;
+
   /**
    * @brief 表达式的名字，比如是字段名称，或者用户在执行SQL语句时输入的内容
    */
@@ -145,6 +150,8 @@ public:
 
   RC get_value(const Tuple &tuple, Value &value) const override;
 
+  std::vector<std::string> referred_tables() const override { return {field_.table_name()}; }
+
 private:
   Field field_;
 };
@@ -181,6 +188,8 @@ public:
 
   const Value &get_value() const { return value_; }
 
+  std::vector<std::string> referred_tables() const override { return {}; }
+
 private:
   Value value_;
 };
@@ -215,6 +224,8 @@ public:
   }
 
   std::unique_ptr<Expression> &child() { return child_; }
+
+  std::vector<std::string> referred_tables() const override { return child_->referred_tables(); }
 
 private:
   RC cast(const Value &value, Value &cast_value) const;
@@ -265,10 +276,13 @@ public:
    */
   RC compare_value(const Value &left, const Value &right, bool &value) const;
 
+  std::vector<std::string> referred_tables() const override { return referred_tables_; }
+
 private:
   CompOp comp_;
   std::unique_ptr<Expression> left_;
   std::unique_ptr<Expression> right_;
+  std::vector<std::string> referred_tables_;
 };
 
 /**
@@ -307,9 +321,12 @@ public:
 
   std::vector<std::unique_ptr<Expression>> &children() { return children_; }
 
+  std::vector<std::string> referred_tables() const override { return referred_tables_; }
+
 private:
   Type conjunction_type_;
   std::vector<std::unique_ptr<Expression>> children_;
+  std::vector<std::string> referred_tables_;
 };
 
 /**
@@ -346,6 +363,8 @@ public:
   std::unique_ptr<Expression> &left() { return left_; }
   std::unique_ptr<Expression> &right() { return right_; }
 
+  std::vector<std::string> referred_tables() const override { return referred_tables_; }
+
 private:
   RC calc_value(const Value &left_value, const Value &right_value, Value &value) const;
   
@@ -353,6 +372,7 @@ private:
   Type arithmetic_type_;
   std::unique_ptr<Expression> left_;
   std::unique_ptr<Expression> right_;
+  std::vector<std::string> referred_tables_;
 };
 
 /*
@@ -381,10 +401,15 @@ public:
 
   void set_value_attr(const ExprValueAttr &attr) { value_attr_ = attr; }
 
+  void set_referred_table(const std::string &table) { referred_tables_.emplace_back(table); }
+
+  std::vector<std::string> referred_tables() const override { return referred_tables_; }
+
 private:
   FieldIdentifier correlate_field_;
   Value value_;
   ExprValueAttr value_attr_;
+  std::vector<std::string> referred_tables_;
 };
 
 /* 字段名表达式。FieldExpr和Field对象耦合，涉及到别名、虚拟列名时不好用，这里额外写一个 */
@@ -406,9 +431,14 @@ public:
 
   void set_value_attr(const ExprValueAttr &attr) { value_attr_ = attr; }
 
+  void set_referred_table(const std::string &table) { referred_tables_.emplace_back(table); }
+
+  std::vector<std::string> referred_tables() const override { return referred_tables_; }
+
 private:
   FieldIdentifier field_;
   ExprValueAttr value_attr_;
+  std::vector<std::string> referred_tables_;
 };
 
 /* expr is null / expr is not null表达式 */
@@ -430,6 +460,8 @@ public:
     attr.nullable = false;
     return attr;
   }
+
+  std::vector<std::string> referred_tables() const override { return child_->referred_tables(); }
 
 private:
   PredNullOp op_;
@@ -456,6 +488,8 @@ public:
     return attr;
   }
 
+  std::vector<std::string> referred_tables() const override { return child_->referred_tables(); }
+
 private:
   RC regex_value(const std::string &string, const std::string &pattern, bool &value) const;
 
@@ -469,7 +503,17 @@ class QuantifiedCompExprSetExpr: public Expression
 {
 public:
   QuantifiedCompExprSetExpr(std::unique_ptr<Expression> child, QuantifiedComp op, std::vector<std::unique_ptr<Expression>> &&set)
-    : child_(std::move(child)), op_(op), set_(std::move(set)) {};
+    : child_(std::move(child)), op_(op), set_(std::move(set)) 
+  {
+    for (auto &expr : set_) {
+      std::vector<std::string> tables = expr->referred_tables();
+      referred_tables_.insert(referred_tables_.end(), std::make_move_iterator(tables.begin()), 
+        std::make_move_iterator(tables.end()));
+    }
+    std::vector<std::string> table = child_->referred_tables();
+    referred_tables_.insert(referred_tables_.end(), std::make_move_iterator(table.begin()), 
+      std::make_move_iterator(table.end()));
+  }
 
   RC get_value(const Tuple &tuple, Value &value) const override;
 
@@ -485,10 +529,13 @@ public:
     return attr;
   }
 
+  std::vector<std::string> referred_tables() const override { return referred_tables_; }
+
 private:
   std::unique_ptr<Expression> child_;
   QuantifiedComp op_;
   std::vector<std::unique_ptr<Expression>> set_;
+  std::vector<std::string> referred_tables_;
 };
 
 class FunctionExpr: public Expression
@@ -508,8 +555,13 @@ public:
 
   ExprValueAttr value_attr() const override;
 
+  void set_referred_tables(const std::string &table) { referred_tables_.emplace_back(table); }
+
+  std::vector<std::string> referred_tables() const override { return referred_tables_; }
+
 private:
   std::unique_ptr<FunctionKernel> kernel_;  // 从kernel中获取值属性
   FieldIdentifier func_arg_;
   bool is_const_;
+  std::vector<std::string> referred_tables_;
 };
