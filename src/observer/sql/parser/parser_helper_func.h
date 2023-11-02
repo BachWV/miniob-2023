@@ -10,3 +10,5 @@ using namespace std;
 bool CheckLeap(int y, int m, int d);
 // 检查时间范围
 bool CheckTimeRange(const char* s, int &time);
+
+bool CheckDateFormat(const char* s);

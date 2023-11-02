@@ -544,10 +544,15 @@ non_negative_value:
       // 这里为什么要-2
       // A: 注意这里有双引号
       char *tmp = common::substr($1,1,strlen($1)-2);
-      int time;
-      if(CheckTimeRange(tmp, time)){
-        $$ = new Value(time, AttrType::DATES);
-       // yyerror (&yylloc, sql_string, sql_result, scanner, YY_("date invalid"));
+      if(CheckDateFormat(tmp)){
+        int time;
+        if(!CheckTimeRange(tmp,time)){
+          $$ = new Value(tmp);
+          yyerror (&yylloc, sql_string, sql_result, scanner, YY_("date out of range"));
+        }else{
+          $$ = new Value(time, AttrType::DATES);
+        }
+        
       }else{
         if(strlen(tmp) > 65535){
         yyerror (&yylloc, sql_string, sql_result, scanner, YY_("string too long"));

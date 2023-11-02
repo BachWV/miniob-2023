@@ -17,8 +17,6 @@ bool CheckLeap(int y, int m, int d)
 // 2001-1-1, 2001-01-1, 2001-1-01, 2001-01-01
 bool CheckTimeRange(const char* s, int &time){
   string str(s);
-  std::regex  pattern("[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}");
-  if(!std::regex_match(str, pattern)) return false;
   vector<int> nums(3);
   int start = 0, end;
   for(auto& num : nums){
@@ -33,4 +31,11 @@ bool CheckTimeRange(const char* s, int &time){
   }
   time=nums[0]*10000+nums[1]*100+nums[2];
   return true;
+
+}
+
+bool CheckDateFormat(const char* s){
+  string str(s);
+  std::regex  pattern("[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}");
+  return std::regex_match(str, pattern);
 }
