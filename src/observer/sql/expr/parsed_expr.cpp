@@ -88,6 +88,41 @@ RC StmtResolveContext::resolve_table_field_identifier(const std::string &table_n
     return RC::SUCCESS;
 }
 
+RC StmtResolveContext::resolve_field_referred_table(const std::string &field_name, std::string &result) const
+{
+    bool field_find = false;
+    for (auto &[table_name, table]: table_namespace_)  // 在表中查找
+    {
+        const FieldMeta *field_meta = table->table_meta().field(field_name.c_str());
+        if (field_meta != nullptr)
+        {
+            if (field_find)  // 多个表都有field_name这个字段，返回解析失败，而不是找不到
+            {
+                LOG_WARN("field name %s is ambiguous", field_name.c_str());
+                return RC::SCHEMA_FIELD_AMBIGUOUS;
+            }
+            field_find = true;
+            result = table_name;
+        }
+    }
+    
+    for (auto &[view_name, view_columns]: views_)  // 在视图中查找
+    {
+        if (view_columns.count(field_name) != 0)
+        {
+            if (field_find)
+            {
+                LOG_WARN("field name %s is ambiguous", field_name.c_str());
+                return RC::SCHEMA_FIELD_AMBIGUOUS;
+            }
+            field_find = true;
+            result = view_name;
+        }
+    }
+
+    return RC::SUCCESS;
+}
+
 RC StmtResolveContext::resolve_other_column_name(const std::string &col_name) const
 {
     if (other_column_names_.count(col_name))
@@ -169,7 +204,14 @@ RC IdentifierExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *re
             {
                 auto id_expr = std::make_unique<IdentifierExpr>(field_identifier.value());
                 id_expr->set_value_attr(value_attr);
-                id_expr->set_referred_table(table_name);
+                if (!table_name.empty())
+                    id_expr->set_referred_table(table_name);
+                else
+                {
+                    std::string refer_table;
+                    stmt_ctx.resolve_field_referred_table(field_name, refer_table);
+                    id_expr->set_referred_table(refer_table);
+                }
                 expr.reset(id_expr.release());
             }
             // 否则，这个标识符是一个相关表达式，是第level层查询的相关子查询
@@ -177,7 +219,14 @@ RC IdentifierExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *re
             {
                 auto correlate_expr = std::make_unique<CorrelateExpr>(field_identifier.value());
                 correlate_expr->set_value_attr(value_attr);
-                correlate_expr->set_referred_table(table_name);
+                if (!table_name.empty())
+                    correlate_expr->set_referred_table(table_name);
+                else
+                {
+                    std::string refer_table;
+                    stmt_ctx.resolve_field_referred_table(field_name, refer_table);
+                    correlate_expr->set_referred_table(refer_table);
+                }
                 result->add_correlate_expr(level, correlate_expr.get());
                 expr.reset(correlate_expr.release());
                 LOG_DEBUG("add correlate expr : %s.%s . Correlate to level=%u, table=%s, field=%s", 
@@ -545,7 +594,14 @@ RC FunctionExprSqlNode::resolve(ExprResolveContext *ctx, ExprResolveResult *resu
         }
 
         expr = std::make_unique<FunctionExpr>(func_sql_.function_kernel->copy(), arg.value());
-        expr->set_referred_tables(func_sql_.rel_attr.relation_name);
+        if (!func_sql_.rel_attr.relation_name.empty())
+            expr->set_referred_table(func_sql_.rel_attr.relation_name);
+        else
+        {
+            std::string refer_table;
+            cur_ctx.resolve_field_referred_table(func_sql_.rel_attr.attribute_name, refer_table);
+            expr->set_referred_table(refer_table);
+        }
     }
     else
     {

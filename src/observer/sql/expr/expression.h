@@ -555,7 +555,7 @@ public:
 
   ExprValueAttr value_attr() const override;
 
-  void set_referred_tables(const std::string &table) { referred_tables_.emplace_back(table); }
+  void set_referred_table(const std::string &table) { referred_tables_.emplace_back(table); }
 
   std::vector<std::string> referred_tables() const override { return referred_tables_; }
 

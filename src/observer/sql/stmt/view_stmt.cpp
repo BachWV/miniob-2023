@@ -41,7 +41,7 @@ RC ViewStmt::create(Db *db, CreateViewSqlNode &view_node, Stmt *&stmt)
         return RC::INVALID_ARGUMENT;
     }
 
-    bool insertable = true, deletable = true;
+    bool insertable = true, deletable = true, updatable = true;
     if (select_stmt->table_map().empty() || 
         !select_stmt->get_group_by_fields().empty() ||
         select_stmt->has_having_clause() ||
@@ -49,6 +49,7 @@ RC ViewStmt::create(Db *db, CreateViewSqlNode &view_node, Stmt *&stmt)
     {
         insertable = false;
         deletable = false;
+        updatable = false;
     }
 
     const std::vector<SelectColumnInfo> &column_exprs = select_stmt->select_expr_fields();
@@ -59,9 +60,10 @@ RC ViewStmt::create(Db *db, CreateViewSqlNode &view_node, Stmt *&stmt)
     for (size_t i = 0; i < columns_in_select.size(); ++i)
     {
         ViewColumnAttr cur_col_info;
-        if (is_simple_field_ref_vec.at(i).first == false)  // 如果列不是简单的field引用，则不可插入，不可更新
+        if (is_simple_field_ref_vec.at(i).first == false)  // 如果列不是简单的field引用，则不可插入，不可删除
         {
             cur_col_info.is_field_identifier = false;
+            insertable = deletable = updatable = false;
         }
         else
         {
@@ -82,7 +84,7 @@ RC ViewStmt::create(Db *db, CreateViewSqlNode &view_node, Stmt *&stmt)
     }
 
     auto view_ = std::make_unique<View>(view_node.view_name, std::move(view_col_infos), 
-        std::make_unique<SelectSqlNode>(std::move(select_sql_node)), insertable, deletable);
+        std::make_unique<SelectSqlNode>(std::move(select_sql_node)), insertable, deletable, updatable);
     stmt = new ViewStmt(std::move(view_));
     return RC::SUCCESS;
 }

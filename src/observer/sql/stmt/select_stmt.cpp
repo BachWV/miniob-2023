@@ -374,7 +374,18 @@ RC SelectStmt::create(Db *db, ExprResolveContext *glob_ctx, const SelectSqlNode 
       if (select_expr->get_type() == ExprSqlNodeType::Identifier)
       {
         auto *id = static_cast<IdentifierExprSqlNode *>(select_expr.get());
-        const std::string &table_name = id->get_table_name();
+        
+        std::string table_name = id->get_table_name();
+
+        // 如果用户没有指定表名，则需要再resolve一遍得到table_name。原因：加了视图后，不能直接通过IdentifierExpr获得table_name了，
+        // 因为从视图里获取的IdentifierExpr，它内部的FieldIdentifier是引用视图子查询列表达式的临时ID
+        // 且IdentifierExprSqlNode中有可能不存在table_name(SQL里只有列名)
+        // 这里不考虑列中的相关表达式，直接在当前作用域解析
+        if (table_name.empty()) {
+          rc = current_expr_ctx.resolve_field_referred_table(id->get_field_name(), table_name);
+          HANDLE_RC(rc);
+        }
+
         const std::string &field_name = id->get_field_name();
         col_info.output_name_ = gen_output_name_for_field_id(table_map.size() > 1, table_name, field_name, expr_alias);
         common_fields_set.emplace(table_name, field_name);  // 用于group by校验

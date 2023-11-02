@@ -4,7 +4,7 @@
 
 struct ExprValueAttr
 {
-  AttrType type;
-  size_t length;
-  bool nullable;
+  AttrType type = AttrType::INTS;
+  size_t length = 4;
+  bool nullable = true;
 };

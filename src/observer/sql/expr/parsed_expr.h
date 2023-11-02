@@ -84,6 +84,9 @@ public:
   RC resolve_table_field_identifier(const std::string &table_name, const std::string &field_name,
     std::optional<FieldIdentifier> &result, ExprValueAttr *result_attr = nullptr) const;
   
+  /* 解析field_name对应的表 */
+  RC resolve_field_referred_table(const std::string &field_name, std::string &result) const;
+
   /* 解析聚集函数等虚拟字段的名字 */
   RC resolve_other_column_name(const std::string &col_name) const;
 
@@ -240,10 +243,17 @@ public:
   virtual ~IdentifierExprSqlNode() = default;
 
   RC resolve(ExprResolveContext *ctx, ExprResolveResult *result) const override;
-  // AttrInfo get_attr_info(): 
 
   const std::string& get_table_name() const { return table_name; }
   const std::string& get_field_name() const { return field_name; } 
+
+  void map_table_name(const std::string &target_table_name) {
+    table_name = target_table_name;
+  }
+
+  void map_field_name(const std::string &target_field_name) {
+    field_name = target_field_name;
+  }
 
 protected:
   std::string table_name;
@@ -257,6 +267,8 @@ public:
     : ExprSqlNode(expr_name, ExprSqlNodeType::NegativeArith), sub_expr_(std::move(sub_expr)) {}
 
   RC resolve(ExprResolveContext *ctx, ExprResolveResult *result) const override;
+
+  ExprSqlNode *sub_expr() { return sub_expr_.get(); }
 
 private:
   std::unique_ptr<ExprSqlNode> sub_expr_;
@@ -279,6 +291,9 @@ public:
 
   RC resolve(ExprResolveContext *ctx, ExprResolveResult *result) const override;
 
+  ExprSqlNode *left_expr() { return left_.get(); }
+  ExprSqlNode *right_expr() { return right_.get(); }
+
 private:
   std::unique_ptr<ExprSqlNode> left_, right_;
   BinaryArithType type_;
@@ -292,6 +307,9 @@ public:
 
   RC resolve(ExprResolveContext *ctx, ExprResolveResult *result) const override;
 
+  ExprSqlNode *left_expr() { return left_.get(); }
+  ExprSqlNode *right_expr() { return right_.get(); }
+
 private:
   std::unique_ptr<ExprSqlNode> left_, right_;
   CompOp op_;
@@ -304,6 +322,8 @@ public:
     : ExprSqlNode(expr_name, ExprSqlNodeType::PredNull), sub_expr_(std::move(sub_expr)), op_(op) {}
 
   RC resolve(ExprResolveContext *ctx, ExprResolveResult *result) const override;
+
+  ExprSqlNode *sub_expr() { return sub_expr_.get(); }
 
 private:
   std::unique_ptr<ExprSqlNode> sub_expr_;
@@ -345,6 +365,8 @@ public:
     : ExprSqlNode(expr_name, ExprSqlNodeType::QuantifiedCompSubquery), child_(std::move(child)), sql_(sql), op_(op) {}
 
   RC resolve(ExprResolveContext *ctx, ExprResolveResult *result) const override;
+
+  ExprSqlNode *sub_expr() { return child_.get(); }
 
 private:
   std::unique_ptr<ExprSqlNode> child_;

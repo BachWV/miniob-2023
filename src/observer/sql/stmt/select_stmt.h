@@ -49,8 +49,6 @@ struct SelectColumnInfo
   std::string output_name_;  // 该列用于输出的名字
 };
 
-using TableSrc = std::variant<Table*, ResolvedView>;
-
 /**
  * @brief 表示select语句
  * @ingroup Statement
