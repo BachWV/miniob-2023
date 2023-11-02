@@ -206,7 +206,7 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 %type <sql_node>            begin_stmt
 %type <sql_node>            commit_stmt
 %type <sql_node>            rollback_stmt
-%type <sql_node>            load_data_stmt
+/* %type <sql_node>            load_data_stmt */
 %type <sql_node>            explain_stmt
 %type <sql_node>            set_variable_stmt
 %type <sql_node>            help_stmt
@@ -275,7 +275,6 @@ command_wrapper:
   | begin_stmt
   | commit_stmt
   | rollback_stmt
-  | load_data_stmt
   | explain_stmt
   | set_variable_stmt
   | help_stmt
@@ -1105,7 +1104,7 @@ comp_op:
     | GE { $$ = GREAT_EQUAL; }
     | NE { $$ = NOT_EQUAL; }
     ;
-
+/* 
 load_data_stmt:
     LOAD DATA INFILE SSS INTO TABLE ID 
     {
@@ -1117,7 +1116,7 @@ load_data_stmt:
       free($7);
       free(tmp_file_name);
     }
-    ;
+    ; */
 
 explain_stmt:
     EXPLAIN command_wrapper
