@@ -161,7 +161,6 @@ ArithmeticExpr *create_arithmetic_expression(ArithmeticExpr::Type type,
 }
 
 /* %token <number> DATE */
-%token <string> DATE_STR
 %token <number> NUMBER
 %token <floats> FLOAT
 %token <string> ID
@@ -545,18 +544,20 @@ non_negative_value:
       // 这里为什么要-2
       // A: 注意这里有双引号
       char *tmp = common::substr($1,1,strlen($1)-2);
-      if(strlen(tmp) > 65535){
-        yyerror (&yylloc, sql_string, sql_result, scanner, YY_("string too long"));
-      }
-      $$ = new Value(tmp);
-      free(tmp);
-    }
-    |DATE_STR{
       int time;
-      if(!CheckTimeRange($1, time)){
-        yyerror (&yylloc, sql_string, sql_result, scanner, YY_("date invalid"));
+      if(CheckTimeRange(tmp, time)){
+        $$ = new Value(time, AttrType::DATES);
+       // yyerror (&yylloc, sql_string, sql_result, scanner, YY_("date invalid"));
+      }else{
+        if(strlen(tmp) > 65535){
+        yyerror (&yylloc, sql_string, sql_result, scanner, YY_("string too long"));
+        }
+        $$ = new Value(tmp);
+        free(tmp);
+
       }
-      $$ = new Value(time, AttrType::DATES);
+      
+      
     }
     |SYM_NULL {
       $$ = new Value();
@@ -1248,7 +1249,7 @@ function_node:
       $$->virtual_field_name = token_name(sql_string, &@$);
       free($1);
     }
-    | DATE_FORMAT LBRACE DATE_STR COMMA SSS RBRACE{
+    | DATE_FORMAT LBRACE SSS COMMA SSS RBRACE{
       // date_format("2017-06-15", "%y")
       $$ = new FunctionSqlNode();
       std::string s = std::string($3).substr(1, strlen($3) - 2);
@@ -1257,6 +1258,7 @@ function_node:
       $$->is_const = true;
       $$->virtual_field_name = token_name(sql_string, &@$);
       free($1);
+      free($3);
     }
     | ROUND LBRACE rel_attr RBRACE{
       // round(score)

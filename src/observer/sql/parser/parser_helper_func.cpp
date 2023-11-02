@@ -1,5 +1,6 @@
 #include"parser_helper_func.h"
 #include <cstring>
+#include <regex>
 
 
 bool CheckLeap(int y, int m, int d)
@@ -16,11 +17,13 @@ bool CheckLeap(int y, int m, int d)
 // 2001-1-1, 2001-01-1, 2001-1-01, 2001-01-01
 bool CheckTimeRange(const char* s, int &time){
   string str(s);
+  std::regex  pattern("[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}");
+  if(!std::regex_match(str, pattern)) return false;
   vector<int> nums(3);
-  int start = 1, end;
+  int start = 0, end;
   for(auto& num : nums){
     int index = str.find('-', start) ;
-    end = (index != -1) ? index : str.size()-1;
+    end = (index != -1) ? index : str.size();
     num = stoi(string(s+start, end - start));
     start = end+1;
   }

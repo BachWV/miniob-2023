@@ -1,4 +1,4 @@
-/* A Bison parser, made by GNU Bison 3.8.  */
+/* A Bison parser, made by GNU Bison 3.8.2.  */
 
 /* Bison interface for Yacc-like parsers in C
 
@@ -117,20 +117,19 @@ extern int yydebug;
     SYM_LIKE = 318,                /* SYM_LIKE  */
     SYM_NOT_LIKE = 319,            /* SYM_NOT_LIKE  */
     AS = 320,                      /* AS  */
-    DATE_STR = 321,                /* DATE_STR  */
-    NUMBER = 322,                  /* NUMBER  */
-    FLOAT = 323,                   /* FLOAT  */
-    ID = 324,                      /* ID  */
-    SSS = 325,                     /* SSS  */
-    MIN = 326,                     /* MIN  */
-    MAX = 327,                     /* MAX  */
-    AVG = 328,                     /* AVG  */
-    COUNT = 329,                   /* COUNT  */
-    SUM = 330,                     /* SUM  */
-    ROUND = 331,                   /* ROUND  */
-    LENGTH = 332,                  /* LENGTH  */
-    DATE_FORMAT = 333,             /* DATE_FORMAT  */
-    UMINUS = 334                   /* UMINUS  */
+    NUMBER = 321,                  /* NUMBER  */
+    FLOAT = 322,                   /* FLOAT  */
+    ID = 323,                      /* ID  */
+    SSS = 324,                     /* SSS  */
+    MIN = 325,                     /* MIN  */
+    MAX = 326,                     /* MAX  */
+    AVG = 327,                     /* AVG  */
+    COUNT = 328,                   /* COUNT  */
+    SUM = 329,                     /* SUM  */
+    ROUND = 330,                   /* ROUND  */
+    LENGTH = 331,                  /* LENGTH  */
+    DATE_FORMAT = 332,             /* DATE_FORMAT  */
+    UMINUS = 333                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -177,7 +176,7 @@ union YYSTYPE
   std::vector<std::unique_ptr<InnerJoinSqlNode>>*    inner_join_list;
   InnerJoinSqlNode*                 inner_join;
 
-#line 181 "yacc_sql.hpp"
+#line 180 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;
